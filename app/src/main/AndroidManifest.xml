@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Para consumir el API REST del backend -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Para capturar la ubicación GPS al registrar un reporte (RF-05) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <application
+        android:allowBackup="true"
+        android:label="RIETI"
+        android:theme="@style/Theme.RIETI"
+        android:usesCleartextTraffic="true">
+
+        <!-- usesCleartextTraffic=true: solo para desarrollo local (backend en http://10.0.2.2:3000) -->
+
+        <activity
+            android:name=".view.MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>
