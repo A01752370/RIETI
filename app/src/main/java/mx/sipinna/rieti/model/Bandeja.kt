@@ -44,7 +44,13 @@ data class Pagina<T>(
 
 /**
  * Detalle de un reporte para el personal (`GET /api/v1/reportes/{id}`).
+ * Los campos que comparte con [ReporteResumen] significan lo mismo.
  *
+ * @property latitud latitud del lugar de los hechos, o null
+ * @property longitud longitud del lugar de los hechos, o null
+ * @property descripcion descripción libre escrita por quien reportó
+ * @property motivoDescarte motivo registrado al descartar, o null
+ * @property historial bitácora del caso, del evento más antiguo al más reciente
  * @property transicionesPermitidas estatus a los que se puede cambiar desde el actual;
  *   los calcula el servidor con la máquina de estados, la app solo los muestra
  */
