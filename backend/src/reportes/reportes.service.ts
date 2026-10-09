@@ -231,6 +231,7 @@ export class ReportesService {
     return valor;
   }
 
+  /** Resumen de un reporte que se sabe que existe. */
   private async resumen(id: number): Promise<ReporteResumenDto> {
     const reporte = await this.ds.getRepository(Reporte).findOneByOrFail({ id });
     return (await this.aplanar([reporte]))[0];
