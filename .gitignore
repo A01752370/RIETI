@@ -1,15 +1,37 @@
+# --- Android / Gradle ---
 *.iml
-.gradle
+.gradle/
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
+local.properties
 /build
+build/
 /captures
 .externalNativeBuild
 .cxx
-local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# --- IDE (cada quien genera la suya) ---
+.idea/
+.vscode/
+.DS_Store
+
+# --- Node ---
+node_modules/
+dist/
+*.log
+
+# --- Secretos y estado de infraestructura: nunca al repositorio ---
+.env
+.env.*
+!.env.example
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform/
+*.pem
+*.p12
+.aws/
