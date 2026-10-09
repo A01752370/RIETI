@@ -52,18 +52,23 @@ export class AuthService {
       if (r.ChallengeName) {
         // NEW_PASSWORD_REQUIRED / MFA: la app aún no implementa estos retos.
         this.logger.warn(`Reto de Cognito no soportado: ${r.ChallengeName}`);
-        throw new UnauthorizedException('Se requiere completar un paso adicional de autenticación');
+        throw new UnauthorizedException({
+          codigo: 'RETO_NO_SOPORTADO',
+          mensaje: 'Tu cuenta requiere un paso adicional (cambio de contraseña o MFA) que la app aún no soporta. Contacta a la administración.',
+        });
       }
       accessToken = r.AuthenticationResult?.AccessToken;
       idToken = r.AuthenticationResult?.IdToken;
       expiresIn = r.AuthenticationResult?.ExpiresIn ?? expiresIn;
     } catch (e) {
       if (e instanceof NotAuthorizedException || e instanceof UserNotFoundException) {
-        throw new UnauthorizedException('Credenciales inválidas');
+        throw new UnauthorizedException({ codigo: 'CREDENCIALES_INVALIDAS', mensaje: 'Correo o contraseña incorrectos' });
       }
       throw e;
     }
-    if (!accessToken || !idToken) throw new UnauthorizedException();
+    if (!accessToken || !idToken) {
+      throw new UnauthorizedException({ codigo: 'CREDENCIALES_INVALIDAS', mensaje: 'Correo o contraseña incorrectos' });
+    }
 
     const claims = await this.verificadorId.verify(idToken);
     const grupos = claims['cognito:groups'] ?? [];
