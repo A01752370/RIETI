@@ -46,7 +46,7 @@ cd infra/terraform && terraform fmt -check && terraform validate && terraform pl
 ## Reglas duras (no negociables)
 1. **Nunca** escribas, imprimas, registres ni commitees secretos: llaves de AWS, tokens de GitHub, contraseñas, `*.tfstate`, `*.tfvars` reales, `.env`, `local.properties`. Si ves uno, detente y avisa al usuario. Los secretos vienen de variables de entorno / Secrets Manager.
 2. **No ejecutes** `terraform apply`, `terraform destroy`, ni comandos de AWS que creen, modifiquen o borren recursos, ni `git push --force`, **sin aprobación explícita** del usuario en ese momento. Lectura (`plan`, `describe`, `get`, `list`) sí.
-3. **Opera solo sobre recursos de este proyecto** (etiqueta `proyecto=rieti`, región `mx-central-1`). No modifiques ni leas otros recursos de la cuenta (D-09).
+3. **Opera solo sobre recursos de este proyecto** (etiqueta `Project=RIETI` y prefijo `rieti`, región `mx-central-1`). No modifiques ni leas otros recursos de la cuenta (D-09).
 4. **Sin PII en logs, ejemplos, pruebas ni datos semilla.** Nunca se solicita ni almacena nombre, CURP ni domicilio del menor (RNF-27).
 5. **Anónimo es anónimo:** no persistas IP, ID de dispositivo ni ID de publicidad en reportes anónimos (RNF-29). La ubicación del dispositivo del reportante no se guarda (RNF-28); solo la ubicación del lugar de los hechos.
 6. **Cada endpoint de personal lleva guard** (JWT + rol) y pasa por RLS. Ninguna ruta nueva sin decisión explícita de si es pública.

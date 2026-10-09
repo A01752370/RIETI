@@ -28,7 +28,7 @@
 
 **Etiquetas aplicadas:** `Project=RIETI`, `Environment=prod`, `ManagedBy=Terraform`, `Repository=A01752370/RIETI` y `Name`/`Tier` en los de red.
 
-> ⚠️ **Discrepancia con D-09:** la decisión del equipo menciona la etiqueta `proyecto=rieti`, pero **ningún recurso la tiene**. La convención desplegada es `Project=RIETI`, y en esta auditoría se usó como equivalente.
+> ✅ **Resuelto el 9-oct-2026:** D-09 (plan) y `CLAUDE.md` ahora dicen `Project=RIETI`. Texto original del hallazgo — **Discrepancia con D-09:** la decisión del equipo menciona la etiqueta `proyecto=rieti`, pero **ningún recurso la tiene**. La convención desplegada es `Project=RIETI`, y en esta auditoría se usó como equivalente.
 
 | Tipo | Recursos (nombre) | Región |
 |---|---|---|
@@ -114,6 +114,6 @@ Ordenadas por urgencia. **Ninguna se ejecutó** (esta tarea fue de solo lectura)
 
 1. **Desactivar y borrar la llave del perfil `rieti`** (creada el 9-oct-2026). Es una llave de administrador de toda la cuenta y se compartió por un canal no seguro. Coincide con el pendiente D-10.
 2. **Dar a RIETI una identidad propia y acotada:** un usuario o rol `rieti` cuya política solo permita actuar sobre recursos con `aws:ResourceTag/Project=RIETI` (y `aws:RequestTag` al crear), en `mx-central-1` más los servicios globales necesarios, con un *permissions boundary* que impida escalar privilegios. Mejor aún: mover RIETI a una cuenta propia dentro de una organización de AWS.
-3. **Alinear la convención de etiquetas** con D-09: decidir entre `Project=RIETI` (lo desplegado) o `proyecto=rieti` (lo documentado) y actualizar el documento o Terraform.
+3. ✅ *Hecho el 9-oct-2026 (se adoptó `Project=RIETI`).* **Alinear la convención de etiquetas** con D-09: decidir entre `Project=RIETI` (lo desplegado) o `proyecto=rieti` (lo documentado) y actualizar el documento o Terraform.
 4. **Avisar a la persona dueña** que RIETI depende de su proveedor OIDC de GitHub y que se crearon 5 *service-linked roles* en su cuenta.
 5. **Activar un *trail* de CloudTrail propio** (o consultar el de la organización) para conservar los eventos más de 90 días e incluir eventos de datos de los buckets de RIETI.
