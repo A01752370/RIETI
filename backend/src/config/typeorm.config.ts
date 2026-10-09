@@ -34,7 +34,8 @@ export function opcionesTypeOrm(): DataSourceOptions {
     database: process.env.DB_NAME,
     ssl: opcionesSsl(),
     entities: ENTIDADES,
-    migrations: [join(__dirname, '..', 'database', 'migrations', '*.js')],
+    // .js en la imagen (dist/); .ts cuando las pruebas corren con ts-jest.
+    migrations: [join(__dirname, '..', 'database', 'migrations', __filename.endsWith('.ts') ? '*.ts' : '*.js')],
     migrationsRun: true,
     // Nunca true: el esquema solo cambia por migraciones.
     synchronize: false,
