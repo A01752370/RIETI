@@ -31,6 +31,10 @@ export class Ubicacion {
   longitud: number | null;
 }
 
+/**
+ * Reporte ciudadano. No guarda IP, identificador de dispositivo ni datos del
+ * menor que lo identifiquen (RNF-27, RNF-29).
+ */
 @Entity('reporte')
 export class Reporte {
   @PrimaryGeneratedColumn({ name: 'id_reporte' })
@@ -62,6 +66,14 @@ export class Reporte {
   @Column({ type: 'text' })
   descripcion: string;
 
+  /** Hash Argon2id (formato PHC) de la clave de consulta; la clave nunca se guarda en claro. */
+  @Column({ name: 'clave_consulta_hash', type: 'varchar', length: 200, nullable: true, select: false })
+  claveConsultaHash: string | null;
+
+  /** Versión del aviso de privacidad aceptada al enviar el reporte (RF-44). La fecha es `fecha_creacion`. */
+  @Column({ name: 'aviso_privacidad_version', type: 'varchar', length: 20, nullable: true })
+  avisoPrivacidadVersion: string | null;
+
   @CreateDateColumn({ name: 'fecha_creacion', type: 'timestamptz' })
   fechaCreacion: Date;
 
@@ -89,6 +101,7 @@ export class Folio {
   reporte: Reporte;
 }
 
+/** Caso: agrupa uno o más reportes y lleva el estatus vigente. */
 @Entity('caso')
 export class Caso {
   @PrimaryGeneratedColumn({ name: 'id_caso' })
@@ -97,6 +110,10 @@ export class Caso {
   @ManyToOne(() => EstatusReporte, { nullable: false, eager: true })
   @JoinColumn({ name: 'id_estatus' })
   estatus: EstatusReporte;
+
+  /** Motivo obligatorio cuando el estatus pasa a Descartado. */
+  @Column({ name: 'motivo_descarte', type: 'text', nullable: true })
+  motivoDescarte: string | null;
 
   @CreateDateColumn({ name: 'fecha_apertura', type: 'timestamptz' })
   fechaApertura: Date;

@@ -459,11 +459,11 @@ Código con KDoc/TSDoc · pruebas · lint sin errores · sin secretos · sin PII
 ### 12.3 Estado de avance (actualizar)
 | Fase | Estado | Notas |
 |---|---|---|
-| 0 Auditoría e higiene | Pendiente | |
-| 1 Seguridad base y contrato | Pendiente | |
-| 2 Funcionalidad central | Pendiente | |
+| 0 Auditoría e higiene | Hecha (10-oct) | Auditoría en `docs/ESTADO-ENTREGA.md` §2; gitleaks limpio; CI con gitleaks. Falta: protección de `main` y *push protection* en GitHub. |
+| 1 Seguridad base y contrato | Parcial (10-oct) | Contrato `/api/v1`, guard que deniega por defecto, clave Argon2id, máquina de estados, límites. Pendiente: Hosted UI/MFA, RLS, `rieti_app` aplicado. |
+| 2 Funcionalidad central | Parcial (10-oct) | Flujo ciudadano y bandeja en Android. Pendiente: web, evidencias, canalización, duplicados. |
 | 3 Valor agregado | Pendiente | |
-| 4 Endurecimiento y documentación | Pendiente | |
+| 4 Endurecimiento y documentación | Parcial (10-oct) | Documentación de la rúbrica escrita; pruebas e2e. Pendiente: ZAP, carga, Dokka/TypeDoc. |
 
 ---
 

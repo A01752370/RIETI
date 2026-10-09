@@ -1,48 +1,69 @@
 package mx.sipinna.rieti.network
 
-import mx.sipinna.rieti.model.ActualizarReporteRequest
+import mx.sipinna.rieti.model.AgregarSeguimientoRequest
+import mx.sipinna.rieti.model.AvisoPrivacidad
+import mx.sipinna.rieti.model.CambiarEstatusRequest
+import mx.sipinna.rieti.model.ConsultaPublica
+import mx.sipinna.rieti.model.ConsultaRequest
 import mx.sipinna.rieti.model.CrearReporteRequest
 import mx.sipinna.rieti.model.LoginRequest
 import mx.sipinna.rieti.model.LoginResponse
-import mx.sipinna.rieti.model.Reporte
+import mx.sipinna.rieti.model.Pagina
+import mx.sipinna.rieti.model.ReporteCreado
+import mx.sipinna.rieti.model.ReporteDetalle
+import mx.sipinna.rieti.model.ReporteResumen
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
- * Contrato del API REST expuesto por el backend (NestJS) consumido por la app.
+ * Contrato del API REST v1 del backend (NestJS), relativo a `BuildConfig.API_URL`.
  *
- * Este es el punto de acoplamiento entre el rol de "App Android" y el rol de
- * "Backend" del equipo: cualquier cambio de ruta, método o forma del JSON
- * aquí debe acordarse con quien desarrolla el backend.
+ * Es el punto de acoplamiento con el backend: cualquier cambio de ruta o de la
+ * forma del JSON debe reflejarse también en `docs/api/openapi.json`.
  *
- * Todas las funciones son `suspend` porque se llaman desde corrutinas
- * (`viewModelScope.launch`) en los ViewModels, nunca directamente desde la UI.
+ * Las rutas públicas no llevan token; las del personal lo reciben del
+ * interceptor de [ServicioRemoto]. Las funciones lanzan excepción ante error:
+ * el manejo está centralizado en `repository/`.
  */
 interface ApiService {
 
-    /** CU-04: registra un nuevo reporte ciudadano. Devuelve el reporte creado (con folio). */
-    @POST("reportes")
-    suspend fun crearReporte(@Body request: CrearReporteRequest): Reporte
+    /** Aviso de privacidad vigente (público, CU-02). */
+    @GET("api/v1/avisos-privacidad/vigente")
+    suspend fun avisoPrivacidad(): AvisoPrivacidad
 
-    /** CU-09: lista todos los reportes/casos, usada por el panel de personal SIPINNA. */
-    @GET("reportes")
-    suspend fun listarReportes(): List<Reporte>
+    /** CU-04: registra un reporte anónimo; devuelve folio y clave (público). */
+    @POST("api/v1/reportes")
+    suspend fun crearReporte(@Body request: CrearReporteRequest): ReporteCreado
 
-    /** CU-08: consulta de seguimiento ciudadano por folio público. */
-    @GET("reportes/folio/{folio}")
-    suspend fun buscarPorFolio(@Path("folio") folio: String): Reporte
+    /** CU-08: consulta ciudadana con folio + clave (público). */
+    @POST("api/v1/reportes/consulta")
+    suspend fun consultar(@Body request: ConsultaRequest): ConsultaPublica
 
-    /** CU-09/CU-10: actualiza estatus y agrega un comentario de seguimiento al caso. */
-    @PATCH("reportes/{id}")
-    suspend fun actualizarReporte(
-        @Path("id") id: Int,
-        @Body request: ActualizarReporteRequest
-    ): Reporte
-
-    /** Inicio de sesión de personal SIPINNA / administración. */
-    @POST("auth/login")
+    /** Inicio de sesión del personal SIPINNA contra Cognito (público). */
+    @POST("api/v1/auth/login")
     suspend fun login(@Body request: LoginRequest): LoginResponse
+
+    /** CU-09: bandeja del personal, con filtro opcional por estatus (requiere sesión). */
+    @GET("api/v1/reportes")
+    suspend fun listarReportes(
+        @Query("estatus") estatus: String?,
+        @Query("pagina") pagina: Int,
+        @Query("tamano") tamano: Int
+    ): Pagina<ReporteResumen>
+
+    /** CU-09: detalle con bitácora y transiciones permitidas (requiere sesión). */
+    @GET("api/v1/reportes/{id}")
+    suspend fun detalle(@Path("id") id: Int): ReporteDetalle
+
+    /** CU-09/CU-10: cambio de estatus validado por la máquina de estados (requiere sesión). */
+    @PATCH("api/v1/reportes/{id}/estatus")
+    suspend fun cambiarEstatus(@Path("id") id: Int, @Body request: CambiarEstatusRequest): ReporteDetalle
+
+    /** Nota de seguimiento sin cambio de estatus (requiere sesión). */
+    @POST("api/v1/reportes/{id}/seguimientos")
+    suspend fun agregarSeguimiento(@Path("id") id: Int, @Body request: AgregarSeguimientoRequest): ReporteDetalle
 }

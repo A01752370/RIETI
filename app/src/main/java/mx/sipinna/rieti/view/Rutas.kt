@@ -1,22 +1,42 @@
 package mx.sipinna.rieti.view
 
+import android.net.Uri
+
 /**
- * Nombres de ruta usados por el `NavHost` de [MainActivity].
- *
- * Centralizar las rutas aquí evita errores de tipeo al navegar entre
- * pantallas y es el equivalente, en Compose, a lo que antes eran los
- * `Intent` entre Activities.
+ * Rutas del `NavHost` de [MainActivity]. Centralizarlas evita errores de
+ * tipeo al navegar (equivalente en Compose a los `Intent` entre Activities).
  */
 object Rutas {
-    const val LOGIN = "login"
-    const val REGISTRO = "registro"
-    const val FORMULARIO = "formulario"
-    const val CONFIRMACION = "confirmacion/{folio}"
-    const val HOME = "home/{esAdmin}"
-    const val REPORTES_LIST = "reportesList"
-    const val SEGUIMIENTO = "seguimiento/{esAdmin}"
+    /** Pantalla de inicio: reportar, consultar o entrar como personal. */
+    const val INICIO = "inicio"
 
-    fun confirmacion(folio: String) = "confirmacion/$folio"
-    fun home(esAdmin: Boolean) = "home/$esAdmin"
-    fun seguimiento(esAdmin: Boolean) = "seguimiento/$esAdmin"
+    /** Aviso de privacidad antes de reportar (CU-02). */
+    const val AVISO = "aviso"
+
+    /** Formulario de reporte; recibe la versión del aviso aceptada. */
+    const val FORMULARIO = "formulario/{avisoVersion}"
+
+    /** Confirmación con folio y clave. */
+    const val CONFIRMACION = "confirmacion/{folio}/{clave}"
+
+    /** Consulta ciudadana con folio + clave. */
+    const val CONSULTA = "consulta"
+
+    /** Inicio de sesión del personal. */
+    const val LOGIN = "login"
+
+    /** Bandeja del personal. */
+    const val BANDEJA = "bandeja"
+
+    /** Detalle y seguimiento de un reporte. */
+    const val DETALLE = "detalle/{id}"
+
+    /** Ruta del formulario con la versión del aviso. */
+    fun formulario(avisoVersion: String) = "formulario/${Uri.encode(avisoVersion)}"
+
+    /** Ruta de la confirmación. La clave solo vive en la pila de navegación en memoria. */
+    fun confirmacion(folio: String, clave: String) = "confirmacion/${Uri.encode(folio)}/${Uri.encode(clave)}"
+
+    /** Ruta del detalle de un reporte. */
+    fun detalle(id: Int) = "detalle/$id"
 }

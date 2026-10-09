@@ -2,7 +2,10 @@ import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { Publico } from '../auth/roles';
 
+/** Sondas de salud para el ALB y ECS. Públicas y sin datos sensibles. */
+@Publico()
 @SkipThrottle()
 @Controller('health')
 export class HealthController {

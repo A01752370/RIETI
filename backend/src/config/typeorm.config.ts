@@ -34,8 +34,11 @@ export function opcionesTypeOrm(): DataSourceOptions {
     database: process.env.DB_NAME,
     ssl: opcionesSsl(),
     entities: ENTIDADES,
-    migrations: [join(__dirname, '..', 'database', 'migrations', '*.js')],
-    migrationsRun: true,
+    // .js en la imagen (dist/); .ts cuando las pruebas corren con ts-jest.
+    migrations: [join(__dirname, '..', 'database', 'migrations', __filename.endsWith('.ts') ? '*.ts' : '*.js')],
+    // Con un usuario sin DDL (rieti_app, D-08) las migraciones se corren aparte con el
+    // usuario maestro y aquí se desactivan con DB_MIGRAR_AL_INICIAR=false.
+    migrationsRun: process.env.DB_MIGRAR_AL_INICIAR !== 'false',
     // Nunca true: el esquema solo cambia por migraciones.
     synchronize: false,
     logging: ['error', 'migration'],
