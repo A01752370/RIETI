@@ -1,7 +1,8 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
 /** Catálogos del ER de la Etapa 2. Se siembran en la migración inicial. */
 
+/** Municipio del catálogo (D-16): los 125 del Estado de México, con su clave INEGI. */
 @Entity('municipio')
 export class Municipio {
   @PrimaryGeneratedColumn({ name: 'id_municipio' })
@@ -12,6 +13,42 @@ export class Municipio {
 
   @Column({ length: 80 })
   estado: string;
+
+  /** Clave geoestadística de INEGI (`15xxx`). */
+  @Column({ name: 'clave_inegi', type: 'varchar', length: 5, nullable: true })
+  claveInegi: string | null;
+
+  /** Si se ofrece en el selector del formulario. */
+  @Column({ default: true })
+  activo: boolean;
+}
+
+/** Contacto institucional de un municipio de la red (D-17). */
+@Entity('contacto_municipio')
+export class ContactoMunicipio {
+  @PrimaryGeneratedColumn({ name: 'id_contacto' })
+  id: number;
+
+  @ManyToOne(() => Municipio, { nullable: false })
+  @JoinColumn({ name: 'id_municipio' })
+  municipio: Municipio;
+
+  /** `correo` o `enlace`. */
+  @Column({ type: 'varchar', length: 10 })
+  tipo: 'correo' | 'enlace';
+
+  @Column({ type: 'varchar', length: 300 })
+  valor: string;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  etiqueta: string | null;
+
+  /** true mientras el dato sea de ejemplo (dominio example.org). */
+  @Column({ name: 'es_ejemplo', default: false })
+  esEjemplo: boolean;
+
+  @UpdateDateColumn({ name: 'fecha_actualizacion', type: 'timestamptz' })
+  fechaActualizacion: Date;
 }
 
 @Entity('rol_usuario')
