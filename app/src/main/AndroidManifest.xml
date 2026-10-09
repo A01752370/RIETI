@@ -9,12 +9,17 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <application
-        android:allowBackup="true"
-        android:label="RIETI"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
         android:theme="@style/Theme.RIETI"
         android:usesCleartextTraffic="false">
 
-        <!-- Solo HTTPS. El build debug permite HTTP hacia 10.0.2.2 (ver src/debug). -->
+        <!-- Solo HTTPS. El build debug permite HTTP hacia 10.0.2.2 (ver src/debug).
+             allowBackup=false: nada de la app se respalda en la nube (A17). -->
 
         <activity
             android:name=".view.MainActivity"

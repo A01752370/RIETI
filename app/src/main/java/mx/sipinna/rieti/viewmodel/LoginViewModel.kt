@@ -4,49 +4,41 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import mx.sipinna.rieti.model.LoginRequest
-import mx.sipinna.rieti.network.ServicioRemoto
+import mx.sipinna.rieti.model.LoginResponse
+import mx.sipinna.rieti.repository.SesionRepositorio
 
 /**
- * ViewModel de la pantalla de inicio de sesión.
+ * ViewModel del inicio de sesión del personal SIPINNA.
  *
- * Llama a `POST /auth/login` a través de [ServicioRemoto] y expone el
- * resultado como [StateFlow], que la pantalla Composable observa con
- * `collectAsState()`.
+ * Llama a `POST /api/v1/auth/login` (Cognito detrás). No hay "Crear cuenta":
+ * las cuentas las da de alta un administrador (D-07, D-12).
+ *
+ * @param sesion repositorio de sesión (sustituible en pruebas)
  */
-class LoginViewModel : ViewModel() {
+class LoginViewModel(
+    private val sesion: SesionRepositorio = SesionRepositorio()
+) : ViewModel() {
 
-    private val _cargando = MutableStateFlow(false)
-    val cargando: StateFlow<Boolean> = _cargando
+    private val _estado = MutableStateFlow<UiState<LoginResponse>>(UiState.Inactivo)
 
-    private val _esAdmin = MutableStateFlow<Boolean?>(null)
-    val esAdmin: StateFlow<Boolean?> = _esAdmin
+    /** Estado del intento de inicio de sesión; en [UiState.Exito] se navega a la bandeja. */
+    val estado: StateFlow<UiState<LoginResponse>> = _estado.asStateFlow()
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error
-
-    /** Intenta iniciar sesión contra el backend con el correo y contraseña capturados. */
-    fun login(correo: String, password: String) {
+    /** Intenta iniciar sesión con el correo y la contraseña capturados. */
+    fun iniciarSesion(correo: String, password: String) {
+        if (_estado.value is UiState.Cargando) return
         if (correo.isBlank() || password.isBlank()) {
-            _error.value = "Ingresa tu correo y contraseña"
+            _estado.value = UiState.Error("Escribe tu correo y tu contraseña")
             return
         }
-        _cargando.value = true
-        viewModelScope.launch {
-            val respuesta = ServicioRemoto.login(LoginRequest(correo, password))
-            if (respuesta != null) {
-                _esAdmin.value = respuesta.esAdministrador
-                _error.value = null
-            } else {
-                _error.value = "No se pudo iniciar sesión. Verifica tu conexión."
-            }
-            _cargando.value = false
-        }
+        _estado.value = UiState.Cargando
+        viewModelScope.launch { _estado.value = sesion.iniciarSesion(correo, password).aUiState() }
     }
 
-    /** Limpia el resultado de navegación para que no se repita al recomponer. */
-    fun limpiarResultado() {
-        _esAdmin.value = null
+    /** Limpia el resultado tras navegar, para no repetir la navegación al recomponer. */
+    fun consumirResultado() {
+        _estado.value = UiState.Inactivo
     }
 }

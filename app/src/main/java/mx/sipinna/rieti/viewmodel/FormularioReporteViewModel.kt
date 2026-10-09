@@ -4,78 +4,97 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import mx.sipinna.rieti.model.CrearReporteRequest
-import mx.sipinna.rieti.model.Reporte
-import mx.sipinna.rieti.network.ServicioRemoto
+import mx.sipinna.rieti.model.ReporteCreado
+import mx.sipinna.rieti.repository.ReportesRepositorio
 
 /**
- * ViewModel del formulario de registro de reporte (CU-04).
+ * Ubicación del lugar de los hechos tomada del GPS.
  *
- * Además del envío al backend, guarda la última ubicación GPS capturada por
- * [mx.sipinna.rieti.model.GestorUbicacion] (`latitud`/`longitud`), para
- * incluirla en la petición y para que la pantalla pueda mostrar el thumbnail
- * del mapa con Coil mientras el usuario completa el resto del formulario.
+ * @property latitud latitud en grados
+ * @property longitud longitud en grados
+ * @property precisionMetros radio de incertidumbre reportado por el GPS, o null
  */
-class FormularioReporteViewModel : ViewModel() {
+data class UbicacionCapturada(val latitud: Double, val longitud: Double, val precisionMetros: Float?) {
+    /** CU-03 A3: con más de 100 m de incertidumbre conviene pedir una referencia más precisa. */
+    val esImprecisa: Boolean get() = (precisionMetros ?: 0f) > 100f
+}
 
-    private val _enviando = MutableStateFlow(false)
-    val enviando: StateFlow<Boolean> = _enviando
+/**
+ * ViewModel del formulario de reporte anónimo (CU-04).
+ *
+ * La ubicación del GPS solo se usa si la persona lo pide y se envía como
+ * ubicación **del lugar de los hechos**; no se guarda en el teléfono (RNF-28).
+ *
+ * @param repositorio acceso al API (sustituible en pruebas)
+ */
+class FormularioReporteViewModel(
+    private val repositorio: ReportesRepositorio = ReportesRepositorio()
+) : ViewModel() {
 
-    private val _reporteCreado = MutableStateFlow<Reporte?>(null)
-    val reporteCreado: StateFlow<Reporte?> = _reporteCreado
+    private val _envio = MutableStateFlow<UiState<ReporteCreado>>(UiState.Inactivo)
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error
+    /** Estado del envío; en [UiState.Exito] la pantalla navega a la confirmación. */
+    val envio: StateFlow<UiState<ReporteCreado>> = _envio.asStateFlow()
 
-    private val _latitud = MutableStateFlow<Double?>(null)
-    val latitud: StateFlow<Double?> = _latitud
+    private val _ubicacion = MutableStateFlow<UbicacionCapturada?>(null)
 
-    private val _longitud = MutableStateFlow<Double?>(null)
-    val longitud: StateFlow<Double?> = _longitud
+    /** Última lectura del GPS, o null si no se ha pedido. */
+    val ubicacion: StateFlow<UbicacionCapturada?> = _ubicacion.asStateFlow()
 
     /** Llamada por [mx.sipinna.rieti.model.GestorUbicacion] cuando el GPS entrega una lectura. */
-    fun actualizarUbicacionCapturada(lat: Double, lng: Double) {
-        _latitud.value = lat
-        _longitud.value = lng
+    fun actualizarUbicacionCapturada(lat: Double, lng: Double, precisionMetros: Float? = null) {
+        _ubicacion.value = UbicacionCapturada(lat, lng, precisionMetros)
+    }
+
+    /** Descarta la lectura del GPS (la persona prefirió no enviarla). */
+    fun quitarUbicacion() {
+        _ubicacion.value = null
     }
 
     /**
-     * Envía el formulario de reporte al backend, incluyendo la ubicación GPS
-     * capturada (si existe) además del texto libre de ubicación.
+     * Valida y envía el reporte.
+     *
+     * @param avisoVersion versión del aviso de privacidad que la persona aceptó
      */
-    fun enviarReporte(
-        ubicacion: String,
-        descripcion: String,
-        cantidadNinos: Int,
-        edadAproximada: String,
+    fun enviar(
+        ubicacionTexto: String,
+        cantidad: String,
+        edad: String,
         actividad: String,
-        situacionRiesgo: String
+        riesgo: String,
+        descripcion: String,
+        avisoVersion: String
     ) {
-        if (ubicacion.isBlank() || descripcion.isBlank()) {
-            _error.value = "Completa la ubicación y la descripción"
+        if (_envio.value is UiState.Cargando) return
+        val problemas = ValidadorReporte.validar(ubicacionTexto, cantidad, edad, actividad, riesgo, descripcion)
+        if (problemas.isNotEmpty()) {
+            _envio.value = UiState.Error(problemas.joinToString("\n"))
             return
         }
-        _enviando.value = true
+        _envio.value = UiState.Cargando
+        val gps = _ubicacion.value
         viewModelScope.launch {
-            val request = CrearReporteRequest(
-                ubicacion = ubicacion,
-                latitud = _latitud.value,
-                longitud = _longitud.value,
-                cantidadNinos = cantidadNinos,
-                edadAproximada = edadAproximada,
-                actividad = actividad,
-                situacionRiesgo = situacionRiesgo,
-                descripcion = descripcion
-            )
-            val resultado = ServicioRemoto.crearReporte(request)
-            if (resultado != null) {
-                _reporteCreado.value = resultado
-                _error.value = null
-            } else {
-                _error.value = "No se pudo enviar el reporte. Intenta de nuevo."
-            }
-            _enviando.value = false
+            _envio.value = repositorio.crear(
+                CrearReporteRequest(
+                    ubicacion = ubicacionTexto.trim(),
+                    latitud = gps?.latitud,
+                    longitud = gps?.longitud,
+                    cantidadNinos = ValidadorReporte.CANTIDADES.getValue(cantidad),
+                    edadAproximada = edad,
+                    actividad = actividad,
+                    situacionRiesgo = riesgo,
+                    descripcion = descripcion.trim(),
+                    avisoPrivacidadVersion = avisoVersion
+                )
+            ).aUiState()
         }
+    }
+
+    /** Regresa al estado inicial (tras navegar a la confirmación). */
+    fun reiniciarEnvio() {
+        _envio.value = UiState.Inactivo
     }
 }
