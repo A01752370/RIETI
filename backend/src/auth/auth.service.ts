@@ -57,7 +57,7 @@ export class AuthService {
 
     const claims = await this.verificadorId.verify(idToken);
     const grupos = claims['cognito:groups'] ?? [];
-    const usuario = await this.sincronizarUsuario(claims.sub, String(claims.email), grupos);
+    const usuario = await this.sincronizarUsuario(claims.sub, String(claims.email).toLowerCase(), grupos);
 
     return {
       idUsuario: usuario.id,
@@ -75,8 +75,12 @@ export class AuthService {
       : grupos.includes('PersonalSIPINNA') ? GRUPO_A_ROL.PersonalSIPINNA : 'Ciudadano';
     const rol = await this.roles.findOneByOrFail({ nombre: nombreRol });
 
-    const existente = await this.usuarios.findOneBy({ cognitoSub: sub });
+    // Por correo también: si la cuenta se recreó en Cognito, llega con otro `sub`.
+    // Seguro porque el pool solo admite altas por administrador y correos verificados.
+    const existente = (await this.usuarios.findOneBy({ cognitoSub: sub }))
+      ?? (await this.usuarios.findOneBy({ correo }));
     if (existente) {
+      existente.cognitoSub = sub;
       existente.correo = correo;
       existente.rol = rol;
       return this.usuarios.save(existente);
