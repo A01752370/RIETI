@@ -62,7 +62,7 @@
 | D-03 | Sin dominio propio: se usa `*.cloudfront.net`. Con que haya funcionalidad es suficiente. |
 | D-04 | Sin alta disponibilidad (un NAT, RDS en una AZ, 1 tarea mínima): **decisión de costo**, documentada. |
 | D-07 | El primer usuario administrador de Cognito lo crea quien administra la cuenta de AWS; después los usuarios se crean desde la plataforma (ver D-06). |
-| D-09 | Alcance en AWS: solo recursos de este proyecto (etiqueta `proyecto=rieti`, región `mx-central-1`). No se opera sobre ningún otro recurso de la cuenta. |
+| D-09 | Alcance en AWS: solo recursos de este proyecto (etiqueta `Project=RIETI` y prefijo `rieti`, región `mx-central-1`). No se opera sobre ningún otro recurso de la cuenta. *Corregido el 9-oct-2026: la versión anterior decía `proyecto=rieti`, que ningún recurso tiene (ver `docs/AUDITORIA-CUENTA.md`).* |
 | D-10 | Las credenciales (llave AWS del perfil `rieti` y token de GitHub) se rotan al terminar la sesión de desarrollo. Tras rotar, usar OIDC de GitHub→AWS (sin llaves estáticas). |
 
 ### 2.2 Decisiones abiertas — con recomendación (confirmar con el equipo)
@@ -356,7 +356,7 @@ Panel web de estadísticas y gráficas con filtros, mapa de calor (Leaflet + dat
 ### 9.4 Infraestructura (Terraform)
 - Cognito (pool, cliente, dominio, grupos), bucket web + OAC, comportamiento `/api/*`, política de cabeceras, restricción ALB↔CloudFront, regla WAF *rate-based*, parámetros de BD (`rds.force_ssl=1`), grupo de parámetros opcional para pgAudit, alarmas y presupuesto con `alerta_emails` (D-05).
 - Estado remoto de Terraform (S3 + bloqueo) si el equipo lo requiere; **nunca** versionar `*.tfstate`.
-- Etiquetar recursos (`proyecto=rieti`) y no operar sobre recursos ajenos al proyecto (D-09).
+- Etiquetar recursos (`Project=RIETI`) y no operar sobre recursos ajenos al proyecto (D-09).
 - Plan de apagado: documentar cómo destruir/pausar (`terraform destroy` o escalar Fargate a 0, detener RDS) al terminar la etapa para proteger el crédito.
 
 ### 9.5 CI/CD (GitHub Actions)
