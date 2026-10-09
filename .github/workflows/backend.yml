@@ -3,9 +3,9 @@ name: Backend
 on:
   push:
     branches: [main]
-    paths: ["backend/**", "infra/sql/**", ".github/workflows/backend.yml"]
+    paths: ["backend/**", "web/**", ".dockerignore", "infra/sql/**", ".github/workflows/backend.yml"]
   pull_request:
-    paths: ["backend/**", "infra/sql/**", ".github/workflows/backend.yml"]
+    paths: ["backend/**", "web/**", ".dockerignore", "infra/sql/**", ".github/workflows/backend.yml"]
   workflow_dispatch:
 
 permissions:
@@ -64,6 +64,15 @@ jobs:
       - run: npm ci
       - run: npm run test:e2e
 
+  # En los PR se construye la imagen completa (web + API) sin subirla, para detectar
+  # errores del Dockerfile antes de fusionar (la fusión despliega).
+  imagen:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build --platform linux/arm64 -f Dockerfile -t rieti-api:pr ..
+
   deploy:
     needs: [test, e2e]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -92,7 +101,8 @@ jobs:
         env:
           IMAGEN: ${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
         run: |
-          docker build --platform linux/arm64 -t "$IMAGEN" .
+          # Contexto: raíz del repo (la imagen incluye la web compilada).
+          docker build --platform linux/arm64 -f Dockerfile -t "$IMAGEN" ..
           docker push "$IMAGEN"
           echo "uri=$IMAGEN" >> "$GITHUB_OUTPUT"
 
