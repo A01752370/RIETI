@@ -15,6 +15,8 @@ import request from 'supertest';
 import { DataSource } from 'typeorm';
 
 const HAY_BD = Boolean(process.env.E2E_DB_PORT);
+/** Con E2E_COMO_RIETI_APP=1 el API se conecta con el rol de mínimo privilegio (infra/sql). */
+const COMO_RIETI_APP = process.env.E2E_COMO_RIETI_APP === '1';
 const describeBd = HAY_BD ? describe : describe.skip;
 
 const BD = 'rieti_e2e';
@@ -48,6 +50,8 @@ const reporteValido = () => ({
 describeBd('API RIETI (e2e)', () => {
   let app: NestExpressApplication;
   let ds: DataSource;
+  /** Conexión con el usuario maestro, para preparar datos y probar el script de administración. */
+  let adminDs: DataSource;
   const http = () => request(app.getHttpServer());
 
   beforeAll(async () => {
@@ -71,6 +75,22 @@ describeBd('API RIETI (e2e)', () => {
     await admin.query(`CREATE DATABASE ${BD}`);
     await admin.destroy();
 
+    adminDs = await new DataSource({
+      type: 'postgres', host: process.env.DB_HOST, port: Number(process.env.DB_PORT),
+      username: process.env.DB_USERNAME, password: process.env.DB_PASSWORD, database: BD,
+    }).initialize();
+    if (COMO_RIETI_APP) {
+      // Migraciones con el usuario maestro y luego el rol limitado, como en el runbook.
+      const { opcionesTypeOrm } = await import('../../src/config/typeorm.config');
+      const mig = await new DataSource({ ...opcionesTypeOrm(), migrationsRun: false }).initialize();
+      await mig.runMigrations();
+      await mig.destroy();
+      const { readFileSync } = await import('fs');
+      await adminDs.query(readFileSync(`${__dirname}/../../../infra/sql/01-rol-rieti-app.sql`, 'utf8'));
+      await adminDs.query("ALTER ROLE rieti_app LOGIN PASSWORD 'solo-e2e-local'");
+      Object.assign(process.env, { DB_USERNAME: 'rieti_app', DB_PASSWORD: 'solo-e2e-local', DB_MIGRAR_AL_INICIAR: 'false' });
+    }
+
     // Imports diferidos: las opciones de TypeORM y Cognito se leen del entorno recién configurado.
     const { AppModule } = await import('../../src/app.module');
     const { VERIFICADOR_JWT } = await import('../../src/auth/jwt.guard');
@@ -91,9 +111,9 @@ describeBd('API RIETI (e2e)', () => {
     ds = app.get(DataSource);
 
     const rol = async (nombre: string) =>
-      (await ds.query('SELECT id_rol FROM rol_usuario WHERE nombre = $1', [nombre]))[0].id_rol;
+      (await adminDs.query('SELECT id_rol FROM rol_usuario WHERE nombre = $1', [nombre]))[0].id_rol;
     const personal = await rol('Personal SIPINNA');
-    await ds.query(
+    await adminDs.query(
       `INSERT INTO usuario (correo, cognito_sub, id_rol, activo) VALUES
        ('enlace@ejemplo.mx', $1, $4, true), ('sinrol@ejemplo.mx', $2, $5, true), ('baja@ejemplo.mx', $3, $4, false)`,
       [SUB_PERSONAL, SUB_SIN_ROL, SUB_INACTIVO, personal, await rol('Ciudadano')]);
@@ -101,6 +121,7 @@ describeBd('API RIETI (e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
+    await adminDs?.destroy();
   });
 
   describe('rutas públicas', () => {
@@ -345,8 +366,39 @@ describeBd('API RIETI (e2e)', () => {
     });
 
     it('A21: la bitácora es solo de inserción', async () => {
-      await expect(ds.query('UPDATE seguimiento SET comentario = $1', ['alterado'])).rejects.toThrow(/append-only/);
-      await expect(ds.query('DELETE FROM seguimiento')).rejects.toThrow(/append-only/);
+      // Con el usuario maestro lo frena el trigger; con rieti_app, además, la falta de permisos.
+      const rechazo = COMO_RIETI_APP ? /permission denied/ : /append-only/;
+      await expect(ds.query('UPDATE seguimiento SET comentario = $1', ['alterado'])).rejects.toThrow(rechazo);
+      await expect(ds.query('DELETE FROM seguimiento')).rejects.toThrow(rechazo);
+      await expect(adminDs.query('DELETE FROM seguimiento')).rejects.toThrow(/append-only/);
+    });
+
+    (COMO_RIETI_APP ? it : it.skip)('D-08: rieti_app no puede borrar reportes ni cambiar el esquema', async () => {
+      await expect(ds.query('DELETE FROM reporte')).rejects.toThrow(/permission denied/);
+      await expect(ds.query("UPDATE reporte SET descripcion = 'x'")).rejects.toThrow(/permission denied/);
+      await expect(ds.query('CREATE TABLE intruso (x int)')).rejects.toThrow(/permission denied/);
+    });
+  });
+
+  describe('script de administración borrar-reporte', () => {
+    it('borra un reporte con su bitácora y deja el trigger activo', async () => {
+      const { borrarReportePorFolio } = await import('../../src/scripts/borrar-reporte');
+      const r = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send(reporteValido()).expect(201);
+      const antes = Number((await ds.query('SELECT count(*) AS n FROM reporte'))[0].n);
+
+      const res = await adminDs.transaction((m) => borrarReportePorFolio(m, r.body.folio));
+      expect(res).toEqual({ folio: r.body.folio, casos: 1, seguimientos: 1 });
+      expect(Number((await ds.query('SELECT count(*) AS n FROM reporte'))[0].n)).toBe(antes - 1);
+      expect(await ds.query('SELECT 1 FROM folio WHERE codigo = $1', [r.body.folio])).toEqual([]);
+
+      // El trigger volvió a quedar activo.
+      await expect(adminDs.query('DELETE FROM seguimiento')).rejects.toThrow(/append-only/);
+    });
+
+    it('si el folio no existe no cambia nada', async () => {
+      const { borrarReportePorFolio } = await import('../../src/scripts/borrar-reporte');
+      await expect(adminDs.transaction((m) => borrarReportePorFolio(m, 'RIETI-2026-999999'))).rejects.toThrow(/No existe/);
+      await expect(adminDs.query('DELETE FROM seguimiento')).rejects.toThrow(/append-only/);
     });
   });
 });
