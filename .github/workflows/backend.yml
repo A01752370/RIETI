@@ -3,9 +3,9 @@ name: Backend
 on:
   push:
     branches: [main]
-    paths: ["backend/**", ".github/workflows/backend.yml"]
+    paths: ["backend/**", "infra/sql/**", ".github/workflows/backend.yml"]
   pull_request:
-    paths: ["backend/**", ".github/workflows/backend.yml"]
+    paths: ["backend/**", "infra/sql/**", ".github/workflows/backend.yml"]
   workflow_dispatch:
 
 permissions:
@@ -34,8 +34,38 @@ jobs:
       - run: npm test
       - run: npm audit --omit=dev --audit-level=high
 
+  # Pruebas de punta a punta contra PostgreSQL 16 + PostGIS reales, con el usuario
+  # maestro y con el rol de mínimo privilegio rieti_app (infra/sql).
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        usuario: [maestro, rieti_app]
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      E2E_DB_PORT: 5432
+      E2E_DB_PASSWORD: postgres
+      E2E_COMO_RIETI_APP: ${{ matrix.usuario == 'rieti_app' && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run test:e2e
+
   deploy:
-    needs: test
+    needs: [test, e2e]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     # Runner ARM64: la imagen se construye nativa para Fargate Graviton.
     runs-on: ubuntu-24.04-arm

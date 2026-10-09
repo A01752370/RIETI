@@ -1,16 +1,17 @@
 package mx.sipinna.rieti.model
 
 /**
- * Respuesta del backend al iniciar sesión.
+ * Respuesta de `POST /api/v1/auth/login`.
  *
- * El backend autentica contra Amazon Cognito y aplica RBAC por grupos (RNF-18):
- * `accessToken` se envía como `Authorization: Bearer` en las rutas de personal.
+ * El backend autentica contra Amazon Cognito y aplica RBAC por grupos (RNF-18).
+ * Solo las cuentas de personal SIPINNA pueden iniciar sesión; los ciudadanos
+ * reportan sin cuenta (D-12).
  *
- * @property idUsuario identificador del usuario autenticado
+ * @property idUsuario identificador del usuario en la base de datos
  * @property correo correo con el que inició sesión
- * @property rol nombre del rol asignado (p. ej. "Personal SIPINNA", "Administrador")
- * @property esAdministrador true si el rol tiene permisos de personal SIPINNA
- * @property accessToken JWT de Cognito para las peticiones autenticadas
+ * @property rol nombre del rol (p. ej. "Personal SIPINNA", "Administrador")
+ * @property esAdministrador true si pertenece al grupo Administrador
+ * @property accessToken JWT de Cognito para `Authorization: Bearer`
  * @property expiresIn segundos de validez del token
  */
 data class LoginResponse(

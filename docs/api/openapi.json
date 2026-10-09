@@ -1,0 +1,1234 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "RIETI API",
+    "version": "1.0.0",
+    "description": "API REST de RIETI (SIPINNA Atizapán de Zaragoza). Documento escrito a mano a partir de backend/src; las pruebas e2e (backend/test/e2e) ejercitan cada ruta. Todos los errores usan el esquema Error."
+  },
+  "servers": [
+    {
+      "url": "https://d3hexe1fo0mq6l.cloudfront.net",
+      "description": "Producción (CloudFront → ALB → ECS)"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Local"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Público"
+    },
+    {
+      "name": "Personal SIPINNA"
+    },
+    {
+      "name": "Operación"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "Operación"
+        ],
+        "summary": "Liveness (ALB/ECS). Fuera del prefijo /api/v1.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "estado"
+                  ],
+                  "properties": {
+                    "estado": {
+                      "type": "string",
+                      "example": "ok"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "Operación"
+        ],
+        "summary": "Readiness: verifica la conexión a PostgreSQL.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "estado",
+                    "bd"
+                  ],
+                  "properties": {
+                    "estado": {
+                      "type": "string"
+                    },
+                    "bd": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sin conexión a la BD",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/avisos-privacidad/vigente": {
+      "get": {
+        "tags": [
+          "Público"
+        ],
+        "summary": "Aviso de privacidad vigente (CU-02, RF-44).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvisoPrivacidad"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/catalogos": {
+      "get": {
+        "tags": [
+          "Público"
+        ],
+        "summary": "Catálogos del formulario y estatus canónicos.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Catalogos"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reportes": {
+      "post": {
+        "tags": [
+          "Público"
+        ],
+        "summary": "CU-04: registrar reporte anónimo. Límite: 5 por minuto por IP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearReporte"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Creado. La clave de consulta solo se entrega en esta respuesta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReporteCreado"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validación (SOLICITUD_INVALIDA, VALOR_NO_VALIDO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Cuerpo mayor a 16 KB (CUERPO_DEMASIADO_GRANDE)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "CU-09: bandeja paginada, del más reciente al más antiguo.",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "estatus",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Recibido",
+                "En revisión",
+                "En atención",
+                "Canalizado",
+                "Concluido",
+                "Descartado"
+              ]
+            }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "tamano",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaReportes"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Filtro inválido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin grupo de personal o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reportes/consulta": {
+      "post": {
+        "tags": [
+          "Público"
+        ],
+        "summary": "CU-08: consulta ciudadana con folio + clave. Por POST para no exponer la clave en URLs. Límite: 10 por minuto por IP y bloqueo del folio tras 5 fallos en 15 minutos.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Consulta"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsultaPublica"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Formato de folio inválido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "FOLIO_O_CLAVE_INCORRECTOS (misma respuesta si el folio no existe o si la clave es incorrecta)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "DEMASIADOS_INTENTOS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reportes/{id}": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "CU-09: detalle con bitácora y transiciones permitidas.",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReporteDetalle"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin grupo de personal o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NO_ENCONTRADO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reportes/{id}/estatus": {
+      "patch": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "CU-09/CU-10: cambio de estatus validado contra la tabla de transiciones de la Etapa 1.",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CambiarEstatus"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReporteDetalle"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Estatus fuera de catálogo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin grupo de personal o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NO_ENCONTRADO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "TRANSICION_INVALIDA, MOTIVO_REQUERIDO o COMENTARIO_REQUERIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reportes/{id}/seguimientos": {
+      "post": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Nota de seguimiento sin cambio de estatus.",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgregarSeguimiento"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReporteDetalle"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin grupo de personal o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NO_ENCONTRADO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Público"
+        ],
+        "summary": "Login del personal contra Cognito (USER_PASSWORD_AUTH). Límite: 5 por minuto por IP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginRespuesta"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "CREDENCIALES_INVALIDAS o RETO_NO_SOPORTADO (cambio de contraseña o MFA pendiente)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "SIN_ROL o USUARIO_INACTIVO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "cognito": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Access token de Amazon Cognito (grupos Administrador o PersonalSIPINNA)."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "codigo",
+          "mensaje"
+        ],
+        "properties": {
+          "codigo": {
+            "type": "string",
+            "example": "FOLIO_O_CLAVE_INCORRECTOS"
+          },
+          "mensaje": {
+            "type": "string"
+          },
+          "detalle": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "AvisoPrivacidad": {
+        "type": "object",
+        "required": [
+          "version",
+          "parrafos"
+        ],
+        "properties": {
+          "version": {
+            "type": "string",
+            "example": "2026-10-v1"
+          },
+          "parrafos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "Catalogos": {
+        "type": "object",
+        "required": [
+          "actividades",
+          "rangosEdad",
+          "riesgos",
+          "estatus"
+        ],
+        "properties": {
+          "actividades": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rangosEdad": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "riesgos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "estatus": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Recibido",
+                "En revisión",
+                "En atención",
+                "Canalizado",
+                "Concluido",
+                "Descartado"
+              ]
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CrearReporte": {
+        "type": "object",
+        "required": [
+          "ubicacion",
+          "cantidadNinos",
+          "edadAproximada",
+          "actividad",
+          "situacionRiesgo",
+          "descripcion",
+          "avisoPrivacidadVersion"
+        ],
+        "properties": {
+          "ubicacion": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Referencia del lugar de los hechos"
+          },
+          "latitud": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -90,
+            "maximum": 90,
+            "description": "Del lugar de los hechos, no de quien reporta"
+          },
+          "longitud": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -180,
+            "maximum": 180
+          },
+          "cantidadNinos": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99
+          },
+          "edadAproximada": {
+            "type": "string",
+            "example": "6-11"
+          },
+          "actividad": {
+            "type": "string",
+            "example": "Venta ambulante"
+          },
+          "situacionRiesgo": {
+            "type": "string",
+            "enum": [
+              "Sí",
+              "No",
+              "No sé"
+            ]
+          },
+          "descripcion": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "avisoPrivacidadVersion": {
+            "type": "string",
+            "example": "2026-10-v1",
+            "description": "Debe ser la versión vigente"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReporteCreado": {
+        "type": "object",
+        "required": [
+          "folio",
+          "claveConsulta",
+          "estatus",
+          "fechaCreacion"
+        ],
+        "properties": {
+          "folio": {
+            "type": "string",
+            "pattern": "^RIETI-\\d{4}-\\d{6}$"
+          },
+          "claveConsulta": {
+            "type": "string",
+            "pattern": "^[2-9A-HJ-KM-NP-Z]{4}-[2-9A-HJ-KM-NP-Z]{4}-[2-9A-HJ-KM-NP-Z]{4}$"
+          },
+          "estatus": {
+            "type": "string",
+            "enum": [
+              "Recibido"
+            ]
+          },
+          "fechaCreacion": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Consulta": {
+        "type": "object",
+        "required": [
+          "folio",
+          "clave"
+        ],
+        "properties": {
+          "folio": {
+            "type": "string",
+            "pattern": "^RIETI-\\d{4}-\\d{6}$"
+          },
+          "clave": {
+            "type": "string",
+            "maxLength": 30
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConsultaPublica": {
+        "type": "object",
+        "required": [
+          "folio",
+          "estatus",
+          "fechaCreacion",
+          "fechaActualizacion",
+          "historial"
+        ],
+        "properties": {
+          "folio": {
+            "type": "string"
+          },
+          "estatus": {
+            "type": "string",
+            "enum": [
+              "Recibido",
+              "En revisión",
+              "En atención",
+              "Canalizado",
+              "Concluido",
+              "Descartado"
+            ]
+          },
+          "fechaCreacion": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fechaActualizacion": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "historial": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "estatus",
+                "fecha"
+              ],
+              "properties": {
+                "estatus": {
+                  "type": "string",
+                  "enum": [
+                    "Recibido",
+                    "En revisión",
+                    "En atención",
+                    "Canalizado",
+                    "Concluido",
+                    "Descartado"
+                  ]
+                },
+                "fecha": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReporteResumen": {
+        "type": "object",
+        "required": [
+          "id",
+          "folio",
+          "estatus",
+          "ubicacion",
+          "actividad",
+          "edadAproximada",
+          "cantidadNinos",
+          "situacionRiesgo",
+          "fechaCreacion",
+          "fechaActualizacion"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "folio": {
+            "type": "string"
+          },
+          "estatus": {
+            "type": "string",
+            "enum": [
+              "Recibido",
+              "En revisión",
+              "En atención",
+              "Canalizado",
+              "Concluido",
+              "Descartado"
+            ]
+          },
+          "ubicacion": {
+            "type": "string"
+          },
+          "actividad": {
+            "type": "string"
+          },
+          "edadAproximada": {
+            "type": "string"
+          },
+          "cantidadNinos": {
+            "type": "integer"
+          },
+          "situacionRiesgo": {
+            "type": "string"
+          },
+          "fechaCreacion": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fechaActualizacion": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaginaReportes": {
+        "type": "object",
+        "required": [
+          "elementos",
+          "total",
+          "pagina",
+          "tamano"
+        ],
+        "properties": {
+          "elementos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReporteResumen"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "pagina": {
+            "type": "integer"
+          },
+          "tamano": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      },
+      "EventoSeguimiento": {
+        "type": "object",
+        "required": [
+          "estatus",
+          "comentario",
+          "autor",
+          "fecha"
+        ],
+        "properties": {
+          "estatus": {
+            "type": "string",
+            "enum": [
+              "Recibido",
+              "En revisión",
+              "En atención",
+              "Canalizado",
+              "Concluido",
+              "Descartado"
+            ]
+          },
+          "comentario": {
+            "type": "string",
+            "nullable": true
+          },
+          "autor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Correo del personal; null en el registro automático"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReporteDetalle": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ReporteResumen"
+          },
+          {
+            "type": "object",
+            "required": [
+              "latitud",
+              "longitud",
+              "descripcion",
+              "motivoDescarte",
+              "historial",
+              "transicionesPermitidas"
+            ],
+            "properties": {
+              "latitud": {
+                "type": "number",
+                "nullable": true
+              },
+              "longitud": {
+                "type": "number",
+                "nullable": true
+              },
+              "descripcion": {
+                "type": "string"
+              },
+              "motivoDescarte": {
+                "type": "string",
+                "nullable": true
+              },
+              "historial": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EventoSeguimiento"
+                }
+              },
+              "transicionesPermitidas": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "Recibido",
+                    "En revisión",
+                    "En atención",
+                    "Canalizado",
+                    "Concluido",
+                    "Descartado"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CambiarEstatus": {
+        "type": "object",
+        "required": [
+          "estatus"
+        ],
+        "properties": {
+          "estatus": {
+            "type": "string",
+            "enum": [
+              "Recibido",
+              "En revisión",
+              "En atención",
+              "Canalizado",
+              "Concluido",
+              "Descartado"
+            ]
+          },
+          "comentario": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "motivo": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Obligatorio si estatus = Descartado"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AgregarSeguimiento": {
+        "type": "object",
+        "required": [
+          "comentario"
+        ],
+        "properties": {
+          "comentario": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "additionalProperties": false
+      },
+      "Login": {
+        "type": "object",
+        "required": [
+          "correo",
+          "password"
+        ],
+        "properties": {
+          "correo": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 256,
+            "format": "password"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LoginRespuesta": {
+        "type": "object",
+        "required": [
+          "idUsuario",
+          "correo",
+          "rol",
+          "esAdministrador",
+          "accessToken",
+          "expiresIn"
+        ],
+        "properties": {
+          "idUsuario": {
+            "type": "integer"
+          },
+          "correo": {
+            "type": "string"
+          },
+          "rol": {
+            "type": "string"
+          },
+          "esAdministrador": {
+            "type": "boolean"
+          },
+          "accessToken": {
+            "type": "string"
+          },
+          "expiresIn": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

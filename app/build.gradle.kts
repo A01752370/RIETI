@@ -64,9 +64,9 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.kotlinx.coroutines.android)
 
-    // Coil: carga de imágenes (thumbnail de mapa de la ubicación capturada)
-    implementation(libs.coil.compose)
-
     // Servicios de ubicación de Google Play (GPS)
     implementation(libs.google.play.services.location)
+
+    // Pruebas unitarias en la JVM (lógica pura: validación y manejo de errores)
+    testImplementation(libs.junit)
 }

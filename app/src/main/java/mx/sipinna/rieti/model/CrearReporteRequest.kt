@@ -1,20 +1,21 @@
 package mx.sipinna.rieti.model
 
 /**
- * Cuerpo de la petición para crear un nuevo reporte (CU-04: Registrar reporte ciudadano).
+ * Cuerpo de `POST /api/v1/reportes` (CU-04: registrar reporte anónimo).
  *
- * `latitud`/`longitud` vienen de [mx.sipinna.rieti.model.GestorUbicacion] cuando el
- * usuario otorgó permiso de ubicación; si no, se envían como null y el reporte
- * queda solo con la ubicación en texto libre.
+ * No incluye ningún dato de quien reporta ni identificadores del dispositivo
+ * (RNF-29). `latitud`/`longitud` son las del **lugar de los hechos**: solo se
+ * envían si la persona tocó "Usar mi ubicación actual" en el formulario.
  *
- * @property ubicacion texto libre o dirección capturada en el formulario
- * @property latitud latitud GPS capturada, o null si no está disponible
- * @property longitud longitud GPS capturada, o null si no está disponible
- * @property cantidadNinos cantidad de niñas/niños observados, seleccionada en los chips
- * @property edadAproximada rango de edad seleccionado en los chips
- * @property actividad actividad observada, seleccionada en los chips
- * @property situacionRiesgo respuesta Sí/No/No sé seleccionada en los chips
- * @property descripcion descripción libre escrita por quien reporta
+ * @property ubicacion referencia del lugar (calle, colonia, punto de referencia)
+ * @property latitud latitud del lugar de los hechos, o null
+ * @property longitud longitud del lugar de los hechos, o null
+ * @property cantidadNinos cantidad aproximada de niñas/niños observados (RF-05)
+ * @property edadAproximada rango de edad del catálogo ("0-5", "6-11", "12-17")
+ * @property actividad actividad observada (catálogo de actividades)
+ * @property situacionRiesgo "Sí", "No" o "No sé"
+ * @property descripcion descripción libre de lo observado
+ * @property avisoPrivacidadVersion versión del aviso que la persona aceptó (RF-44)
  */
 data class CrearReporteRequest(
     val ubicacion: String,
@@ -24,5 +25,32 @@ data class CrearReporteRequest(
     val edadAproximada: String,
     val actividad: String,
     val situacionRiesgo: String,
-    val descripcion: String
+    val descripcion: String,
+    val avisoPrivacidadVersion: String
+)
+
+/**
+ * Respuesta de `POST /api/v1/reportes`.
+ *
+ * @property folio folio público `RIETI-AAAA-NNNNNN`
+ * @property claveConsulta clave `XXXX-XXXX-XXXX`; el servidor solo guarda su hash, así que no se puede recuperar
+ * @property estatus estatus inicial ("Recibido")
+ * @property fechaCreacion fecha de registro en ISO-8601
+ */
+data class ReporteCreado(
+    val folio: String,
+    val claveConsulta: String,
+    val estatus: String,
+    val fechaCreacion: String
+)
+
+/**
+ * Aviso de privacidad vigente (`GET /api/v1/avisos-privacidad/vigente`).
+ *
+ * @property version versión que se envía en [CrearReporteRequest.avisoPrivacidadVersion]
+ * @property parrafos texto del aviso, un párrafo por elemento
+ */
+data class AvisoPrivacidad(
+    val version: String,
+    val parrafos: List<String>
 )
