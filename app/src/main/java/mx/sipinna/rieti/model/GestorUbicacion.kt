@@ -15,6 +15,9 @@ import com.google.android.gms.location.Priority
 import mx.sipinna.rieti.viewmodel.FormularioReporteViewModel
 
 /**
+ * La lectura se entrega al ViewModel en memoria y se envía solo como ubicación
+ * del lugar de los hechos si la persona lo pide; no se guarda en el teléfono (RNF-28).
+ *
  * Encapsula el uso del GPS del dispositivo (vía Servicios de Google Play) para
  * capturar automáticamente la ubicación al registrar un reporte (RF-05).
  *
@@ -63,7 +66,11 @@ class GestorUbicacion(
         clienteUbicacion.getCurrentLocation(solicitud, null)
             .addOnSuccessListener { ubicacion: Location? ->
                 if (ubicacion != null) {
-                    viewModel.actualizarUbicacionCapturada(ubicacion.latitude, ubicacion.longitude)
+                    viewModel.actualizarUbicacionCapturada(
+                        ubicacion.latitude,
+                        ubicacion.longitude,
+                        if (ubicacion.hasAccuracy()) ubicacion.accuracy else null
+                    )
                 }
             }
     }
