@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.7
 # Imagen del API RIETI para ECS Fargate (ARM64/Graviton).
 # La imagen base se baja de la copia oficial en ECR Public (Docker Official Images),
 # no de Docker Hub: Docker Hub limita las descargas anónimas y el despliegue falló con 429.
