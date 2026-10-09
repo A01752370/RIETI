@@ -1,0 +1,63 @@
+/*
+ * Tokens de diseño de RIETI (los mismos valores están en
+ * app/src/main/java/mx/sipinna/rieti/ui/theme/Color.kt y docs/diseno/tokens.md).
+ *
+ * Colores tomados de los logos. Los tonos que no alcanzan contraste AA (4.5:1)
+ * para texto se oscurecieron conservando el tono; los originales en pastel
+ * solo se usan como decoración, nunca para texto.
+ */
+:root {
+  /* Marca (texto y botones: AA ≥ 4.7:1 sobre blanco y fondos tintados) */
+  --color-primario: #007482;          /* teal SIPINNA #0092A3 oscurecido · 5.50:1 */
+  --color-primario-oscuro: #00626d;   /* hover/presionado · 7.08:1 */
+  --color-secundario: #486090;        /* índigo SIPINNA, original · 6.27:1 */
+  --color-acento: #bb3970;            /* rosa SIPINNA #D5769E oscurecido · 5.34:1 */
+  --color-texto: #1e120d;             /* texto del logo SIPINNA · 18.3:1 */
+  --color-texto-secundario: #6b6b6b;  /* gris RIETI #909090 oscurecido · 5.33:1 */
+  --color-error: #c62828;
+  --color-exito: #2d7931;
+
+  /* Superficies */
+  --color-fondo: #ffffff;
+  --color-superficie: #f3f4f8;
+  --color-tinte-primario: #e6f4f6;
+  --color-tinte-acento: #fbeff4;
+  --color-borde: #c9ccd6;
+
+  /* Decorativos (solo imágenes, bordes y adornos; NO texto) */
+  --deco-teal: #0092a3;
+  --deco-azul: #54aac1;
+  --deco-rosa: #d5769e;
+  --deco-lila: #a185ab;
+
+  /* Estatus (texto blanco ≥ 4.5:1; siempre acompañados de icono y texto) */
+  --estatus-recibido: #546e7a;
+  --estatus-en-revision: #1565c0;
+  --estatus-en-atencion: #c15700;
+  --estatus-canalizado: #6a1b9a;
+  --estatus-concluido: #2e7d32;
+  --estatus-descartado: #757575;
+
+  /* Tipografía del sistema: sin fuentes externas */
+  --fuente: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif;
+  --texto-xs: 0.875rem;
+  --texto-s: 1rem;
+  --texto-m: 1.125rem;
+  --texto-l: 1.375rem;
+  --texto-xl: 1.75rem;
+  --texto-xxl: 2.25rem;
+  --interlineado: 1.5;
+
+  /* Espaciado (escala de 4 px) */
+  --e1: 0.25rem;
+  --e2: 0.5rem;
+  --e3: 0.75rem;
+  --e4: 1rem;
+  --e6: 1.5rem;
+  --e8: 2rem;
+  --e12: 3rem;
+
+  --radio: 0.75rem;
+  --objetivo-tactil: 2.75rem; /* 44 px */
+  --ancho-maximo: 72rem;
+}
