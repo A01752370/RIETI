@@ -2,12 +2,26 @@
 # La imagen base se baja de la copia oficial en ECR Public (Docker Official Images),
 # no de Docker Hub: Docker Hub limita las descargas anónimas y el despliegue falló con 429.
 
+#
+# El contexto de construcción es la RAÍZ del repositorio (docker build -f backend/Dockerfile .):
+# la imagen incluye la web compilada (web/dist), que el mismo backend sirve.
+
+# --- Web (React + Vite) ---
+FROM public.ecr.aws/docker/library/node:24-alpine AS web
+WORKDIR /web
+COPY web/package*.json ./
+RUN npm ci --ignore-scripts
+COPY web/ ./
+# La verificación de tipos corre en CI (web.yml); aquí solo se compila.
+RUN npx vite build
+
+# --- API (NestJS) ---
 FROM public.ecr.aws/docker/library/node:24-alpine AS build
 WORKDIR /app
-COPY package*.json ./
+COPY backend/package*.json ./
 RUN npm ci --ignore-scripts
-COPY tsconfig*.json ./
-COPY src ./src
+COPY backend/tsconfig*.json ./
+COPY backend/src ./src
 RUN npm run build && npm prune --omit=dev
 
 FROM public.ecr.aws/docker/library/node:24-alpine
@@ -22,6 +36,7 @@ ADD --chmod=444 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pe
 COPY --from=build --chown=node:node /app/package.json ./
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=web --chown=node:node /web/dist ./web
 
 USER node
 EXPOSE 3000
