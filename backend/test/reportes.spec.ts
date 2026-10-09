@@ -1,5 +1,4 @@
-import { formatearFolio, redactarParaCiudadano } from '../src/reportes/reportes.service';
-import { ReporteRespuestaDto } from '../src/reportes/reporte.dto';
+import { formatearFolio, lineaDeTiempoPublica } from '../src/reportes/reportes.service';
 
 describe('formatearFolio', () => {
   it('rellena el consecutivo a 6 dígitos', () => {
@@ -7,20 +6,22 @@ describe('formatearFolio', () => {
   });
 });
 
-describe('redactarParaCiudadano', () => {
-  const completo: ReporteRespuestaDto = {
-    id: 1, folio: 'RIETI-2026-000001', ubicacion: 'Calle 1', latitud: 19.5, longitud: -99.2,
-    cantidadNinos: 2, edadAproximada: '6-11', actividad: 'Venta ambulante', situacionRiesgo: 'Sí',
-    descripcion: 'detalle', estatus: 'Recibido', comentarioAdmin: 'nota interna',
-    fechaCreacion: '2026-01-01T00:00:00.000Z', fechaActualizacion: '2026-01-01T00:00:00.000Z',
-  };
+describe('lineaDeTiempoPublica', () => {
+  const f = (iso: string) => new Date(iso);
 
-  it('oculta ubicación, coordenadas, descripción y comentarios', () => {
-    const r = redactarParaCiudadano(completo);
-    expect(r).toMatchObject({ ubicacion: '', latitud: null, longitud: null, descripcion: '', comentarioAdmin: null });
+  it('solo expone estatus y fecha (sin comentarios ni autor)', () => {
+    const r = lineaDeTiempoPublica([{ estatus: 'Recibido', fecha: f('2026-10-01T10:00:00Z') }]);
+    expect(r).toEqual([{ estatus: 'Recibido', fecha: '2026-10-01T10:00:00.000Z' }]);
+    expect(Object.keys(r[0]).sort()).toEqual(['estatus', 'fecha']);
   });
 
-  it('conserva folio y estatus', () => {
-    expect(redactarParaCiudadano(completo)).toMatchObject({ folio: completo.folio, estatus: 'Recibido' });
+  it('omite las notas que no cambiaron el estatus', () => {
+    const r = lineaDeTiempoPublica([
+      { estatus: 'Recibido', fecha: f('2026-10-01T10:00:00Z') },
+      { estatus: 'En revisión', fecha: f('2026-10-02T10:00:00Z') },
+      { estatus: 'En revisión', fecha: f('2026-10-03T10:00:00Z') },
+      { estatus: 'En atención', fecha: f('2026-10-04T10:00:00Z') },
+    ]);
+    expect(r.map((e) => e.estatus)).toEqual(['Recibido', 'En revisión', 'En atención']);
   });
 });
