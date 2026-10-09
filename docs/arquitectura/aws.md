@@ -78,7 +78,7 @@ flowchart LR
 | Anónimo sin IP (RNF-29) | La BD no guarda IP. El WAF guarda muestras con IP por 3 h; los logs del ALB registran a CloudFront como cliente | Documentado como control parcial. |
 | Redshift, QuickSight, OpenSearch, SES, Lambda | No desplegados | Las estadísticas, cuando se hagan, saldrán de PostgreSQL/PostGIS. |
 | Docker/Kubernetes | ECS Fargate | Contenedores gestionados equivalentes, sin administrar nodos. |
-| Etiqueta `proyecto=rieti` (D-09) | Etiquetas `Project=RIETI`, `Environment`, `ManagedBy=Terraform` | Mismo propósito; se conserva la convención ya desplegada. |
+| Etiquetado del proyecto (D-09) | Etiquetas `Project=RIETI`, `Environment`, `ManagedBy=Terraform` | D-09 se corrigió el 9-oct-2026 para usar `Project=RIETI`, la etiqueta realmente desplegada. |
 
 ## Costo
 
