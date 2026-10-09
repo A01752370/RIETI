@@ -3,6 +3,9 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+val apiUrl: String = (findProperty("rieti.apiUrl") as String?) ?: "https://d3hexe1fo0mq6l.cloudfront.net/"
+val apiUrlDebug: String = (findProperty("rieti.apiUrl") as String?) ?: apiUrl
+
 android {
     namespace = "mx.sipinna.rieti"
     compileSdk = 34
@@ -13,10 +16,21 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
+        // URL del API en AWS (CloudFront → ALB → ECS). Se puede sobrescribir con -Prieti.apiUrl=...
+        buildConfigField("String", "API_URL", "\"${apiUrl}\"")
+    }
+
+    buildTypes {
+        debug {
+            // Permite apuntar al backend local: -Prieti.apiUrl=http://10.0.2.2:3000/
+            buildConfigField("String", "API_URL", "\"${apiUrlDebug}\"")
+        }
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {

@@ -1,0 +1,92 @@
+name: Backend
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: npm audit --omit=dev --audit-level=high
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    # Runner ARM64: la imagen se construye nativa para Fargate Graviton.
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      id-token: write # OIDC hacia AWS, sin access keys
+    env:
+      AWS_REGION: mx-central-1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Credenciales AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login a ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build y push de la imagen
+        id: imagen
+        env:
+          IMAGEN: ${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
+        run: |
+          docker build --platform linux/arm64 -t "$IMAGEN" .
+          docker push "$IMAGEN"
+          echo "uri=$IMAGEN" >> "$GITHUB_OUTPUT"
+
+      - name: Task definition actual
+        run: |
+          aws ecs describe-task-definition --task-definition "${{ vars.ECS_TASK_FAMILY }}" \
+            --query taskDefinition > task-definition.json
+
+      - name: Nueva revisión con la imagen
+        id: td
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: backend/task-definition.json
+          container-name: ${{ vars.ECS_CONTAINER }}
+          image: ${{ steps.imagen.outputs.uri }}
+
+      - name: Desplegar en ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.td.outputs.task-definition }}
+          cluster: ${{ vars.ECS_CLUSTER }}
+          service: ${{ vars.ECS_SERVICE }}
+          wait-for-service-stability: true
+
+      - name: Smoke test
+        working-directory: .
+        run: curl -fsS --retry 5 --retry-delay 10 "${{ vars.API_URL }}health"
