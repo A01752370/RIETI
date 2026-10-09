@@ -16,8 +16,8 @@ resource "aws_iam_role" "github_deploy" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          # Solo la rama de despliegue de este repositorio.
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/${var.github_rama_despliegue}"
+          # Solo la rama de despliegue de este repositorio (sujeto inmutable: owner@id/repo@id).
+          "token.actions.githubusercontent.com:sub" = "${var.github_oidc_sub_prefijo}:ref:refs/heads/${var.github_rama_despliegue}"
         }
       }
     }]

@@ -20,6 +20,12 @@ variable "github_repo" {
   default     = "A01752370/RIETI"
 }
 
+variable "github_oidc_sub_prefijo" {
+  description = "Prefijo del claim sub de OIDC. El repo usa sujetos inmutables; ver GET /repos/{repo}/actions/oidc/customization/sub."
+  type        = string
+  default     = "repo:A01752370@120143699/RIETI@1409439035"
+}
+
 variable "github_rama_despliegue" {
   type    = string
   default = "main"
