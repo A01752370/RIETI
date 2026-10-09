@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1.7
 # Imagen del API RIETI para ECS Fargate (ARM64/Graviton).
+# La imagen base se baja de la copia oficial en ECR Public (Docker Official Images),
+# no de Docker Hub: Docker Hub limita las descargas anónimas y el despliegue falló con 429.
 
-FROM node:24-alpine AS build
+FROM public.ecr.aws/docker/library/node:24-alpine AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --ignore-scripts
@@ -9,7 +11,7 @@ COPY tsconfig*.json ./
 COPY src ./src
 RUN npm run build && npm prune --omit=dev
 
-FROM node:24-alpine
+FROM public.ecr.aws/docker/library/node:24-alpine
 ENV NODE_ENV=production \
     PORT=3000 \
     DB_SSL_CA=/etc/ssl/rds/global-bundle.pem
