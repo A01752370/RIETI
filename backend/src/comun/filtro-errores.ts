@@ -81,7 +81,9 @@ export function convertirError(excepcion: unknown): { estatus: number; cuerpo: E
   if (Array.isArray(obj.message)) {
     detalle = obj.message.map(String);
     mensaje ??= 'Hay datos inválidos en la solicitud';
-  } else if (typeof obj.message === 'string' && typeof obj.error === 'string' && estatus < 500) {
+  } else if (typeof obj.message === 'string' && typeof obj.error === 'string' && estatus < 500
+    // "Cannot GET /ruta" es el texto en inglés de Express para rutas inexistentes.
+    && !/^Cannot [A-Z]+ /.test(obj.message)) {
     // Nest pone `error` solo cuando el código pasó un mensaje propio
     // (p. ej. `new NotFoundException('Reporte no encontrado')`); si no, `message`
     // es la frase genérica en inglés y preferimos la nuestra.
