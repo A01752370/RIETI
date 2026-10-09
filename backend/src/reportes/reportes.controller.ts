@@ -1,54 +1,77 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseIntPipe, Patch, Post, Query, Req } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { Request } from 'express';
-import { AuthService } from '../auth/auth.service';
-import { UsuarioAutenticado } from '../auth/auth.dto';
-import { AuthOpcional, GRUPOS_PERSONAL, Roles } from '../auth/roles';
-import { ActualizarReporteDto, CrearReporteDto, ReporteRespuestaDto } from './reporte.dto';
-import { redactarParaCiudadano, ReportesService } from './reportes.service';
+import { GRUPOS_PERSONAL, Publico, Roles } from '../auth/roles';
+import { RequestAutenticado } from '../auth/jwt.guard';
+import {
+  AgregarSeguimientoDto, CambiarEstatusDto, ConsultaPublicaDto, ConsultarReporteDto, CrearReporteDto,
+  ListarReportesDto, PaginaDto, ReporteCreadoDto, ReporteDetalleDto, ReporteResumenDto,
+} from './reporte.dto';
+import { ReportesService } from './reportes.service';
 
-type RequestAutenticado = Request & { usuario?: UsuarioAutenticado };
-
+/**
+ * Rutas de reportes (`/api/v1/reportes`).
+ *
+ * Públicas (decisión explícita, `@Publico`): registrar un reporte y consultarlo
+ * con folio + clave. Todo lo demás exige JWT de personal SIPINNA.
+ */
 @Controller('reportes')
 export class ReportesController {
-  constructor(
-    private readonly reportes: ReportesService,
-    private readonly auth: AuthService,
-  ) {}
+  constructor(private readonly reportes: ReportesService) {}
 
-  /** CU-04: reporte ciudadano anónimo. */
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  /** CU-04: registra un reporte anónimo. 5 por minuto por IP (spam, ataque A9). */
+  @Publico()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post()
-  crear(@Body() dto: CrearReporteDto): Promise<ReporteRespuestaDto> {
+  crear(@Body() dto: CrearReporteDto): Promise<ReporteCreadoDto> {
     return this.reportes.crear(dto);
   }
 
-  /** CU-09: listado para personal SIPINNA. */
+  /**
+   * CU-08: consulta ciudadana con folio + clave. Por POST para que la clave no
+   * quede en URLs ni en logs de acceso. 10 por minuto por IP, además del
+   * bloqueo por folio tras 5 fallos (ataque A1).
+   */
+  @Publico()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('consulta')
+  @HttpCode(200)
+  consultar(@Body() dto: ConsultarReporteDto): Promise<ConsultaPublicaDto> {
+    return this.reportes.consultar(dto.folio, dto.clave);
+  }
+
+  /** CU-09: bandeja del personal con filtro por estatus y paginación. */
   @Roles(...GRUPOS_PERSONAL)
   @Get()
-  listar(): Promise<ReporteRespuestaDto[]> {
-    return this.reportes.listar();
+  listar(@Query() filtros: ListarReportesDto): Promise<PaginaDto<ReporteResumenDto>> {
+    return this.reportes.listar(filtros);
   }
 
-  /** CU-08: consulta por folio. Anónimo → solo estatus; personal → reporte completo. */
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
-  @AuthOpcional()
-  @Get('folio/:folio')
-  async buscarPorFolio(@Param('folio') folio: string, @Req() req: RequestAutenticado): Promise<ReporteRespuestaDto> {
-    const reporte = await this.reportes.buscarPorFolio(folio);
-    const esPersonal = req.usuario?.grupos.some((g) => GRUPOS_PERSONAL.includes(g)) ?? false;
-    return esPersonal ? reporte : redactarParaCiudadano(reporte);
-  }
-
-  /** CU-09/CU-10: cambia estatus y agrega seguimiento. */
+  /** CU-09: detalle del reporte con bitácora y transiciones permitidas. */
   @Roles(...GRUPOS_PERSONAL)
-  @Patch(':id')
-  async actualizar(
+  @Get(':id')
+  detalle(@Param('id', ParseIntPipe) id: number): Promise<ReporteDetalleDto> {
+    return this.reportes.detalle(id);
+  }
+
+  /** CU-09/CU-10: cambia el estatus según la máquina de estados. */
+  @Roles(...GRUPOS_PERSONAL)
+  @Patch(':id/estatus')
+  cambiarEstatus(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: ActualizarReporteDto,
+    @Body() dto: CambiarEstatusDto,
     @Req() req: RequestAutenticado,
-  ): Promise<ReporteRespuestaDto> {
-    const usuario = req.usuario ? await this.auth.buscarPorSub(req.usuario.sub) : null;
-    return this.reportes.actualizar(id, dto, usuario);
+  ): Promise<ReporteDetalleDto> {
+    return this.reportes.cambiarEstatus(id, dto, req.usuario!.idUsuario);
+  }
+
+  /** Agrega una nota de seguimiento sin cambiar el estatus. */
+  @Roles(...GRUPOS_PERSONAL)
+  @Post(':id/seguimientos')
+  agregarSeguimiento(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AgregarSeguimientoDto,
+    @Req() req: RequestAutenticado,
+  ): Promise<ReporteDetalleDto> {
+    return this.reportes.agregarSeguimiento(id, dto, req.usuario!.idUsuario);
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   CognitoIdentityProviderClient, InitiateAuthCommand, NotAuthorizedException, UserNotFoundException,
@@ -29,6 +29,16 @@ export class AuthService {
     @InjectRepository(RolUsuario) private readonly roles: Repository<RolUsuario>,
   ) {}
 
+  /**
+   * Autentica con `USER_PASSWORD_AUTH` y sincroniza la fila `usuario`.
+   *
+   * Los retos de Cognito (cambio de contraseña inicial, MFA) aún no se
+   * soportan: por eso el alta usa `admin-set-user-password --permanent`
+   * (ver docs/RUNBOOK-AWS.md). Migrar a Hosted UI + PKCE está en la hoja de ruta.
+   *
+   * @throws UnauthorizedException credenciales inválidas o reto no soportado
+   * @throws ForbiddenException la cuenta no tiene rol de personal o está desactivada
+   */
   async login({ correo, password }: LoginDto): Promise<LoginRespuestaDto> {
     let accessToken: string | undefined;
     let idToken: string | undefined;
@@ -57,13 +67,20 @@ export class AuthService {
 
     const claims = await this.verificadorId.verify(idToken);
     const grupos = claims['cognito:groups'] ?? [];
+    if (!grupos.some((g) => GRUPOS_PERSONAL.includes(g))) {
+      throw new ForbiddenException({ codigo: 'SIN_ROL', mensaje: 'Tu cuenta no tiene un rol de personal SIPINNA asignado' });
+    }
     const usuario = await this.sincronizarUsuario(claims.sub, String(claims.email).toLowerCase(), grupos);
+
+    if (!usuario.activo) {
+      throw new ForbiddenException({ codigo: 'USUARIO_INACTIVO', mensaje: 'Tu cuenta no está activa en RIETI' });
+    }
 
     return {
       idUsuario: usuario.id,
       correo: usuario.correo,
       rol: usuario.rol.nombre,
-      esAdministrador: grupos.some((g) => GRUPOS_PERSONAL.includes(g)),
+      esAdministrador: grupos.includes('Administrador'),
       accessToken,
       expiresIn,
     };
@@ -88,7 +105,7 @@ export class AuthService {
     return this.usuarios.save(this.usuarios.create({ cognitoSub: sub, correo, rol }));
   }
 
-  /** Busca el usuario local por `sub` (para registrar quién hace cada seguimiento). */
+  /** Busca el usuario local por `sub` (el guard lo usa para validar que siga activo). */
   buscarPorSub(sub: string): Promise<Usuario | null> {
     return this.usuarios.findOneBy({ cognitoSub: sub });
   }
