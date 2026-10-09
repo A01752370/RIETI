@@ -23,12 +23,14 @@ const BD = 'rieti_e2e';
 const SUB_PERSONAL = '11111111-1111-4111-8111-111111111111';
 const SUB_SIN_ROL = '22222222-2222-4222-8222-222222222222';
 const SUB_INACTIVO = '33333333-3333-4333-8333-333333333333';
+const SUB_ADMIN = '44444444-4444-4444-8444-444444444444';
 
 /** Doble del verificador de Cognito: solo conoce estos tokens. */
 const TOKENS: Record<string, { sub: string; 'cognito:groups'?: string[] }> = {
   'token-personal': { sub: SUB_PERSONAL, 'cognito:groups': ['PersonalSIPINNA'] },
   'token-sin-rol': { sub: SUB_SIN_ROL, 'cognito:groups': [] },
   'token-inactivo': { sub: SUB_INACTIVO, 'cognito:groups': ['PersonalSIPINNA'] },
+  'token-admin': { sub: SUB_ADMIN, 'cognito:groups': ['Administrador'] },
 };
 
 let siguienteIp = 1;
@@ -115,8 +117,9 @@ describeBd('API RIETI (e2e)', () => {
     const personal = await rol('Personal SIPINNA');
     await adminDs.query(
       `INSERT INTO usuario (correo, cognito_sub, id_rol, activo) VALUES
-       ('enlace@ejemplo.mx', $1, $4, true), ('sinrol@ejemplo.mx', $2, $5, true), ('baja@ejemplo.mx', $3, $4, false)`,
-      [SUB_PERSONAL, SUB_SIN_ROL, SUB_INACTIVO, personal, await rol('Ciudadano')]);
+       ('enlace@ejemplo.mx', $1, $4, true), ('sinrol@ejemplo.mx', $2, $5, true), ('baja@ejemplo.mx', $3, $4, false),
+       ('admin@ejemplo.mx', $6, $7, true)`,
+      [SUB_PERSONAL, SUB_SIN_ROL, SUB_INACTIVO, personal, await rol('Ciudadano'), SUB_ADMIN, await rol('Administrador')]);
   }, 120_000);
 
   afterAll(async () => {
@@ -377,6 +380,141 @@ describeBd('API RIETI (e2e)', () => {
       await expect(ds.query('DELETE FROM reporte')).rejects.toThrow(/permission denied/);
       await expect(ds.query("UPDATE reporte SET descripcion = 'x'")).rejects.toThrow(/permission denied/);
       await expect(ds.query('CREATE TABLE intruso (x int)')).rejects.toThrow(/permission denied/);
+    });
+  });
+
+  describe('municipios (D-16)', () => {
+    let atizapan: number;
+
+    it('el catálogo tiene los 125 municipios con clave INEGI, en orden alfabético', async () => {
+      const r = await http().get('/api/v1/catalogos/municipios').expect(200);
+      expect(r.body).toHaveLength(125);
+      expect(r.body.every((m: { clave: string }) => /^15\d{3}$/.test(m.clave))).toBe(true);
+      const nombres = r.body.map((m: { nombre: string }) => m.nombre);
+      expect(nombres).toEqual([...nombres].sort(new Intl.Collator('es', { sensitivity: 'base' }).compare));
+      const fila = r.body.find((m: { clave: string }) => m.clave === '15013');
+      expect(fila.nombre).toBe('Atizapán de Zaragoza');
+      atizapan = fila.id;
+    });
+
+    it('la fila original de Atizapán se conservó (mismo id) y no hay duplicados', async () => {
+      const filas = await adminDs.query("SELECT id_municipio, clave_inegi FROM municipio WHERE nombre = 'Atizapán de Zaragoza'");
+      expect(filas).toEqual([{ id_municipio: 1, clave_inegi: '15013' }]);
+      expect(atizapan).toBe(1);
+    });
+
+    it('acepta un reporte con municipio y lo guarda', async () => {
+      const r = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp())
+        .send({ ...reporteValido(), municipioId: atizapan }).expect(201);
+      const [fila] = await adminDs.query(
+        'SELECT r.id_municipio FROM reporte r JOIN folio f ON f.id_reporte = r.id_reporte WHERE f.codigo = $1', [r.body.folio]);
+      expect(fila.id_municipio).toBe(atizapan);
+    });
+
+    it('sigue aceptando reportes sin municipio (compatibilidad con la app instalada)', async () => {
+      await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send(reporteValido()).expect(201);
+    });
+
+    it('rechaza un municipio que no existe', async () => {
+      const r = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp())
+        .send({ ...reporteValido(), municipioId: 99999 }).expect(400);
+      expect(r.body).toEqual({ codigo: 'VALOR_NO_VALIDO', mensaje: 'El municipio seleccionado no es válido' });
+    });
+
+    it('la bandeja muestra y filtra por municipio', async () => {
+      const r = await http().get('/api/v1/reportes?municipioId=' + atizapan).set('Authorization', 'Bearer token-personal').expect(200);
+      expect(r.body.elementos.length).toBeGreaterThanOrEqual(1);
+      expect(r.body.elementos.every((e: { municipio: string }) => e.municipio === 'Atizapán de Zaragoza')).toBe(true);
+    });
+  });
+
+  describe('estadísticas (solo agregados)', () => {
+    const personal = { Authorization: 'Bearer token-personal' };
+
+    it('sin token → 401; sin rol → 403', async () => {
+      await http().get('/api/v1/estadisticas/resumen').expect(401);
+      await http().get('/api/v1/estadisticas/resumen').set('Authorization', 'Bearer token-sin-rol').expect(403);
+    });
+
+    it('devuelve solo conteos, con los 6 estatus en orden', async () => {
+      const r = await http().get('/api/v1/estadisticas/resumen').set(personal).expect(200);
+      expect(Object.keys(r.body).sort()).toEqual(['nuevosUltimos7Dias', 'porEstatus', 'porMes', 'sinMunicipio', 'total']);
+      expect(r.body.porEstatus.map((e: { etiqueta: string }) => e.etiqueta))
+        .toEqual(['Recibido', 'En revisión', 'En atención', 'Canalizado', 'Concluido', 'Descartado']);
+      const suma = (l: { total: number }[]) => l.reduce((a, e) => a + e.total, 0);
+      expect(suma(r.body.porEstatus)).toBe(r.body.total);
+      expect(suma(r.body.porMes)).toBe(r.body.total);
+      expect(r.body.nuevosUltimos7Dias).toBe(r.body.total);
+      expect(JSON.stringify(r.body)).not.toMatch(/RIETI-|Dos menores|López Mateos/);
+    });
+
+    it('filtra por municipio y por fecha, y valida el formato', async () => {
+      const todos = (await http().get('/api/v1/estadisticas/resumen').set(personal)).body;
+      const atizapan = await http().get('/api/v1/estadisticas/resumen?municipioId=1').set(personal).expect(200);
+      expect(atizapan.body.total).toBe(todos.total - todos.sinMunicipio);
+      const futuro = await http().get('/api/v1/estadisticas/resumen?desde=2099-01-01').set(personal).expect(200);
+      expect(futuro.body.total).toBe(0);
+      expect(futuro.body.porEstatus.every((e: { total: number }) => e.total === 0)).toBe(true);
+      await http().get('/api/v1/estadisticas/resumen?desde=ayer').set(personal).expect(400);
+    });
+  });
+
+  describe('red de municipios (D-17)', () => {
+    it('es pública y trae solo datos de ejemplo con example.org', async () => {
+      const r = await http().get('/api/v1/red-municipios').expect(200);
+      expect(r.body.hayDatosDeEjemplo).toBe(true);
+      const contactos = r.body.municipios.flatMap((m: { contactos: object[] }) => m.contactos);
+      expect(contactos.length).toBeGreaterThan(0);
+      expect(contactos.every((c: { valor: string; esEjemplo: boolean }) => c.esEjemplo && /example\.org/.test(c.valor))).toBe(true);
+    });
+
+    it('el enlace municipal no puede editarla (403)', async () => {
+      await http().put('/api/v1/red-municipios/1').set('Authorization', 'Bearer token-personal').send({ contactos: [] }).expect(403);
+    });
+
+    it('el administrador la reemplaza; un enlace sin https se rechaza', async () => {
+      const malo = await http().put('/api/v1/red-municipios/1').set('Authorization', 'Bearer token-admin')
+        .send({ contactos: [{ tipo: 'enlace', valor: 'http://example.org' }] }).expect(400);
+      expect(malo.body.codigo).toBe('CONTACTO_INVALIDO');
+      const r = await http().put('/api/v1/red-municipios/1').set('Authorization', 'Bearer token-admin')
+        .send({ contactos: [{ tipo: 'correo', valor: 'red@example.org', etiqueta: 'Prueba' }] }).expect(200);
+      expect(r.body.hayDatosDeEjemplo).toBe(false);
+      expect(r.body.municipios[0].contactos).toEqual([{ tipo: 'correo', valor: 'red@example.org', etiqueta: 'Prueba', esEjemplo: false }]);
+    });
+  });
+
+  describe('perfil del personal (D-18)', () => {
+    it('el enlace municipal ve su perfil y permisos, sin red.editar', async () => {
+      const r = await http().get('/api/v1/auth/perfil').set('Authorization', 'Bearer token-personal').expect(200);
+      expect(r.body.correo).toBe('enlace@ejemplo.mx');
+      expect(r.body.perfil).toBe('Enlace municipal');
+      expect(r.body.permisos.map((p: { permiso: string }) => p.permiso)).not.toContain('red.editar');
+    });
+
+    it('el administrador tiene red.editar', async () => {
+      const r = await http().get('/api/v1/auth/perfil').set('Authorization', 'Bearer token-admin').expect(200);
+      expect(r.body.perfil).toBe('Administrador');
+      expect(r.body.permisos.map((p: { permiso: string }) => p.permiso)).toContain('red.editar');
+    });
+
+    it('sin token → 401', async () => {
+      await http().get('/api/v1/auth/perfil').expect(401);
+    });
+  });
+
+  describe('errores y cabeceras', () => {
+    it('las rutas inexistentes del API responden en español', async () => {
+      const r = await http().get('/api/v1/no-existe').expect(404);
+      expect(r.body).toEqual({ codigo: 'NO_ENCONTRADO', mensaje: 'No se encontró el recurso' });
+    });
+
+    it('envía una CSP estricta sin orígenes externos ni unsafe-inline', async () => {
+      const r = await http().get('/health').expect(200);
+      const csp: string = r.headers['content-security-policy'];
+      expect(csp).toContain("default-src 'self'");
+      expect(csp).toContain("style-src 'self'");
+      expect(csp).toContain("frame-ancestors 'none'");
+      expect(csp).not.toMatch(/unsafe-inline|unsafe-eval|https:|\*/);
     });
   });
 
