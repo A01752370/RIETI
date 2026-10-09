@@ -1,10 +1,12 @@
 package mx.sipinna.rieti.network
 
+import mx.sipinna.rieti.BuildConfig
 import mx.sipinna.rieti.model.ActualizarReporteRequest
 import mx.sipinna.rieti.model.CrearReporteRequest
 import mx.sipinna.rieti.model.LoginRequest
 import mx.sipinna.rieti.model.LoginResponse
 import mx.sipinna.rieti.model.Reporte
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -19,18 +21,39 @@ import retrofit2.converter.gson.GsonConverterFactory
  * para mantener el código básico (KISS). Cada función envuelve la llamada en
  * `try/catch` para no propagar excepciones de red hasta el ViewModel.
  *
- * `URL_BASE` apunta a `10.0.2.2`, la forma en que el emulador de Android
- * Studio accede al `localhost` de la máquina donde corre el backend.
+ * `URL_BASE` viene de `BuildConfig.API_URL` (API en AWS por HTTPS). Para usar
+ * un backend local en el emulador: `-Prieti.apiUrl=http://10.0.2.2:3000/`.
  */
 object ServicioRemoto {
 
-    private const val URL_BASE = "http://10.0.2.2:3000/"
+    private val URL_BASE = BuildConfig.API_URL
 
+    /**
+     * Access token de Cognito devuelto por `POST /auth/login`. Solo en memoria:
+     * al cerrar la app hay que volver a iniciar sesión.
+     */
+    @Volatile
+    private var accessToken: String? = null
+
+    /** Agrega `Authorization: Bearer` a las peticiones cuando hay sesión. */
+    private val authInterceptor = Interceptor { chain ->
+        val token = accessToken
+        val peticion = if (token != null) {
+            chain.request().newBuilder().header("Authorization", "Bearer $token").build()
+        } else {
+            chain.request()
+        }
+        chain.proceed(peticion)
+    }
+
+    // Nunca BODY: el cuerpo incluye contraseñas y datos de reportes de menores.
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
+        redactHeader("Authorization")
     }
 
     private val okHttpClient = OkHttpClient.Builder()
+        .addInterceptor(authInterceptor)
         .addInterceptor(loggingInterceptor)
         .build()
 
@@ -85,9 +108,14 @@ object ServicioRemoto {
     /** Intenta iniciar sesión. Devuelve null si las credenciales fallan o hay error de red. */
     suspend fun login(request: LoginRequest): LoginResponse? {
         return try {
-            servicio.login(request)
+            servicio.login(request).also { accessToken = it.accessToken }
         } catch (e: Exception) {
             null
         }
+    }
+
+    /** Descarta el token de la sesión actual. */
+    fun cerrarSesion() {
+        accessToken = null
     }
 }

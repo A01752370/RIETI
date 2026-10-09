@@ -12,9 +12,9 @@
         android:allowBackup="true"
         android:label="RIETI"
         android:theme="@style/Theme.RIETI"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="false">
 
-        <!-- usesCleartextTraffic=true: solo para desarrollo local (backend en http://10.0.2.2:3000) -->
+        <!-- Solo HTTPS. El build debug permite HTTP hacia 10.0.2.2 (ver src/debug). -->
 
         <activity
             android:name=".view.MainActivity"
