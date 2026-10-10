@@ -32,6 +32,7 @@ Abre en el navegador: `https://d3hexe1fo0mq6l.cloudfront.net/api/v1/catalogos`
 | 3.2 | Toca **Reportar una situación**. | Aviso de privacidad (versión `2026-10-v1`). El botón **Continuar** está desactivado. |
 | 3.3 | Marca **Leí y acepto el aviso de privacidad** → **Continuar**. | Formulario de reporte. |
 | 3.4 | Sin llenar nada, baja y toca **Enviar reporte**. | Recuadro rojo con la lista de lo que falta (lugar, cantidad, edad, actividad, riesgo, descripción). |
+| 3.4b | En **Municipio donde ocurre** escribe `atiz` y toca **Atizapán de Zaragoza**. | La lista se filtra mientras escribes (sin importar acentos) y el campo queda con el municipio elegido. Si intentas enviar sin municipio, aparece "Elige el municipio donde ocurre". |
 | 3.5 | Escribe un lugar ficticio, p. ej. `Crucero de Av. Ejemplo y Calle 5`. Toca **Estoy en el lugar: usar mi ubicación actual** y acepta el permiso. | Aparece la tarjeta "Ubicación del lugar de los hechos" con `19.55940, -99.25120`. |
 | 3.6 | Elige **2 a 3**, **6-11**, **Venta ambulante**, **No sé** y escribe una descripción ficticia. Toca **Enviar reporte**. | Pantalla **Reporte enviado** con un folio `RIETI-2026-000…` y una clave `XXXX-XXXX-XXXX`. 📸 |
 | 3.7 | **Anota el folio y la clave** (o toca **Copiar folio y clave**). Toca **Ya los guardé, volver al inicio**. | Regresa al inicio. Con el botón Atrás ya no se puede volver al formulario. |

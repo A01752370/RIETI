@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import mx.sipinna.rieti.model.CrearReporteRequest
+import mx.sipinna.rieti.model.Municipio
 import mx.sipinna.rieti.model.ReporteCreado
 import mx.sipinna.rieti.repository.ReportesRepositorio
 
@@ -39,6 +40,18 @@ class FormularioReporteViewModel(
     /** Estado del envío; en [UiState.Exito] la pantalla navega a la confirmación. */
     val envio: StateFlow<UiState<ReporteCreado>> = _envio.asStateFlow()
 
+    private val _municipios = MutableStateFlow<UiState<List<Municipio>>>(UiState.Inactivo)
+
+    /** Catálogo de municipios para el selector (D-16). */
+    val municipios: StateFlow<UiState<List<Municipio>>> = _municipios.asStateFlow()
+
+    /** Descarga el catálogo de municipios si aún no se tiene. */
+    fun cargarMunicipios() {
+        if (_municipios.value is UiState.Exito || _municipios.value is UiState.Cargando) return
+        _municipios.value = UiState.Cargando
+        viewModelScope.launch { _municipios.value = repositorio.municipios().aUiState() }
+    }
+
     private val _ubicacion = MutableStateFlow<UbicacionCapturada?>(null)
 
     /** Última lectura del GPS, o null si no se ha pedido. */
@@ -57,9 +70,11 @@ class FormularioReporteViewModel(
     /**
      * Valida y envía el reporte.
      *
+     * @param municipio municipio elegido (obligatorio en la app)
      * @param avisoVersion versión del aviso de privacidad que la persona aceptó
      */
     fun enviar(
+        municipio: Municipio?,
         ubicacionTexto: String,
         cantidad: String,
         edad: String,
@@ -69,7 +84,7 @@ class FormularioReporteViewModel(
         avisoVersion: String
     ) {
         if (_envio.value is UiState.Cargando) return
-        val problemas = ValidadorReporte.validar(ubicacionTexto, cantidad, edad, actividad, riesgo, descripcion)
+        val problemas = ValidadorReporte.validar(municipio, ubicacionTexto, cantidad, edad, actividad, riesgo, descripcion)
         if (problemas.isNotEmpty()) {
             _envio.value = UiState.Error(problemas.joinToString("\n"))
             return
@@ -79,6 +94,7 @@ class FormularioReporteViewModel(
         viewModelScope.launch {
             _envio.value = repositorio.crear(
                 CrearReporteRequest(
+                    municipioId = municipio?.id,
                     ubicacion = ubicacionTexto.trim(),
                     latitud = gps?.latitud,
                     longitud = gps?.longitud,
