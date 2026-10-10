@@ -3,7 +3,7 @@ import { join } from 'path';
 import { DataSourceOptions } from 'typeorm';
 import { obtenerPasswordBd } from './db-password';
 import {
-  Actividad, EstatusReporte, Municipio, RangoEdad, Riesgo, RolUsuario,
+  Actividad, ContactoMunicipio, EstatusReporte, Municipio, RangoEdad, Riesgo, RolUsuario,
 } from '../catalogos/catalogo.entities';
 import { Usuario } from '../auth/usuario.entity';
 import {
@@ -11,7 +11,7 @@ import {
 } from '../reportes/reporte.entities';
 
 export const ENTIDADES = [
-  Municipio, RolUsuario, Actividad, Riesgo, RangoEdad, EstatusReporte,
+  Municipio, ContactoMunicipio, RolUsuario, Actividad, Riesgo, RangoEdad, EstatusReporte,
   Usuario, Ubicacion, Reporte, Folio, Caso, ReporteCaso, Seguimiento,
 ];
 

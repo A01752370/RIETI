@@ -1,7 +1,17 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Req } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { Publico } from './roles';
+import { DESCRIPCION_PERMISO, GRUPO_A_PERFIL, Permiso, permisosDe, Publico, Requiere } from './roles';
+import { RequestAutenticado } from './jwt.guard';
+
+/** Perfil y permisos del personal autenticado (D-18). */
+export interface PerfilDto {
+  correo: string;
+  /** "Administrador" o "Enlace municipal". */
+  perfil: string;
+  grupos: string[];
+  permisos: { permiso: Permiso; descripcion: string }[];
+}
 import { LoginDto, LoginRespuestaDto } from './auth.dto';
 
 /** Inicio de sesión del personal SIPINNA (`/api/v1/auth`). */
@@ -19,5 +29,20 @@ export class AuthController {
   @HttpCode(200)
   login(@Body() dto: LoginDto): Promise<LoginRespuestaDto> {
     return this.auth.login(dto);
+  }
+
+  /** Perfil y permisos de quien hace la petición, según la matriz de `roles.ts`. */
+  @Requiere('perfil.ver')
+  @Get('perfil')
+  async perfil(@Req() req: RequestAutenticado): Promise<PerfilDto> {
+    const { sub, grupos } = req.usuario!;
+    const usuario = await this.auth.buscarPorSub(sub);
+    const principal = grupos.includes('Administrador') ? 'Administrador' : 'PersonalSIPINNA';
+    return {
+      correo: usuario?.correo ?? '',
+      perfil: GRUPO_A_PERFIL[principal],
+      grupos,
+      permisos: permisosDe(grupos).map((p) => ({ permiso: p, descripcion: DESCRIPCION_PERMISO[p] })),
+    };
   }
 }

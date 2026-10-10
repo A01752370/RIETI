@@ -145,3 +145,21 @@ Solo se registra lo que se comprobó con comandos de lectura o con `curl` contra
 - El primer despliegue falló con 429 de Docker Hub al bajar `node:24-alpine`. La imagen base ahora sale de ECR Public y se quitó la directiva `syntax` del Dockerfile (rama `fix/imagen-base-ecr-public`, fusionada). El job e2e sigue bajando `postgis/postgis` de Docker Hub.
 
 **Observación menor:** para rutas inexistentes, el 404 conserva el texto de Express en inglés ("Cannot GET …"), aunque con el formato `{codigo, mensaje}`.
+
+## 9. Web, municipios, red y permisos (rama `feat/web-publica`, verificado en local el 9-oct-2026)
+
+**No está desplegado.** Lo de esta sección se probó en una máquina de desarrollo con PostgreSQL 16 + PostGIS 3.6 locales.
+
+| Qué | Evidencia |
+|---|---|
+| Catálogo de 125 municipios (D-16) | Fuente: INEGI, servicio `wscatgeo/v2/mgem/15` (numReg 125). Pruebas: 125 claves 15001–15125 sin repetir; Atizapán de Zaragoza = 15013 (≠ Atizapán, 15012) |
+| Migración `MunicipiosYRed` segura con datos | Prueba e2e sobre una base con usuario, reporte y bitácora: se aplica sin tocarlos, conserva el `id` de Atizapán, es idempotente y se revierte |
+| `municipioId` opcional en `POST /reportes` | e2e: sin municipio → 201; municipio válido → se guarda; inexistente → 400 |
+| Matriz de permisos (D-18) | Prueba que compara cada ruta con la matriz esperada + e2e (401/403/200 por perfil). Ver `docs/seguridad/roles-y-permisos.md` |
+| Red de municipios (D-17) | e2e: solo datos `example.org` con `es_ejemplo`; el enlace no puede editar (403); el administrador sí |
+| Estadísticas solo agregadas | e2e: sin folios ni textos; sumas coinciden; filtros de fecha y municipio |
+| Pruebas del backend | 53 unitarias; e2e 52/52 con usuario maestro (1 omitida por modo) y 53/53 conectado como `rieti_app`; 3 de la migración con datos |
+| Web | Tipos sin errores, 22 pruebas (combobox con teclado, validación, gráficas sin estilos en línea, 911/089 y logos con alt en todas las páginas públicas) |
+| CSP estricta en navegador real | Chrome con la web compilada servida por el backend local: 16 pantallas (pública en móvil y personal en escritorio, gráficas incluidas), **0 violaciones de CSP, 0 errores de consola, 0 peticiones a otros orígenes** |
+| Imagen Docker con la web | **No verificada en local** (no hay Docker); el job `imagen` del PR la construye |
+

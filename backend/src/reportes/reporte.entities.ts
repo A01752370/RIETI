@@ -44,7 +44,7 @@ export class Reporte {
   @JoinColumn({ name: 'id_ubicacion' })
   ubicacion: Ubicacion;
 
-  @ManyToOne(() => Municipio, { nullable: true })
+  @ManyToOne(() => Municipio, { nullable: true, eager: true })
   @JoinColumn({ name: 'id_municipio' })
   municipio: Municipio | null;
 

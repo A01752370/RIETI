@@ -8,6 +8,8 @@ import { crearVerificadorCognito, JwtGuard, VERIFICADOR_JWT } from './auth/jwt.g
 import { HealthController } from './health/health.controller';
 import { AvisosController } from './avisos/aviso-privacidad';
 import { CatalogosController } from './catalogos/catalogos.controller';
+import { EstadisticasController } from './estadisticas/estadisticas.controller';
+import { RedController } from './red/red.controller';
 import { ReportesModule } from './reportes/reportes.module';
 
 /**
@@ -22,7 +24,7 @@ import { ReportesModule } from './reportes/reportes.module';
     AuthModule,
     ReportesModule,
   ],
-  controllers: [HealthController, AvisosController, CatalogosController],
+  controllers: [HealthController, AvisosController, CatalogosController, RedController, EstadisticasController],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: VERIFICADOR_JWT, useFactory: crearVerificadorCognito },

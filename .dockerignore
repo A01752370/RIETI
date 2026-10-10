@@ -1,0 +1,17 @@
+# Contexto de la imagen del backend (docker build -f backend/Dockerfile .): solo backend/ y web/.
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+.git
+.github
+.gradle
+.idea
+app
+assets
+build
+docs
+gradle
+infra
+backend/test
+*.md
