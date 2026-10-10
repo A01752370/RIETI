@@ -64,6 +64,16 @@ export class CrearReporteDto {
   @MaxLength(2000)
   descripcion: string;
 
+  /**
+   * Municipio donde ocurre (D-16), `id` de `GET /catalogos/municipios`. Opcional por
+   * compatibilidad con la app ya instalada; si viene, se valida contra la base.
+   */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  municipioId?: number;
+
   /** Versión del aviso de privacidad que la persona aceptó; debe ser la vigente. */
   @Equals(AVISO_PRIVACIDAD_VERSION, { message: 'Debes aceptar el aviso de privacidad vigente' })
   avisoPrivacidadVersion: string;
@@ -125,6 +135,13 @@ export class ListarReportesDto {
   @IsIn(ESTATUS_ORDENADOS)
   estatus?: string;
 
+  /** Filtra por municipio (`id` del catálogo). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  municipioId?: number;
+
   /** Página (desde 1). */
   @IsOptional()
   @Type(() => Number)
@@ -147,6 +164,8 @@ export interface ReporteResumenDto {
   folio: string;
   estatus: string;
   ubicacion: string;
+  /** Municipio donde ocurre, o null si el reporte no lo indicó. */
+  municipio: string | null;
   actividad: string;
   edadAproximada: string;
   cantidadNinos: number;

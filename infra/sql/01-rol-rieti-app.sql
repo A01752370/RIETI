@@ -43,6 +43,10 @@ GRANT UPDATE (id_estatus, motivo_descarte, fecha_actualizacion) ON caso TO rieti
 -- Bitácora: solo inserción (además del trigger append-only).
 GRANT SELECT, INSERT ON seguimiento TO rieti_app;
 
+-- Directorio de la red de municipios (D-17): datos institucionales, sin PII. El administrador
+-- reemplaza la lista de un municipio, por eso aquí sí hay DELETE.
+GRANT SELECT, INSERT, DELETE ON contacto_municipio TO rieti_app;
+
 -- Consecutivo de folios.
 GRANT SELECT, INSERT, UPDATE ON folio_contador TO rieti_app;
 

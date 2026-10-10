@@ -77,6 +77,13 @@
 | D-14 | Resolución de municipio (RF-12) | MVP: el ciudadano/personal elige del catálogo de municipios (flujo E3 de CU-01). Stretch: resolver por coordenadas con polígonos INEGI en PostGIS. | Los polígonos del Marco Geoestadístico son trabajo extra; el catálogo cubre la demo. |
 | D-15 | Folio | Mantener `RIETI-AAAA-NNNNNN` (legible, como Figma) **más** clave de consulta aleatoria obligatoria (hash Argon2id). La consulta exige ambos. | Un folio secuencial solo es enumerable; con la clave deja de ser explotable. |
 
+### 2.3 Recomendaciones del socio formador (registradas el 9-oct-2026)
+| ID | Decisión | Estado |
+|---|---|---|
+| D-16 | Catálogo desplegable con los **125 municipios del Estado de México** (claves INEGI 15001–15125) para que la persona seleccione dónde se genera el reporte. | Implementado en API y web (campo con búsqueda). En el API el municipio es **opcional** hasta que la app Android que lo envía esté publicada y probada; después será obligatorio. |
+| D-17 | El municipio o la institución debe proporcionar **correos o enlaces de contacto** de los municipios integrantes de la red. | Estructura implementada (sección "Red de municipios", editable por el administrador). Hoy solo hay **datos de ejemplo** (`example.org`, `es_ejemplo = true`) con aviso visible; los oficiales los entrega la institución y se cargan como datos. |
+| D-18 | Es indispensable **mantener el aviso de privacidad** y establecer claramente las **funciones y permisos de cada perfil**. | Aviso obligatorio antes de reportar, con versión, accesible desde el pie y la app. Matriz en `docs/seguridad/roles-y-permisos.md` (implementado vs. planeado), aplicada en el código y verificada con pruebas. |
+
 ---
 
 ## 3. Alcance del MVP (MoSCoW)

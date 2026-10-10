@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In } from 'typeorm';
-import { Actividad, EstatusReporte, RangoEdad, Riesgo } from '../catalogos/catalogo.entities';
+import { Actividad, EstatusReporte, Municipio, RangoEdad, Riesgo } from '../catalogos/catalogo.entities';
 import { Usuario } from '../auth/usuario.entity';
 import { Caso, Folio, Reporte, ReporteCaso, Seguimiento, Ubicacion } from './reporte.entities';
 import {
@@ -67,6 +67,7 @@ export class ReportesService {
         this.catalogo(m, RangoEdad, dto.edadAproximada, 'edadAproximada'),
         this.catalogo(m, EstatusReporte, ESTATUS_INICIAL, 'estatus'),
       ]);
+      const municipio = dto.municipioId === undefined ? null : await this.municipioValido(m, dto.municipioId);
 
       const reporte = await m.save(m.create(Reporte, {
         ubicacion: m.create(Ubicacion, {
@@ -74,7 +75,7 @@ export class ReportesService {
           latitud: dto.latitud ?? null,
           longitud: dto.longitud ?? null,
         }),
-        actividad, riesgo, rangoEdad,
+        actividad, riesgo, rangoEdad, municipio,
         cantidadNinos: dto.cantidadNinos,
         descripcion: dto.descripcion,
         claveConsultaHash,
@@ -142,19 +143,21 @@ export class ReportesService {
   }
 
   /** CU-09: bandeja del personal, del más reciente al más antiguo, con filtro por estatus. */
-  async listar({ estatus, pagina, tamano }: ListarReportesDto): Promise<PaginaDto<ReporteResumenDto>> {
+  async listar({ estatus, municipioId, pagina, tamano }: ListarReportesDto): Promise<PaginaDto<ReporteResumenDto>> {
     const filtro = estatus ?? null;
+    const municipio = municipioId ?? null;
     const desde = `
       FROM reporte r
       JOIN reporte_caso rc ON rc.id_reporte = r.id_reporte
       JOIN caso c ON c.id_caso = rc.id_caso
       JOIN estatus_reporte e ON e.id_estatus = c.id_estatus
-      WHERE ($1::text IS NULL OR e.nombre = $1::text)`;
-    const [{ total }] = await this.ds.query(`SELECT count(DISTINCT r.id_reporte)::int AS total ${desde}`, [filtro]);
+      WHERE ($1::text IS NULL OR e.nombre = $1::text)
+        AND ($2::int IS NULL OR r.id_municipio = $2::int)`;
+    const [{ total }] = await this.ds.query(`SELECT count(DISTINCT r.id_reporte)::int AS total ${desde}`, [filtro, municipio]);
     const filas: { id: number }[] = await this.ds.query(
       `SELECT DISTINCT r.id_reporte AS id, r.fecha_creacion ${desde}
        ORDER BY r.fecha_creacion DESC, r.id_reporte DESC
-       LIMIT $2 OFFSET $3`, [filtro, tamano, (pagina - 1) * tamano]);
+       LIMIT $3 OFFSET $4`, [filtro, municipio, tamano, (pagina - 1) * tamano]);
 
     const ids = filas.map((f) => Number(f.id));
     const reportes = ids.length === 0 ? [] : await this.ds.getRepository(Reporte).findBy({ id: In(ids) });
@@ -222,6 +225,13 @@ export class ReportesService {
     return this.detalle(id);
   }
 
+  /** Municipio activo del catálogo; 400 si no existe o está inactivo (D-16). */
+  private async municipioValido(m: EntityManager, id: number): Promise<Municipio> {
+    const municipio = await m.findOneBy(Municipio, { id, activo: true });
+    if (!municipio) throw new BadRequestException({ codigo: 'VALOR_NO_VALIDO', mensaje: 'El municipio seleccionado no es válido' });
+    return municipio;
+  }
+
   /** Busca un valor de catálogo por nombre; 400 si no existe. */
   private async catalogo<T extends { nombre: string }>(
     m: EntityManager, entidad: new () => T, nombre: string, campo: string,
@@ -267,6 +277,7 @@ export class ReportesService {
       folio: folioPor.get(r.id) ?? '',
       estatus: casoPor.get(r.id)?.estatus.nombre ?? ESTATUS_INICIAL,
       ubicacion: r.ubicacion.descripcion,
+      municipio: r.municipio?.nombre ?? null,
       actividad: r.actividad.nombre,
       edadAproximada: r.rangoEdad.nombre,
       cantidadNinos: r.cantidadNinos,

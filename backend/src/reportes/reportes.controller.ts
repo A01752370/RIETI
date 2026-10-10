@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, ParseIntPipe, Patch, Post, Query, Req } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { GRUPOS_PERSONAL, Publico, Roles } from '../auth/roles';
+import { Publico, Requiere } from '../auth/roles';
 import { RequestAutenticado } from '../auth/jwt.guard';
 import {
   AgregarSeguimientoDto, CambiarEstatusDto, ConsultaPublicaDto, ConsultarReporteDto, CrearReporteDto,
@@ -39,22 +39,22 @@ export class ReportesController {
     return this.reportes.consultar(dto.folio, dto.clave);
   }
 
-  /** CU-09: bandeja del personal con filtro por estatus y paginación. */
-  @Roles(...GRUPOS_PERSONAL)
+  /** CU-09: bandeja del personal con filtros (estatus, municipio) y paginación. */
+  @Requiere('reportes.ver')
   @Get()
   listar(@Query() filtros: ListarReportesDto): Promise<PaginaDto<ReporteResumenDto>> {
     return this.reportes.listar(filtros);
   }
 
   /** CU-09: detalle del reporte con bitácora y transiciones permitidas. */
-  @Roles(...GRUPOS_PERSONAL)
+  @Requiere('reportes.ver')
   @Get(':id')
   detalle(@Param('id', ParseIntPipe) id: number): Promise<ReporteDetalleDto> {
     return this.reportes.detalle(id);
   }
 
   /** CU-09/CU-10: cambia el estatus según la máquina de estados. */
-  @Roles(...GRUPOS_PERSONAL)
+  @Requiere('reportes.gestionar')
   @Patch(':id/estatus')
   cambiarEstatus(
     @Param('id', ParseIntPipe) id: number,
@@ -65,7 +65,7 @@ export class ReportesController {
   }
 
   /** Agrega una nota de seguimiento sin cambiar el estatus. */
-  @Roles(...GRUPOS_PERSONAL)
+  @Requiere('reportes.gestionar')
   @Post(':id/seguimientos')
   agregarSeguimiento(
     @Param('id', ParseIntPipe) id: number,

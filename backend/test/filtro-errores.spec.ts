@@ -52,3 +52,11 @@ describe('errores de body-parser', () => {
     expect(cuerpo.codigo).toBe('SOLICITUD_INVALIDA');
   });
 });
+
+describe('rutas inexistentes', () => {
+  it('no devuelve el texto en inglés de Express', () => {
+    const { NotFoundException } = require('@nestjs/common');
+    expect(convertirError(new NotFoundException('Cannot GET /api/v1/no-existe')).cuerpo)
+      .toEqual({ codigo: 'NO_ENCONTRADO', mensaje: 'No se encontró el recurso' });
+  });
+});
