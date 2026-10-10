@@ -1,6 +1,6 @@
 # Identificación de ataques — RIETI
 
-> Etapa 3 · Fecha de corte: 10-oct-2026 · Rama `integracion-final`.
+> Etapa 3 · Fecha de corte: 10-oct-2026 · `main` (incluye web pública y del personal, municipios, red y matriz de permisos).
 > Complemento: [métodos de protección](metodos-proteccion.md) (qué control mitiga cada ataque, dónde está en el código y cómo se probó).
 
 RIETI recibe reportes sobre **niñas, niños y adolescentes en posible situación de trabajo infantil**. Un incidente no solo expone datos: puede poner en riesgo a un menor o a la persona que reporta. Por eso el análisis prioriza la confidencialidad del reporte y el anonimato del denunciante por encima de la disponibilidad.
@@ -46,7 +46,7 @@ Estado: **Mitigado (probado)** = hay control y prueba automatizada · **Mitigado
 | A3 | Escalamiento horizontal entre municipios | Un enlace del municipio A pide reportes del municipio B | Fuga entre municipios | Planeado (hoy hay un solo municipio y los reportes no guardan municipio) |
 | A4 | Escalamiento vertical | Una cuenta sin rol de personal llama rutas del personal | Acceso indebido | Mitigado (probado) |
 | A5 | Inyección SQL | Payloads en folio, filtros o campos de texto | Lectura/borrado de la BD | Mitigado (probado) |
-| A6 | XSS almacenado | `<script>` en la descripción, visto luego por el personal | Robo de sesión del personal | No aplica aún (no hay web; la app pinta texto plano) |
+| A6 | XSS almacenado | `<script>` en la descripción, visto luego por el personal | Robo de sesión del personal | Mitigado (probado): React escapa el texto, sin `dangerouslySetInnerHTML`, CSP sin `unsafe-inline` |
 | A7 | Subida de archivos maliciosos | Evidencias con malware o archivos enormes | Malware, costo | No aplica aún (no hay subida de evidencias) |
 | A8 | Fuga de metadatos EXIF | Foto con GPS del teléfono del denunciante | Reidentificación | No aplica aún (no hay fotos) |
 | A9 | Spam / reportes falsos masivos | Scripts que envían miles de reportes | Saturar al personal, costo | Mitigado (probado) |

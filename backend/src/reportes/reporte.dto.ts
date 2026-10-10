@@ -65,14 +65,13 @@ export class CrearReporteDto {
   descripcion: string;
 
   /**
-   * Municipio donde ocurre (D-16), `id` de `GET /catalogos/municipios`. Opcional por
-   * compatibilidad con la app ya instalada; si viene, se valida contra la base.
+   * Municipio donde ocurre (D-16), `id` de `GET /catalogos/municipios`. Obligatorio
+   * desde que la web y la app Android lo envían; se valida contra la base.
    */
-  @IsOptional()
   @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  municipioId?: number;
+  @IsInt({ message: 'Elige el municipio donde ocurre' })
+  @Min(1, { message: 'Elige el municipio donde ocurre' })
+  municipioId: number;
 
   /** Versión del aviso de privacidad que la persona aceptó; debe ser la vigente. */
   @Equals(AVISO_PRIVACIDAD_VERSION, { message: 'Debes aceptar el aviso de privacidad vigente' })
