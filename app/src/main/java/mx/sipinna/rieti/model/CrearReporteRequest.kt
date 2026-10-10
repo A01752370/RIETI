@@ -7,6 +7,7 @@ package mx.sipinna.rieti.model
  * (RNF-29). `latitud`/`longitud` son las del **lugar de los hechos**: solo se
  * envían si la persona tocó "Usar mi ubicación actual" en el formulario.
  *
+ * @property municipioId municipio donde ocurre (D-16), `id` de `GET /api/v1/catalogos/municipios`
  * @property ubicacion referencia del lugar (calle, colonia, punto de referencia)
  * @property latitud latitud del lugar de los hechos, o null
  * @property longitud longitud del lugar de los hechos, o null
@@ -18,6 +19,7 @@ package mx.sipinna.rieti.model
  * @property avisoPrivacidadVersion versión del aviso que la persona aceptó (RF-44)
  */
 data class CrearReporteRequest(
+    val municipioId: Int?,
     val ubicacion: String,
     val latitud: Double?,
     val longitud: Double?,
@@ -27,6 +29,19 @@ data class CrearReporteRequest(
     val situacionRiesgo: String,
     val descripcion: String,
     val avisoPrivacidadVersion: String
+)
+
+/**
+ * Municipio del catálogo (D-16): los 125 del Estado de México con su clave INEGI.
+ *
+ * @property id identificador que se envía en [CrearReporteRequest.municipioId]
+ * @property clave clave geoestadística de INEGI (`15xxx`)
+ * @property nombre nombre oficial del municipio
+ */
+data class Municipio(
+    val id: Int,
+    val clave: String?,
+    val nombre: String
 )
 
 /**
