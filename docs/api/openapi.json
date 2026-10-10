@@ -1335,6 +1335,7 @@
       "CrearReporte": {
         "type": "object",
         "required": [
+          "municipioId",
           "ubicacion",
           "cantidadNinos",
           "edadAproximada",
@@ -1390,7 +1391,7 @@
           "municipioId": {
             "type": "integer",
             "minimum": 1,
-            "description": "D-16: id de /catalogos/municipios. Opcional por compatibilidad con la app instalada; si viene, se valida."
+            "description": "D-16: id de /catalogos/municipios (obligatorio; se valida contra la base)."
           },
           "avisoPrivacidadVersion": {
             "type": "string",
