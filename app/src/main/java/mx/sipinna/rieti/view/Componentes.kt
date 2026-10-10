@@ -1,6 +1,24 @@
 package mx.sipinna.rieti.view
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Dp
+import mx.sipinna.rieti.R
+import mx.sipinna.rieti.ui.theme.ColoresEstatus
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -58,7 +76,12 @@ fun PantallaRieti(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(titulo, modifier = Modifier.semantics { heading() }) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LogoRieti(alto = 40.dp)
+                        Text(titulo, modifier = Modifier.semantics { heading() })
+                    }
+                },
                 navigationIcon = {
                     if (alRegresar != null) {
                         IconButton(onClick = alRegresar) {
@@ -68,10 +91,11 @@ fun PantallaRieti(
                 },
                 actions = { acciones() },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
+                    // Barra clara: los logos y el texto oscuro se leen sobre fondo claro.
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.primary,
+                    actionIconContentColor = MaterialTheme.colorScheme.primary
                 )
             )
         }
@@ -88,11 +112,68 @@ fun PantallaRieti(
     }
 }
 
-/** Botón de texto para la barra superior (usa el color de la barra). */
+/** Botón de texto para la barra superior. */
 @Composable
 fun AccionBarra(texto: String, alPresionar: () -> Unit) {
     TextButton(onClick = alPresionar) {
-        Text(texto, color = MaterialTheme.colorScheme.onPrimary)
+        Text(texto, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+/**
+ * Logo de RIETI (identidad de la app). Se muestra completo, sin recortar ni
+ * deformar (`ContentScale.Fit`), con margen de seguridad alrededor.
+ *
+ * @param alto alto en dp; el ancho sale de la proporción original (508×492)
+ */
+@Composable
+fun LogoRieti(alto: Dp, modifier: Modifier = Modifier) {
+    Image(
+        painter = painterResource(R.drawable.logo_rieti),
+        contentDescription = "RIETI, Ruta Intermunicipal para la Erradicación del Trabajo Infantil",
+        contentScale = ContentScale.Fit,
+        modifier = modifier.height(alto).padding(4.dp)
+    )
+}
+
+/**
+ * Logo institucional del SIPINNA de Atizapán de Zaragoza (marca institucional).
+ *
+ * @param alto alto en dp; el ancho sale de la proporción original (1920×571)
+ */
+@Composable
+fun LogoSipinna(alto: Dp, modifier: Modifier = Modifier) {
+    Image(
+        painter = painterResource(R.drawable.logo_sipinna),
+        contentDescription = "Sistema Municipal de Protección Integral de Niñas, Niños y Adolescentes (SIPINNA) de Atizapán de Zaragoza",
+        contentScale = ContentScale.Fit,
+        modifier = modifier.height(alto).padding(4.dp)
+    )
+}
+
+/** Encabezado de marca: RIETI (app) y SIPINNA (institución), sobre fondo claro. */
+@Composable
+fun EncabezadoMarcas() {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            LogoRieti(alto = 72.dp)
+            LogoSipinna(alto = 56.dp)
+        }
+        HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+/** Estado vacío con una explicación (no una pantalla en blanco). */
+@Composable
+fun EstadoVacio(texto: String) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(Icons.Filled.Info, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+            Text(texto, style = MaterialTheme.typography.bodyLarge)
+        }
     }
 }
 
@@ -135,27 +216,40 @@ fun AvisoEmergencia() {
     }
 }
 
-/** Color asociado a cada estatus canónico, para reconocerlo de un vistazo. */
+/** Color de cada estatus canónico (igual que en la web; texto blanco ≥ 4.5:1). */
 fun colorEstatus(estatus: String): Color = when (estatus) {
-    "Recibido" -> Color(0xFF546E7A)
-    "En revisión" -> Color(0xFF1565C0)
-    "En atención" -> Color(0xFFEF6C00)
-    "Canalizado" -> Color(0xFF6A1B9A)
-    "Concluido" -> Color(0xFF2E7D32)
-    "Descartado" -> Color(0xFF757575)
+    "Recibido" -> ColoresEstatus.Recibido
+    "En revisión" -> ColoresEstatus.EnRevision
+    "En atención" -> ColoresEstatus.EnAtencion
+    "Canalizado" -> ColoresEstatus.Canalizado
+    "Concluido" -> ColoresEstatus.Concluido
+    "Descartado" -> ColoresEstatus.Descartado
     else -> Color(0xFF424242)
 }
 
-/** Etiqueta de color con el nombre del estatus. */
+/** Icono de cada estatus (los mismos conceptos que en la web). */
+fun iconoEstatus(estatus: String): ImageVector = when (estatus) {
+    "Recibido" -> Icons.Filled.Email
+    "En revisión" -> Icons.Filled.Search
+    "En atención" -> Icons.Filled.Person
+    "Canalizado" -> Icons.AutoMirrored.Filled.ArrowForward
+    "Concluido" -> Icons.Filled.CheckCircle
+    "Descartado" -> Icons.Filled.Close
+    else -> Icons.Filled.Info
+}
+
+/** Etiqueta de estatus: color + icono + texto (nunca solo color). */
 @Composable
 fun EtiquetaEstatus(estatus: String) {
-    Surface(color = colorEstatus(estatus), shape = MaterialTheme.shapes.small) {
-        Text(
-            estatus,
-            color = Color.White,
-            style = MaterialTheme.typography.labelLarge,
+    Surface(color = colorEstatus(estatus), shape = MaterialTheme.shapes.extraLarge) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-        )
+        ) {
+            Icon(iconoEstatus(estatus), contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Text(estatus, color = Color.White, style = MaterialTheme.typography.labelLarge)
+        }
     }
 }
 

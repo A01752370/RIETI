@@ -7,6 +7,7 @@ package mx.sipinna.rieti.model
  * @property folio folio público
  * @property estatus estatus vigente
  * @property ubicacion referencia del lugar de los hechos
+ * @property municipio municipio donde ocurre, o null si el reporte no lo indicó
  * @property actividad actividad observada
  * @property edadAproximada rango de edad
  * @property cantidadNinos cantidad aproximada de menores
@@ -19,6 +20,7 @@ data class ReporteResumen(
     val folio: String,
     val estatus: String,
     val ubicacion: String,
+    val municipio: String?,
     val actividad: String,
     val edadAproximada: String,
     val cantidadNinos: Int,
@@ -59,6 +61,7 @@ data class ReporteDetalle(
     val folio: String,
     val estatus: String,
     val ubicacion: String,
+    val municipio: String?,
     val actividad: String,
     val edadAproximada: String,
     val cantidadNinos: Int,

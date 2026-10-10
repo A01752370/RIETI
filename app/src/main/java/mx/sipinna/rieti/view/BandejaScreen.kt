@@ -84,7 +84,7 @@ fun BandejaScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (e.datos.elementos.isEmpty()) {
-                    Text("No hay reportes con este filtro.", style = MaterialTheme.typography.bodyLarge)
+                    EstadoVacio(if (filtro == null) "Todavía no hay reportes." else "No hay reportes en “$filtro”. Toca “Todos” para ver el resto.")
                 }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(e.datos.elementos, key = { it.id }) { r -> FilaReporte(r) { alAbrirReporte(r.id) } }
@@ -104,6 +104,7 @@ private fun FilaReporte(r: ReporteResumen, alTocar: () -> Unit) {
                 Text(r.folio, style = MaterialTheme.typography.titleSmall)
                 EtiquetaEstatus(r.estatus)
             }
+            Text(r.municipio ?: "Municipio no indicado", style = MaterialTheme.typography.titleSmall)
             Text(r.ubicacion, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
                 "${r.actividad} · ${r.cantidadNinos} menor(es) de ${r.edadAproximada} años · Riesgo: ${r.situacionRiesgo}",

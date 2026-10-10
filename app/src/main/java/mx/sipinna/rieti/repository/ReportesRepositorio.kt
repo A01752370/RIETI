@@ -6,6 +6,7 @@ import mx.sipinna.rieti.model.CambiarEstatusRequest
 import mx.sipinna.rieti.model.ConsultaPublica
 import mx.sipinna.rieti.model.ConsultaRequest
 import mx.sipinna.rieti.model.CrearReporteRequest
+import mx.sipinna.rieti.model.Municipio
 import mx.sipinna.rieti.model.Pagina
 import mx.sipinna.rieti.model.ReporteCreado
 import mx.sipinna.rieti.model.ReporteDetalle
@@ -24,6 +25,9 @@ class ReportesRepositorio(private val api: ApiService = ServicioRemoto.api) {
 
     /** Aviso de privacidad vigente. */
     suspend fun avisoPrivacidad(): Resultado<AvisoPrivacidad> = ejecutar { api.avisoPrivacidad() }
+
+    /** Catálogo de municipios (D-16). */
+    suspend fun municipios(): Resultado<List<Municipio>> = ejecutar { api.municipios() }
 
     /** Envía un reporte anónimo; el resultado trae folio y clave de consulta. */
     suspend fun crear(request: CrearReporteRequest): Resultado<ReporteCreado> = ejecutar { api.crearReporte(request) }

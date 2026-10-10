@@ -8,6 +8,7 @@ import mx.sipinna.rieti.model.ConsultaRequest
 import mx.sipinna.rieti.model.CrearReporteRequest
 import mx.sipinna.rieti.model.LoginRequest
 import mx.sipinna.rieti.model.LoginResponse
+import mx.sipinna.rieti.model.Municipio
 import mx.sipinna.rieti.model.Pagina
 import mx.sipinna.rieti.model.ReporteCreado
 import mx.sipinna.rieti.model.ReporteDetalle
@@ -34,6 +35,10 @@ interface ApiService {
     /** Aviso de privacidad vigente (público, CU-02). */
     @GET("api/v1/avisos-privacidad/vigente")
     suspend fun avisoPrivacidad(): AvisoPrivacidad
+
+    /** D-16: los 125 municipios del Estado de México, en orden alfabético (público). */
+    @GET("api/v1/catalogos/municipios")
+    suspend fun municipios(): List<Municipio>
 
     /** CU-04: registra un reporte anónimo; devuelve folio y clave (público). */
     @POST("api/v1/reportes")
