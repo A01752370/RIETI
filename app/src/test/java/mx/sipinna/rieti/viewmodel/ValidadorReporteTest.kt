@@ -4,18 +4,25 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import mx.sipinna.rieti.model.Municipio
 
 /** Pruebas de [ValidadorReporte]: reglas del formulario antes de enviar. */
 class ValidadorReporteTest {
 
+    private val atizapan = Municipio(1, "15013", "Atizapán de Zaragoza")
+    private val municipios = listOf(
+        atizapan, Municipio(2, "15012", "Atizapán"), Municipio(3, "15057", "Naucalpan de Juárez"), Municipio(4, "15104", "Tlalnepantla de Baz")
+    )
+
     private fun validar(
+        municipio: Municipio? = atizapan,
         ubicacion: String = "Av. López Mateos y Calle 5",
         cantidad: String = "2 a 3",
         edad: String = "6-11",
         actividad: String = "Venta ambulante",
         riesgo: String = "No sé",
         descripcion: String = "Dos menores vendiendo dulces"
-    ) = ValidadorReporte.validar(ubicacion, cantidad, edad, actividad, riesgo, descripcion)
+    ) = ValidadorReporte.validar(municipio, ubicacion, cantidad, edad, actividad, riesgo, descripcion)
 
     @Test
     fun `un formulario completo no tiene problemas`() {
@@ -54,5 +61,19 @@ class ValidadorReporteTest {
         assertEquals("RIETI-2026-000123", ValidadorReporte.normalizarFolio(" rieti-2026-000123 "))
         assertNull(ValidadorReporte.normalizarFolio("RIETI-2026-123"))
         assertNull(ValidadorReporte.normalizarFolio("RIETI-2026-000001' OR '1'='1"))
+    }
+
+    @Test
+    fun `el municipio es obligatorio en la app`() {
+        assertEquals(listOf("Elige el municipio donde ocurre"), validar(municipio = null))
+    }
+
+    @Test
+    fun `la busqueda de municipios ignora acentos y prioriza los que empiezan con el texto`() {
+        assertEquals("atizapan", ValidadorReporte.normalizar("  ATIZAPÁN "))
+        assertEquals(listOf("15013", "15012"), ValidadorReporte.filtrarMunicipios(municipios, "atizapan").map { it.clave })
+        assertEquals(listOf("Tlalnepantla de Baz"), ValidadorReporte.filtrarMunicipios(municipios, "baz").map { it.nombre })
+        assertEquals(municipios, ValidadorReporte.filtrarMunicipios(municipios, ""))
+        assertTrue(ValidadorReporte.filtrarMunicipios(municipios, "zzz").isEmpty())
     }
 }

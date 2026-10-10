@@ -28,7 +28,8 @@ import androidx.compose.ui.unit.dp
  */
 @Composable
 fun InicioScreen(alReportar: () -> Unit, alConsultar: () -> Unit, alEntrarPersonal: () -> Unit) {
-    PantallaRieti(titulo = "RIETI") {
+    PantallaRieti(titulo = "Inicio") {
+        EncabezadoMarcas()
         Text(
             "Reporta posibles situaciones de trabajo infantil en la Ruta Intermunicipal",
             style = MaterialTheme.typography.headlineSmall

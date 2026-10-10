@@ -18,7 +18,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import android.content.Intent
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -36,9 +38,11 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun ConfirmacionScreen(folio: String, clave: String, alTerminar: () -> Unit) {
     val portapapeles = LocalClipboardManager.current
+    val contexto = LocalContext.current
     var copiado by rememberSaveable { mutableStateOf(false) }
 
     PantallaRieti(titulo = "Reporte enviado") {
+        LogoRieti(alto = 96.dp)
         Text("Gracias. Recibimos tu reporte.", style = MaterialTheme.typography.headlineSmall)
         Text(
             "El personal del SIPINNA lo revisará. Con estos datos puedes consultar su avance:",
@@ -76,6 +80,20 @@ fun ConfirmacionScreen(folio: String, clave: String, alTerminar: () -> Unit) {
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) {
             Text(if (copiado) "Copiados al portapapeles" else "Copiar folio y clave")
+        }
+
+        OutlinedButton(
+            onClick = {
+                // La persona elige con qué app compartir (p. ej. enviárselo a sí misma); RIETI no guarda nada.
+                val envio = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, "RIETI\nFolio: $folio\nClave de consulta: $clave")
+                }
+                contexto.startActivity(Intent.createChooser(envio, "Compartir folio y clave"))
+            },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        ) {
+            Text("Compartir")
         }
 
         Button(onClick = alTerminar, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {

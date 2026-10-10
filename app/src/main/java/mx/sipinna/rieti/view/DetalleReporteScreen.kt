@@ -83,6 +83,7 @@ private fun DatosReporte(r: ReporteDetalle) {
                 EtiquetaEstatus(r.estatus)
             }
             Campo("Registrado", formatearFecha(r.fechaCreacion))
+            Campo("Municipio", r.municipio ?: "No indicado")
             Campo("Lugar", r.ubicacion)
             if (r.latitud != null && r.longitud != null) {
                 Campo("Coordenadas", String.format(Locale.US, "%.5f, %.5f", r.latitud, r.longitud))

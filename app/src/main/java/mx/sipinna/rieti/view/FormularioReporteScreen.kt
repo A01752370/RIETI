@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.util.Locale
 import mx.sipinna.rieti.model.GestorUbicacion
+import mx.sipinna.rieti.model.Municipio
 import mx.sipinna.rieti.model.ReporteCreado
 import mx.sipinna.rieti.viewmodel.FormularioReporteViewModel
 import mx.sipinna.rieti.viewmodel.UiState
@@ -40,7 +41,7 @@ import mx.sipinna.rieti.viewmodel.ValidadorReporte
 /**
  * Formulario de reporte anónimo (CU-04).
  *
- * Grupos de chips de selección única (cantidad, edad, actividad, riesgo),
+ * Municipio con búsqueda (D-16, obligatorio en la app), grupos de chips de selección única (cantidad, edad, actividad, riesgo),
  * referencia del lugar y descripción. La ubicación del GPS es opcional, se pide
  * solo al tocar el botón y se envía como lugar de los hechos (CU-03); si el
  * permiso se niega, el reporte se puede enviar igual (CU-03 E1).
@@ -67,6 +68,10 @@ fun FormularioReporteScreen(
     var actividad by rememberSaveable { mutableStateOf("") }
     var riesgo by rememberSaveable { mutableStateOf("") }
     var permisoNegado by rememberSaveable { mutableStateOf(false) }
+
+    var municipio by remember { mutableStateOf<Municipio?>(null) }
+    val catalogoMunicipios by viewModel.municipios.collectAsState()
+    LaunchedEffect(Unit) { viewModel.cargarMunicipios() }
 
     val envio by viewModel.envio.collectAsState()
     val gps by viewModel.ubicacion.collectAsState()
@@ -97,6 +102,20 @@ fun FormularioReporteScreen(
         )
 
         Titulo("¿Dónde ocurre?")
+        when (val c = catalogoMunicipios) {
+            is UiState.Exito -> SelectorMunicipio(
+                municipios = c.datos,
+                seleccionado = municipio,
+                alElegir = { municipio = it },
+                error = (envio as? UiState.Error)?.mensaje?.takeIf { municipio == null && it.contains("municipio") }
+                    ?.let { "Elige el municipio donde ocurre" }
+            )
+            is UiState.Error -> {
+                MensajeError("No se pudo cargar la lista de municipios. ${c.mensaje}")
+                OutlinedButton(onClick = viewModel::cargarMunicipios, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Reintentar") }
+            }
+            else -> Cargando()
+        }
         OutlinedTextField(
             value = ubicacionTexto,
             onValueChange = { if (it.length <= ValidadorReporte.MAX_UBICACION) ubicacionTexto = it },
@@ -167,7 +186,7 @@ fun FormularioReporteScreen(
         (envio as? UiState.Error)?.let { MensajeError(it.mensaje) }
 
         Button(
-            onClick = { viewModel.enviar(ubicacionTexto, cantidad, edad, actividad, riesgo, descripcion, avisoVersion) },
+            onClick = { viewModel.enviar(municipio, ubicacionTexto, cantidad, edad, actividad, riesgo, descripcion, avisoVersion) },
             enabled = envio !is UiState.Cargando,
             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
         ) {
