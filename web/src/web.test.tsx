@@ -155,3 +155,29 @@ describe('páginas públicas', () => {
     expect((screen.getByRole('button', { name: 'Continuar' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe('A6: XSS almacenado en la web del personal', () => {
+  it('una descripción con HTML malicioso se muestra como texto, sin crear elementos', async () => {
+    const { fijarSesion } = await import('./api');
+    const ataque = '<img src=x onerror="alert(1)"><script>alert(2)</script>';
+    const detalle = {
+      id: 1, folio: 'RIETI-2026-000001', estatus: 'Recibido', ubicacion: ataque, municipio: 'Atizapán de Zaragoza',
+      actividad: 'Otro', edadAproximada: '6-11', cantidadNinos: 1, situacionRiesgo: 'No sé',
+      fechaCreacion: '2026-10-10T00:00:00Z', fechaActualizacion: '2026-10-10T00:00:00Z', latitud: null, longitud: null,
+      descripcion: ataque, motivoDescarte: null, transicionesPermitidas: ['En revisión'],
+      historial: [{ estatus: 'Recibido', comentario: ataque, autor: null, fecha: '2026-10-10T00:00:00Z' }],
+    };
+    fijarSesion({ token: 'token-prueba', correo: 'enlace@example.org' });
+    window.history.pushState(null, '', '/personal/reportes/1');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(detalle), { status: 200 })));
+    let r!: ReturnType<typeof render>;
+    await act(async () => { r = render(<App />); });
+    await screen.findAllByText(ataque);
+    expect(r.container.querySelector('script')).toBeNull();
+    expect(r.container.querySelector('img[src="x"]')).toBeNull();
+    expect(r.container.querySelector('[onerror]')).toBeNull();
+    // Se serializa como texto escapado (&lt;img …), no como etiqueta.
+    expect(r.container.innerHTML).toContain('&lt;img src=x');
+    fijarSesion(null);
+  });
+});
