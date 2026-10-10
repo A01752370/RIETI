@@ -46,6 +46,7 @@ const reporteValido = () => ({
   actividad: 'Venta ambulante',
   situacionRiesgo: 'No sé',
   descripcion: 'Dos menores vendiendo dulces entre los autos durante la tarde.',
+  municipioId: 1, // Atizapán de Zaragoza (15013): conserva el id 1 tras la migración
   avisoPrivacidadVersion: '2026-10-v1',
 });
 
@@ -411,8 +412,20 @@ describeBd('API RIETI (e2e)', () => {
       expect(fila.id_municipio).toBe(atizapan);
     });
 
-    it('sigue aceptando reportes sin municipio (compatibilidad con la app instalada)', async () => {
-      await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send(reporteValido()).expect(201);
+    it('exige municipio: sin municipioId → 400 con mensaje en español', async () => {
+      const { municipioId, ...sinMunicipio } = reporteValido();
+      expect(municipioId).toBe(1);
+      const r = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send(sinMunicipio).expect(400);
+      expect(r.body.codigo).toBe('SOLICITUD_INVALIDA');
+      expect(r.body.detalle).toContain('Elige el municipio donde ocurre');
+    });
+
+    it('rechaza municipioId no numérico o menor que 1', async () => {
+      for (const valor of ['uno', 0, -3]) {
+        const r = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp())
+          .send({ ...reporteValido(), municipioId: valor }).expect(400);
+        expect(r.body.detalle).toContain('Elige el municipio donde ocurre');
+      }
     });
 
     it('rechaza un municipio que no existe', async () => {

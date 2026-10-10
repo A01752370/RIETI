@@ -67,7 +67,7 @@ export class ReportesService {
         this.catalogo(m, RangoEdad, dto.edadAproximada, 'edadAproximada'),
         this.catalogo(m, EstatusReporte, ESTATUS_INICIAL, 'estatus'),
       ]);
-      const municipio = dto.municipioId === undefined ? null : await this.municipioValido(m, dto.municipioId);
+      const municipio = await this.municipioValido(m, dto.municipioId);
 
       const reporte = await m.save(m.create(Reporte, {
         ubicacion: m.create(Ubicacion, {
