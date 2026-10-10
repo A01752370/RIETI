@@ -1,6 +1,6 @@
 # Estado de la entrega — RIETI (Etapa 3)
 
-**Fecha de corte:** 10-oct-2026 · **Rama:** `integracion-final` (fusionada en `main`) · **Despliegue en AWS:** 9-oct-2026, ver [sección 8](#8-despliegue-en-aws-verificado-el-9-oct-2026)
+**Fecha de corte:** 10-oct-2026 (congelamiento a las 12:00) · **Rama:** `main` · Estado más reciente: [sección 10](#10-estado-al-congelamiento-10-oct-2026)
 **Modo de trabajo:** "24 horas": solo P0–P5 del plan de entrega; lo demás queda como hoja de ruta.
 
 ## 1. Resumen
@@ -146,9 +146,9 @@ Solo se registra lo que se comprobó con comandos de lectura o con `curl` contra
 
 **Observación menor:** para rutas inexistentes, el 404 conserva el texto de Express en inglés ("Cannot GET …"), aunque con el formato `{codigo, mensaje}`.
 
-## 9. Web, municipios, red y permisos (rama `feat/web-publica`, verificado en local el 9-oct-2026)
+## 9. Web, municipios, red y permisos (verificado en local el 9-oct-2026; desplegado después, ver sección 10)
 
-**No está desplegado.** Lo de esta sección se probó en una máquina de desarrollo con PostgreSQL 16 + PostGIS 3.6 locales.
+Lo de esta sección se probó en una máquina de desarrollo con PostgreSQL 16 + PostGIS 3.6 locales.
 
 | Qué | Evidencia |
 |---|---|
@@ -162,4 +162,43 @@ Solo se registra lo que se comprobó con comandos de lectura o con `curl` contra
 | Web | Tipos sin errores, 22 pruebas (combobox con teclado, validación, gráficas sin estilos en línea, 911/089 y logos con alt en todas las páginas públicas) |
 | CSP estricta en navegador real | Chrome con la web compilada servida por el backend local: 16 pantallas (pública en móvil y personal en escritorio, gráficas incluidas), **0 violaciones de CSP, 0 errores de consola, 0 peticiones a otros orígenes** |
 | Imagen Docker con la web | **No verificada en local** (no hay Docker); el job `imagen` del PR la construye |
+
+## 10. Estado al congelamiento (10-oct-2026)
+
+Fuente de cada dato: **[yo]** = comprobado en esta sesión con comandos o pruebas; **[Bowser]** = prueba manual reportada por Bowser; **[CI]** = resultado de GitHub Actions consultado con la API pública de GitHub.
+
+### En producción (`main`)
+
+| Tema | Estado | Evidencia |
+|---|---|---|
+| Web pública y del personal servida por el backend | En producción | [yo] `GET /` → 200 HTML con CSP `'self'`; [Bowser] web probada en producción y funcionando |
+| Panel de estadísticas | En producción | [yo] Chrome real en local: tarjetas, barras, serie mensual y tablas alternativas, 0 violaciones de CSP; [Bowser] web en producción |
+| 125 municipios (D-16) | En producción | [yo] `GET /api/v1/catalogos/municipios` → 125 con claves únicas; Atizapán de Zaragoza = 15013 con su `id` original |
+| Red de municipios (D-17) | En producción, **solo datos de ejemplo** | [yo] `GET /api/v1/red-municipios` → 200, contactos `example.org`, `hayDatosDeEjemplo: true` |
+| Roles y permisos (D-18) | En producción | [yo] matriz en código + pruebas (`docs/seguridad/roles-y-permisos.md`); [yo] `GET /api/v1/auth/perfil` sin token → 401 |
+| Migración `MunicipiosYRed` | Aplicada | [yo] respuestas del API que dependen de sus columnas y tabla; prueba e2e sobre base con datos (local) |
+| Android: logos, selector de municipio con búsqueda, tokens, estatus con icono | En `main` (PR #6) | [yo] emulador aparte: inicio, aviso, formulario, búsqueda y selección de municipio; [Bowser] app nueva probada |
+| Android: ícono adaptativo (opción A) | En `main` | [yo] 0 píxeles fuera de la zona segura en 5 densidades; vista previa círculo/squircle/cuadrado sin cortes; launcher de emulador |
+| CI | En verde | [CI] merge de la web: test, e2e (maestro y rieti_app), imagen, build (web y Android), gitleaks y **deploy** en éxito; PR #6 e ícono: build y gitleaks en éxito |
+
+### Pendiente de fusionar
+
+| Cambio | Estado | Evidencia |
+|---|---|---|
+| `municipioId` obligatorio en `POST /reportes` (rama `feat/municipio-obligatorio`) | PR por abrir/revisar | [yo] local: 53 unitarias; e2e 56/56 (maestro) y 57/57 (`rieti_app`); sin municipio → 400 "Elige el municipio donde ocurre"; 23 pruebas de web incluida A6 (XSS) |
+
+### Limitaciones conocidas
+
+- **Evidencias fotográficas: no implementadas.** El bucket S3 privado y cifrado existe (Terraform) y el rol de la tarea tiene permiso de escritura, pero **no hay endpoint ni código de carga** (A7, A8 y A14 sin funcionalidad que proteger).
+- **Reporte con datos de contacto: no disponible** (solo anónimo); requiere cifrado a nivel aplicación.
+- **Coordinador y filtro por municipio del enlace: planeados**; hoy el enlace municipal ve los reportes de todos los municipios. Sin RLS.
+- **API con el usuario maestro de la BD**: el rol `rieti_app` está preparado y probado en local, **no aplicado** en AWS.
+- **MFA no obligatorio**; el personal usa contraseña permanente (sin Hosted UI).
+- **Red de municipios con datos de ejemplo**; los contactos oficiales los debe entregar la institución. La edición es solo por API (no hay pantalla en la web).
+- **Aviso de privacidad en borrador** (falta validación jurídica).
+- **Android**: TalkBack no se probó; R8 no está activado; el token del personal vive en memoria.
+- **Sin prueba de carga ni escaneo OWASP ZAP**; sin Dependabot.
+- **TLS mínimo no endurecible** con el dominio `*.cloudfront.net`.
+- Al fusionar `municipio-obligatorio`, las APK anteriores al PR #6 ya no podrán enviar reportes.
+- Reportes de prueba en producción: `RIETI-2026-000001`, `000002` y `000004` (ficticios, marcados "PRUEBA AUTOMATIZADA" los dos últimos) y `000003` (origen no verificado). Se pueden retirar con el paso 3 del runbook.
 

@@ -62,6 +62,16 @@ Las pruebas e2e corrieron en una máquina de desarrollo con PostgreSQL local. **
 | Paginación obligatoria (máximo 100 por página) | `ListarReportesDto` | A22 | e2e |
 | WAF: límite de 300 solicitudes por IP cada 5 min, reglas administradas de AWS (reputación de IP, Common, Known Bad Inputs, SQLi) | `infra/terraform/cloudfront.tf` | A5, A9, A22 | Configuración |
 
+### Web (pública y del personal)
+
+| Control | Dónde | Mitiga | Verificación |
+|---|---|---|---|
+| CSP estricta: solo `'self'`, sin `unsafe-inline` ni orígenes externos; `frame-ancestors 'none'` | `backend/src/configurar-app.ts` (`DIRECTIVAS_CSP`) | A6, A12 | e2e "CSP estricta"; Chrome real con la web compilada: 16 pantallas, 0 violaciones, 0 peticiones externas (local); cabecera presente en producción (`curl -I`) |
+| React escapa todo el texto; no se usa `dangerouslySetInnerHTML` ni `innerHTML` | `web/src` | A6 | `web/src/web.test.tsx` "A6": una descripción con `<script>` e `<img onerror>` se muestra como texto, sin crear elementos |
+| Sin CDN, fuentes externas ni analítica; gráficas SVG propias | `web/` | A16, A20 | Recorrido en Chrome: 0 orígenes externos |
+| Sesión del personal solo en memoria (no `localStorage` ni cookies) | `web/src/api.ts` | A17 | Revisión de código |
+| Matriz de permisos única (`MATRIZ_PERMISOS` + `@Requiere`) | `backend/src/auth/roles.ts` | A4 | `rutas-protegidas.spec.ts` compara cada ruta con la matriz; e2e por perfil (ver `roles-y-permisos.md`) |
+
 ### Perímetro y transporte
 
 | Control | Dónde | Mitiga | Verificación |
