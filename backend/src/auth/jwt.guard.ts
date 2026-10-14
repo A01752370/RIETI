@@ -97,7 +97,8 @@ export class JwtGuard implements CanActivate {
 
   /**
    * Rutas de ciudadano (Fase 4): solo tokens del pool de ciudadanos. Registra o
-   * actualiza la fila de `cuentas_ciudadano` (solo `sub` y fechas).
+   * actualiza la fila de `cuentas_ciudadano` (solo `sub` y fechas). Un token del
+   * personal nunca se acepta aquí.
    *
    * @param opcional true si la ruta también acepta peticiones anónimas
    */
@@ -111,6 +112,10 @@ export class JwtGuard implements CanActivate {
     try {
       sub = (await this.verificadorCiudadano.verify(token)).sub;
     } catch {
+      // En la ruta opcional (POST /reportes) un token que no es de ciudadano se ignora, salvo que se
+      // pida vincular: las APK instaladas mandan el token del personal en todas las peticiones y su
+      // reporte debe seguir aceptándose como anónimo.
+      if (opcional && (req.body as { vincularCuenta?: unknown } | undefined)?.vincularCuenta !== true) return true;
       throw new UnauthorizedException();
     }
     const [{ id_cuenta: idCuenta }] = await this.ds.query(

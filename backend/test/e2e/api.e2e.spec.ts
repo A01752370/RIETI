@@ -768,10 +768,19 @@ describeBd('API RIETI (e2e)', () => {
       expect(JSON.stringify(mios)).not.toMatch(/Dos menores|López Mateos/);
     });
 
-    it('vincularCuenta sin sesión → 400; token de ciudadano inválido → 401', async () => {
+    it('vincularCuenta sin sesión → 400; con un token que no es de ciudadano → 401', async () => {
       const sin = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send({ ...reporteValido(), vincularCuenta: true }).expect(400);
       expect(sin.body.codigo).toBe('SESION_REQUERIDA');
-      await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).set('Authorization', 'Bearer inventado').send(reporteValido()).expect(401);
+      await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).set('Authorization', 'Bearer inventado')
+        .send({ ...reporteValido(), vincularCuenta: true }).expect(401);
+    });
+
+    it('compatibilidad: las APK que mandan el token del personal pueden seguir enviando reportes anónimos', async () => {
+      const r = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).set('Authorization', 'Bearer token-personal')
+        .send(reporteValido()).expect(201);
+      const [fila] = await adminDs.query(
+        'SELECT r.cuenta_ciudadano_id FROM reporte r JOIN folio f ON f.id_reporte = r.id_reporte WHERE f.codigo = $1', [r.body.folio]);
+      expect(fila).toEqual({ cuenta_ciudadano_id: null });
     });
 
     it('otra cuenta no ve los reportes ajenos y el personal no ve la cuenta vinculada', async () => {
