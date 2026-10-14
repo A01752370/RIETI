@@ -28,12 +28,17 @@ GRANT USAGE ON SCHEMA public TO rieti_app;
 -- Catálogos: solo lectura.
 GRANT SELECT ON municipio, rol_usuario, actividad, riesgo, rango_edad, estatus_reporte TO rieti_app;
 
+-- Geografía (Fase 2): polígonos del INEGI y catálogo opcional de códigos postales, solo lectura.
+GRANT SELECT ON municipio_geom, codigo_postal_municipio TO rieti_app;
+
 -- Personal: el login sincroniza correo/rol/sub; nunca se borra.
 GRANT SELECT, INSERT ON usuario TO rieti_app;
 GRANT UPDATE (correo, cognito_sub, id_rol) ON usuario TO rieti_app;
 
 -- Reportes: alta y lectura; solo se actualiza la fecha de actualización.
 GRANT SELECT, INSERT ON ubicacion, reporte, folio, reporte_caso TO rieti_app;
+-- Menores por grupo de edad (Fase 2): se insertan con el reporte y no se modifican.
+GRANT SELECT, INSERT ON reporte_menores_grupo TO rieti_app;
 GRANT UPDATE (fecha_actualizacion) ON reporte TO rieti_app;
 
 -- Caso: estatus vigente y motivo de descarte.

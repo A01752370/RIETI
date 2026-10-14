@@ -1,6 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import {
-  Equals, IsIn, IsInt, IsLatitude, IsLongitude, IsNotEmpty, IsOptional, IsString, Matches, Max, MaxLength, Min,
+  ArrayMaxSize, ArrayMinSize, Equals, IsArray, IsIn, IsInt, IsLatitude, IsLongitude, IsNotEmpty, IsOptional, IsString,
+  Matches, Max, MaxLength, Min, ValidateIf, ValidateNested,
 } from 'class-validator';
 import { AVISO_PRIVACIDAD_VERSION } from '../avisos/aviso-privacidad';
 import { ESTATUS_ORDENADOS } from './estatus';
@@ -8,19 +9,80 @@ import { ESTATUS_ORDENADOS } from './estatus';
 /** Quita espacios al inicio y al final de los textos recibidos. */
 const recortar = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
+/** Menores observados en un rango de edad (Fase 2). */
+export class GrupoMenoresDto {
+  /** Rango del catálogo `rango_edad` ("0-5", "6-11", "12-17" o "Sin determinar"). */
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(20)
+  rango: string;
+
+  /** Cuántos menores de ese rango (el total del reporte no puede pasar de 50). */
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  cantidad: number;
+}
+
+/** Dirección estructurada del lugar de los hechos (Fase 2). Se autorrellena desde el mapa y es editable. */
+export class DireccionDto {
+  @Transform(recortar)
+  @IsString()
+  @IsNotEmpty({ message: 'Escribe la calle' })
+  @MaxLength(120)
+  calle: string;
+
+  @IsOptional()
+  @Transform(recortar)
+  @IsString()
+  @MaxLength(20)
+  numeroExterior?: string;
+
+  @Transform(recortar)
+  @IsString()
+  @IsNotEmpty({ message: 'Escribe la colonia' })
+  @MaxLength(120)
+  colonia: string;
+
+  /** 5 dígitos; además se valida que sea del Estado de México (50000–57999). */
+  @Transform(recortar)
+  @IsString()
+  @Matches(/^\d{5}$/, { message: 'El código postal debe tener 5 dígitos' })
+  codigoPostal: string;
+
+  @IsOptional()
+  @Transform(recortar)
+  @IsString()
+  @MaxLength(300)
+  referencias?: string;
+}
+
 /**
  * Cuerpo de `POST /api/v1/reportes` (CU-04, reporte anónimo).
  *
  * `ValidationPipe` corre con `whitelist` + `forbidNonWhitelisted`: cualquier
  * campo que no esté aquí (p. ej. un identificador de dispositivo) se rechaza.
+ *
+ * Acepta dos formatos (las APK instaladas siguen usando el anterior):
+ * - **Anterior:** `ubicacion` (texto), `cantidadNinos` y `edadAproximada`.
+ * - **Nuevo (Fase 2):** `direccion` y `grupos`; `ubicacion`, `cantidadNinos` y
+ *   `edadAproximada` se vuelven opcionales y el servidor los deriva.
  */
 export class CrearReporteDto {
-  /** Referencia del lugar de los hechos (calle, colonia, referencia). */
+  /** Referencia del lugar de los hechos. Obligatoria si no se envía `direccion`. */
+  @ValidateIf((o: CrearReporteDto) => o.direccion === undefined || o.ubicacion !== undefined)
   @Transform(recortar)
   @IsString()
   @IsNotEmpty()
   @MaxLength(300)
-  ubicacion: string;
+  ubicacion?: string;
+
+  /** Dirección estructurada (formato nuevo). */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DireccionDto)
+  direccion?: DireccionDto;
 
   /** Latitud del lugar de los hechos (opcional). No es la ubicación de quien reporta. */
   @IsOptional()
@@ -32,24 +94,42 @@ export class CrearReporteDto {
   @IsLongitude()
   longitud?: number | null;
 
-  /** Cantidad aproximada de niñas, niños o adolescentes observados (RF-05). */
+  /** Cantidad aproximada de menores (formato anterior; obligatoria si no se envían `grupos`). */
+  @ValidateIf((o: CrearReporteDto) => o.grupos === undefined || o.cantidadNinos !== undefined)
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(99)
-  cantidadNinos: number;
+  cantidadNinos?: number;
 
-  /** Rango de edad (catálogo `rango_edad`). */
+  /** Rango de edad (formato anterior; obligatorio si no se envían `grupos`). */
+  @ValidateIf((o: CrearReporteDto) => o.grupos === undefined || o.edadAproximada !== undefined)
   @IsString()
   @IsNotEmpty()
   @MaxLength(20)
-  edadAproximada: string;
+  edadAproximada?: string;
 
-  /** Actividad observada (catálogo `actividad`). */
+  /** Menores por grupo de edad (formato nuevo): de 1 a 4 grupos, sin repetir rango. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Indica al menos un grupo de edad' })
+  @ArrayMaxSize(4)
+  @ValidateNested({ each: true })
+  @Type(() => GrupoMenoresDto)
+  grupos?: GrupoMenoresDto[];
+
+  /** Actividad observada (catálogo `actividad`, `GET /catalogos/actividades`). */
   @IsString()
   @IsNotEmpty()
   @MaxLength(80)
   actividad: string;
+
+  /** Detalle cuando la actividad es "Otro" (obligatorio en el formato nuevo). */
+  @IsOptional()
+  @Transform(recortar)
+  @IsString()
+  @MaxLength(120)
+  actividadOtro?: string;
 
   /** ¿Se percibe riesgo? (catálogo `riesgo`: Sí / No / No sé). */
   @IsString()
@@ -157,6 +237,21 @@ export class ListarReportesDto {
   tamano = 20;
 }
 
+/** Grupo de edad en la respuesta del personal. */
+export interface GrupoMenoresRespuestaDto {
+  rango: string;
+  cantidad: number;
+}
+
+/** Dirección en la respuesta del personal (null si el reporte se creó con el formato anterior). */
+export interface DireccionRespuestaDto {
+  calle: string | null;
+  numeroExterior: string | null;
+  colonia: string | null;
+  codigoPostal: string | null;
+  referencias: string | null;
+}
+
 /** Fila de la bandeja del personal. */
 export interface ReporteResumenDto {
   id: number;
@@ -195,6 +290,12 @@ export interface ReporteDetalleDto extends ReporteResumenDto {
   latitud: number | null;
   longitud: number | null;
   descripcion: string;
+  /** Menores por grupo de edad (los reportes anteriores tienen un solo grupo). */
+  grupos: GrupoMenoresRespuestaDto[];
+  /** Detalle de la actividad cuando es "Otro". */
+  actividadOtro: string | null;
+  /** Dirección estructurada, o null si el reporte solo trae el texto de `ubicacion`. */
+  direccion: DireccionRespuestaDto | null;
   motivoDescarte: string | null;
   /** Bitácora completa, del evento más antiguo al más reciente. */
   historial: EventoSeguimientoDto[];

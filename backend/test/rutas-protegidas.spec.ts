@@ -10,7 +10,8 @@ const PUBLICAS_PERMITIDAS = new Set([
   'POST auth/login',
   'POST reportes', 'POST reportes/consulta',
   'GET avisos-privacidad/vigente',
-  'GET catalogos', 'GET catalogos/municipios',
+  'GET catalogos', 'GET catalogos/municipios', 'GET catalogos/actividades',
+  'GET geo/reversa', 'GET geo/teselas/:z/:x/:y.png',
   'GET red-municipios',
 ]);
 

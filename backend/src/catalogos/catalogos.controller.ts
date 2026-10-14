@@ -14,6 +14,13 @@ export interface CatalogosDto {
   estatus: string[];
 }
 
+/** Actividad del selector (Fase 2). */
+export interface ActividadDto {
+  nombre: string;
+  /** true para "Otro": el formulario pide describir la actividad. */
+  requiereDetalle: boolean;
+}
+
 /** Municipio del selector del formulario (D-16). */
 export interface MunicipioDto {
   /** `id` que se envía en `municipioId`. */
@@ -35,10 +42,22 @@ export class CatalogosController {
   @Publico()
   @Get()
   async todos(): Promise<CatalogosDto> {
-    const nombres = async (e: typeof Actividad | typeof RangoEdad | typeof Riesgo) =>
+    const nombres = async (e: typeof RangoEdad | typeof Riesgo) =>
       (await this.ds.getRepository(e).find({ order: { id: 'ASC' } })).map((x) => x.nombre);
-    const [actividades, rangosEdad, riesgos] = await Promise.all([nombres(Actividad), nombres(RangoEdad), nombres(Riesgo)]);
-    return { actividades, rangosEdad, riesgos, estatus: [...ESTATUS_ORDENADOS] };
+    const [actividades, rangosEdad, riesgos] = await Promise.all([this.actividadesOrdenadas(), nombres(RangoEdad), nombres(Riesgo)]);
+    return { actividades: actividades.map((a) => a.nombre), rangosEdad, riesgos, estatus: [...ESTATUS_ORDENADOS] };
+  }
+
+  /** Catálogo de actividades en el orden del selector ("Otro" al final). La app lo usa con respaldo local. */
+  @Publico()
+  @Get('actividades')
+  async actividades(): Promise<ActividadDto[]> {
+    return this.actividadesOrdenadas();
+  }
+
+  private async actividadesOrdenadas(): Promise<ActividadDto[]> {
+    const filas = await this.ds.getRepository(Actividad).find({ order: { orden: 'ASC', id: 'ASC' } });
+    return filas.map((a) => ({ nombre: a.nombre, requiereDetalle: a.nombre === 'Otro' }));
   }
 
   /** Municipios activos (los 125 del Estado de México), en orden alfabético. */

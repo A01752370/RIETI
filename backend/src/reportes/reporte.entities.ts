@@ -29,6 +29,22 @@ export class Ubicacion {
 
   @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true, transformer: decimalANumero })
   longitud: number | null;
+
+  /** Dirección estructurada (Fase 2; opcional: las APK anteriores solo envían `descripcion`). */
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  calle: string | null;
+
+  @Column({ name: 'numero_exterior', type: 'varchar', length: 20, nullable: true })
+  numeroExterior: string | null;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  colonia: string | null;
+
+  @Column({ name: 'codigo_postal', type: 'varchar', length: 5, nullable: true })
+  codigoPostal: string | null;
+
+  @Column({ type: 'varchar', length: 300, nullable: true })
+  referencias: string | null;
 }
 
 /**
@@ -60,8 +76,13 @@ export class Reporte {
   @JoinColumn({ name: 'id_rango_edad' })
   rangoEdad: RangoEdad;
 
+  /** Total de menores observados (suma de los grupos de edad desde la Fase 2). */
   @Column({ name: 'cantidad_ninos', type: 'smallint' })
   cantidadNinos: number;
+
+  /** Detalle libre cuando la actividad es "Otro". */
+  @Column({ name: 'actividad_otro', type: 'varchar', length: 120, nullable: true })
+  actividadOtro: string | null;
 
   @Column({ type: 'text' })
   descripcion: string;
@@ -163,4 +184,24 @@ export class Seguimiento {
 
   @CreateDateColumn({ type: 'timestamptz' })
   fecha: Date;
+}
+
+/**
+ * Menores observados en un grupo de edad (Fase 2). Un reporte tiene de 1 a 4
+ * grupos, uno por rango; la llave primaria impide repetir un rango.
+ */
+@Entity('reporte_menores_grupo')
+export class GrupoMenores {
+  @PrimaryColumn({ name: 'id_reporte' })
+  idReporte: number;
+
+  @PrimaryColumn({ name: 'id_rango_edad' })
+  idRangoEdad: number;
+
+  @ManyToOne(() => RangoEdad, { nullable: false, eager: true })
+  @JoinColumn({ name: 'id_rango_edad' })
+  rangoEdad: RangoEdad;
+
+  @Column({ type: 'smallint' })
+  cantidad: number;
 }
