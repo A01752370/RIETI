@@ -52,6 +52,9 @@ data class Pagina<T>(
  * @property longitud longitud del lugar de los hechos, o null
  * @property descripcion descripción libre escrita por quien reportó
  * @property motivoDescarte motivo registrado al descartar, o null
+ * @property grupos menores por grupo de edad (reportes anteriores a la Fase 2: un solo grupo; null si el servidor es anterior)
+ * @property actividadOtro descripción de la actividad cuando es "Otro", o null
+ * @property direccion dirección estructurada, o null si el reporte solo trae el texto de [ubicacion]
  * @property historial bitácora del caso, del evento más antiguo al más reciente
  * @property transicionesPermitidas estatus a los que se puede cambiar desde el actual;
  *   los calcula el servidor con la máquina de estados, la app solo los muestra
@@ -73,7 +76,19 @@ data class ReporteDetalle(
     val descripcion: String,
     val motivoDescarte: String?,
     val historial: List<EventoSeguimiento>,
-    val transicionesPermitidas: List<String>
+    val transicionesPermitidas: List<String>,
+    val grupos: List<GrupoMenores>? = null,
+    val actividadOtro: String? = null,
+    val direccion: DireccionRespuesta? = null
+)
+
+/** Dirección de un reporte tal como la devuelve el servidor (cualquier campo puede faltar). */
+data class DireccionRespuesta(
+    val calle: String?,
+    val numeroExterior: String?,
+    val colonia: String?,
+    val codigoPostal: String?,
+    val referencias: String?
 )
 
 /**

@@ -1,5 +1,7 @@
 package mx.sipinna.rieti.repository
 
+import mx.sipinna.rieti.model.Actividad
+import mx.sipinna.rieti.model.GeoReversa
 import mx.sipinna.rieti.model.AgregarSeguimientoRequest
 import mx.sipinna.rieti.model.AvisoPrivacidad
 import mx.sipinna.rieti.model.CambiarEstatusRequest
@@ -31,6 +33,12 @@ class ReportesRepositorio(private val api: ApiService = ServicioRemoto.api) {
 
     /** Envía un reporte anónimo; el resultado trae folio y clave de consulta. */
     suspend fun crear(request: CrearReporteRequest): Resultado<ReporteCreado> = ejecutar { api.crearReporte(request) }
+
+    /** Catálogo de actividades del servidor. */
+    suspend fun actividades(): Resultado<List<Actividad>> = ejecutar { api.actividades() }
+
+    /** Dirección sugerida y municipio de un punto del mapa. */
+    suspend fun reversa(lat: Double, lng: Double): Resultado<GeoReversa> = ejecutar { api.reversa(lat, lng) }
 
     /** Consulta ciudadana con folio + clave. */
     suspend fun consultar(folio: String, clave: String): Resultado<ConsultaPublica> =

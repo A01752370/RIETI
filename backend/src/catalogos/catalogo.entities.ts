@@ -71,6 +71,10 @@ export class Actividad {
 
   @Column({ length: 80, unique: true })
   nombre: string;
+
+  /** Posición en el selector ("Otro" al final). */
+  @Column({ type: 'smallint', default: 100 })
+  orden: number;
 }
 
 @Entity('riesgo')

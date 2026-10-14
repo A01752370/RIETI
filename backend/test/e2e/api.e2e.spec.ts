@@ -33,6 +33,18 @@ const TOKENS: Record<string, { sub: string; 'cognito:groups'?: string[] }> = {
   'token-admin': { sub: SUB_ADMIN, 'cognito:groups': ['Administrador'] },
 };
 
+/** Doble de la fuente geográfica externa: cuenta las llamadas y nunca sale a internet. */
+const fuenteGeoFalsa = {
+  llamadasReversa: 0,
+  async reversa() {
+    this.llamadasReversa++;
+    return { address: { road: 'Avenida Adolfo López Mateos', house_number: '12', suburb: 'Centro', postcode: '52900' } };
+  },
+  async tesela() {
+    return Buffer.from([0x89, 0x50, 0x4e, 0x47]); // cabecera PNG
+  },
+};
+
 let siguienteIp = 1;
 /** IP de cliente distinta por grupo de peticiones. */
 const nuevaIp = () => `203.0.113.${siguienteIp++}, 127.0.0.1`;
@@ -47,7 +59,7 @@ const reporteValido = () => ({
   situacionRiesgo: 'No sé',
   descripcion: 'Dos menores vendiendo dulces entre los autos durante la tarde.',
   municipioId: 1, // Atizapán de Zaragoza (15013): conserva el id 1 tras la migración
-  avisoPrivacidadVersion: '2026-10-v1',
+  avisoPrivacidadVersion: '2026-10-v2',
 });
 
 describeBd('API RIETI (e2e)', () => {
@@ -97,6 +109,7 @@ describeBd('API RIETI (e2e)', () => {
     // Imports diferidos: las opciones de TypeORM y Cognito se leen del entorno recién configurado.
     const { AppModule } = await import('../../src/app.module');
     const { VERIFICADOR_JWT } = await import('../../src/auth/jwt.guard');
+    const { FUENTE_GEO } = await import('../../src/geo/fuente-geo');
     const { configurarApp } = await import('../../src/configurar-app');
 
     const modulo = await Test.createTestingModule({ imports: [AppModule] })
@@ -107,6 +120,8 @@ describeBd('API RIETI (e2e)', () => {
           return TOKENS[t];
         },
       })
+      .overrideProvider(FUENTE_GEO)
+      .useValue(fuenteGeoFalsa)
       .compile();
     app = modulo.createNestApplication<NestExpressApplication>({ bodyParser: false, logger: false });
     configurarApp(app);
@@ -148,7 +163,7 @@ describeBd('API RIETI (e2e)', () => {
 
     it('aviso de privacidad vigente', async () => {
       const r = await http().get('/api/v1/avisos-privacidad/vigente').expect(200);
-      expect(r.body.version).toBe('2026-10-v1');
+      expect(r.body.version).toBe('2026-10-v2');
       expect(r.body.parrafos.length).toBeGreaterThan(0);
       // Secciones con título: mismo texto, mismo orden (las APK instaladas siguen leyendo `parrafos`).
       expect(r.body.secciones.flatMap((s: { parrafos: string[] }) => s.parrafos)).toEqual(r.body.parrafos);
@@ -178,7 +193,7 @@ describeBd('API RIETI (e2e)', () => {
          FROM reporte r JOIN folio f ON f.id_reporte = r.id_reporte WHERE f.codigo = $1`, [folio]);
       expect(fila.h).toMatch(/^\$argon2id\$/);
       expect(fila.h).not.toContain(clave.replace(/-/g, ''));
-      expect(fila.v).toBe('2026-10-v1');
+      expect(fila.v).toBe('2026-10-v2');
     });
 
     it('el esquema no tiene columnas de IP ni de dispositivo (RNF-29)', async () => {
@@ -440,6 +455,134 @@ describeBd('API RIETI (e2e)', () => {
       const r = await http().get('/api/v1/reportes?municipioId=' + atizapan).set('Authorization', 'Bearer token-personal').expect(200);
       expect(r.body.elementos.length).toBeGreaterThanOrEqual(1);
       expect(r.body.elementos.every((e: { municipio: string }) => e.municipio === 'Atizapán de Zaragoza')).toBe(true);
+    });
+  });
+
+  describe('formulario robusto (Fase 2)', () => {
+    /** Reporte con el formato nuevo: grupos de edad y dirección estructurada. */
+    const reporteNuevo = () => {
+      const { ubicacion, cantidadNinos, edadAproximada, ...resto } = reporteValido();
+      expect([ubicacion, cantidadNinos, edadAproximada].every((v) => v !== undefined)).toBe(true);
+      return {
+        ...resto,
+        actividad: 'Limpieza de parabrisas o actividades en cruceros',
+        grupos: [{ rango: '0-5', cantidad: 2 }, { rango: '12-17', cantidad: 1 }],
+        direccion: { calle: 'Av. López Mateos', numeroExterior: '12', colonia: 'Centro', codigoPostal: '52900', referencias: 'frente al mercado' },
+      };
+    };
+    const enviar = (cuerpo: object) => http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send(cuerpo);
+    const idDe = async (folio: string) =>
+      Number((await adminDs.query('SELECT id_reporte FROM folio WHERE codigo = $1', [folio]))[0].id_reporte);
+
+    it('acepta grupos de edad (2 de 0-5 y 1 de 12-17) y dirección; deriva total, rango y texto de ubicación', async () => {
+      const r = await enviar(reporteNuevo()).expect(201);
+      const id = await idDe(r.body.folio);
+      const d = await http().get(`/api/v1/reportes/${id}`).set('Authorization', 'Bearer token-personal').expect(200);
+      expect(d.body.grupos).toEqual([{ rango: '0-5', cantidad: 2 }, { rango: '12-17', cantidad: 1 }]);
+      expect(d.body.cantidadNinos).toBe(3);
+      expect(d.body.edadAproximada).toBe('0-5');
+      expect(d.body.ubicacion).toBe('Av. López Mateos 12, Col. Centro, C.P. 52900. Ref.: frente al mercado');
+      expect(d.body.direccion).toEqual({ calle: 'Av. López Mateos', numeroExterior: '12', colonia: 'Centro', codigoPostal: '52900', referencias: 'frente al mercado' });
+      expect(d.body.actividad).toBe('Limpieza de parabrisas o actividades en cruceros');
+    });
+
+    it('el formato anterior (APK instaladas) sigue funcionando y queda como un solo grupo', async () => {
+      const r = await enviar(reporteValido()).expect(201);
+      const id = await idDe(r.body.folio);
+      const d = await http().get(`/api/v1/reportes/${id}`).set('Authorization', 'Bearer token-personal').expect(200);
+      expect(d.body.grupos).toEqual([{ rango: '6-11', cantidad: 2 }]);
+      expect(d.body.direccion).toBeNull();
+    });
+
+    it('"Otro" exige describir la actividad en el formato nuevo y la guarda', async () => {
+      const sin = await enviar({ ...reporteNuevo(), actividad: 'Otro' }).expect(400);
+      expect(sin.body.mensaje).toBe('Describe la actividad que observaste');
+      const con = await enviar({ ...reporteNuevo(), actividad: 'Otro', actividadOtro: 'Malabares' }).expect(201);
+      const d = await http().get(`/api/v1/reportes/${await idDe(con.body.folio)}`).set('Authorization', 'Bearer token-personal').expect(200);
+      expect(d.body.actividadOtro).toBe('Malabares');
+    });
+
+    it('rechaza más de 50 menores, rangos repetidos y rangos fuera de catálogo', async () => {
+      const mucho = await enviar({ ...reporteNuevo(), grupos: [{ rango: '0-5', cantidad: 30 }, { rango: '6-11', cantidad: 21 }] }).expect(400);
+      expect(mucho.body.codigo).toBe('GRUPOS_INVALIDOS');
+      const repetido = await enviar({ ...reporteNuevo(), grupos: [{ rango: '0-5', cantidad: 1 }, { rango: '0-5', cantidad: 1 }] }).expect(400);
+      expect(repetido.body.codigo).toBe('GRUPOS_INVALIDOS');
+      const inventado = await enviar({ ...reporteNuevo(), grupos: [{ rango: '18-25', cantidad: 1 }] }).expect(400);
+      expect(inventado.body.codigo).toBe('VALOR_NO_VALIDO');
+      await enviar({ ...reporteNuevo(), grupos: [] }).expect(400);
+    });
+
+    it('acepta "Sin determinar" como grupo de edad', async () => {
+      await enviar({ ...reporteNuevo(), grupos: [{ rango: 'Sin determinar', cantidad: 4 }] }).expect(201);
+    });
+
+    it('rechaza un punto que no cae en el municipio elegido y dice dónde cae', async () => {
+      const toluca = await enviar({ ...reporteNuevo(), latitud: 19.2826, longitud: -99.6557 }).expect(400);
+      expect(toluca.body.codigo).toBe('UBICACION_FUERA_DEL_MUNICIPIO');
+      expect(toluca.body.mensaje).toContain('Toluca');
+      expect(toluca.body.mensaje).toContain('Atizapán de Zaragoza');
+      const cdmx = await enviar({ ...reporteNuevo(), latitud: 19.4326, longitud: -99.1332 }).expect(400);
+      expect(cdmx.body.mensaje).toContain('fuera del Estado de México');
+    });
+
+    it('guarda las coordenadas redondeadas a 5 decimales', async () => {
+      const r = await enviar({ ...reporteNuevo(), latitud: 19.5594123, longitud: -99.2512987 }).expect(201);
+      const [u] = await adminDs.query(
+        'SELECT u.latitud, u.longitud FROM ubicacion u JOIN reporte r ON r.id_ubicacion = u.id_ubicacion WHERE r.id_reporte = $1',
+        [await idDe(r.body.folio)]);
+      expect([Number(u.latitud), Number(u.longitud)]).toEqual([19.55941, -99.2513]);
+    });
+
+    it('código postal: rechaza los de otro estado y, con catálogo cargado, los de otro municipio', async () => {
+      const cdmx = await enviar({ ...reporteNuevo(), direccion: { ...reporteNuevo().direccion, codigoPostal: '06000' } }).expect(400);
+      expect(cdmx.body.codigo).toBe('CODIGO_POSTAL_NO_VALIDO');
+      await enviar({ ...reporteNuevo(), direccion: { ...reporteNuevo().direccion, codigoPostal: '5290' } }).expect(400);
+
+      // Con el catálogo opcional cargado (solo en esta prueba), 52900 apunta a Toluca y no a Atizapán.
+      await adminDs.query("INSERT INTO codigo_postal_municipio (codigo_postal, clave_inegi) VALUES ('52900', '15106')");
+      try {
+        const otro = await enviar(reporteNuevo()).expect(400);
+        expect(otro.body.mensaje).toBe('El código postal 52900 no corresponde a Atizapán de Zaragoza');
+      } finally {
+        await adminDs.query("DELETE FROM codigo_postal_municipio WHERE codigo_postal = '52900'");
+      }
+    });
+
+    it('catálogo de actividades: amplio, ordenado y con "Otro" al final', async () => {
+      const r = await http().get('/api/v1/catalogos/actividades').expect(200);
+      expect(r.body).toHaveLength(15);
+      expect(r.body.at(-1)).toEqual({ nombre: 'Otro', requiereDetalle: true });
+      expect(r.body.filter((a: { requiereDetalle: boolean }) => a.requiereDetalle)).toHaveLength(1);
+      const c = await http().get('/api/v1/catalogos').expect(200);
+      expect(c.body.actividades).toEqual(r.body.map((a: { nombre: string }) => a.nombre));
+      expect(c.body.rangosEdad).toContain('Sin determinar');
+    });
+
+    it('geocodificación inversa mediada: dirección + municipio, con caché', async () => {
+      const antes = fuenteGeoFalsa.llamadasReversa;
+      const r = await http().get('/api/v1/geo/reversa?lat=19.55941&lng=-99.25129').set('X-Forwarded-For', nuevaIp()).expect(200);
+      expect(r.body.direccion).toEqual({ calle: 'Avenida Adolfo López Mateos', numeroExterior: '12', colonia: 'Centro', codigoPostal: '52900' });
+      expect(r.body.municipioSugerido).toEqual({ id: 1, nombre: 'Atizapán de Zaragoza' });
+      expect(r.body.atribucion).toContain('OpenStreetMap');
+      // Mismas coordenadas redondeadas a 4 decimales → sale de la caché.
+      await http().get('/api/v1/geo/reversa?lat=19.55942&lng=-99.25131').set('X-Forwarded-For', nuevaIp()).expect(200);
+      expect(fuenteGeoFalsa.llamadasReversa).toBe(antes + 1);
+    });
+
+    it('geocodificación: fuera del Estado de México y coordenadas inválidas se rechazan', async () => {
+      const lejos = await http().get('/api/v1/geo/reversa?lat=25.6866&lng=-100.3161').set('X-Forwarded-For', nuevaIp()).expect(400);
+      expect(lejos.body.codigo).toBe('FUERA_DE_COBERTURA');
+      await http().get('/api/v1/geo/reversa?lat=abc&lng=-99.25').set('X-Forwarded-For', nuevaIp()).expect(400);
+      await http().get('/api/v1/geo/reversa?lat=19.5').set('X-Forwarded-For', nuevaIp()).expect(400);
+    });
+
+    it('teselas: solo del Estado de México y con zoom permitido', async () => {
+      const ok = await http().get('/api/v1/geo/teselas/16/14699/29136.png').set('X-Forwarded-For', nuevaIp()).expect(200);
+      expect(ok.headers['content-type']).toContain('image/png');
+      expect(ok.headers['cache-control']).toContain('max-age=86400');
+      await http().get('/api/v1/geo/teselas/16/0/0.png').set('X-Forwarded-For', nuevaIp()).expect(404);
+      await http().get('/api/v1/geo/teselas/19/117592/233088.png').set('X-Forwarded-For', nuevaIp()).expect(404);
+      await http().get('/api/v1/geo/teselas/16/x/29136.png').set('X-Forwarded-For', nuevaIp()).expect(400);
     });
   });
 

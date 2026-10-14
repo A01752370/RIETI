@@ -7,12 +7,21 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -26,25 +35,34 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import java.util.Locale
 import mx.sipinna.rieti.model.GestorUbicacion
 import mx.sipinna.rieti.model.Municipio
+import mx.sipinna.rieti.model.MunicipioSugerido
 import mx.sipinna.rieti.model.ReporteCreado
+import mx.sipinna.rieti.viewmodel.DatosDireccion
 import mx.sipinna.rieti.viewmodel.FormularioReporteViewModel
 import mx.sipinna.rieti.viewmodel.UiState
 import mx.sipinna.rieti.viewmodel.ValidadorReporte
+import org.osmdroid.util.GeoPoint
 
 /**
- * Formulario de reporte anónimo (CU-04).
+ * Formulario de reporte anónimo (CU-04, Fase 2).
  *
- * Municipio con búsqueda (D-16, obligatorio en la app), grupos de chips de selección única (cantidad, edad, actividad, riesgo),
- * referencia del lugar y descripción. La ubicación del GPS es opcional, se pide
- * solo al tocar el botón y se envía como lugar de los hechos (CU-03); si el
- * permiso se niega, el reporte se puede enviar igual (CU-03 E1).
+ * - **Dónde:** municipio con búsqueda (D-16), mapa OSM para marcar el punto
+ *   (tocando o arrastrando el marcador) u "Usar mi ubicación" (permiso opcional),
+ *   y dirección editable que se autorrellena desde el mapa sin borrar lo escrito.
+ *   Si el punto cae en otro municipio, se ofrece cambiarlo.
+ * - **Menores por grupo de edad** con contadores (total ≤ 50).
+ * - **Actividad** en un selector desplegable; "Otro" pide describirla.
+ * - Riesgo percibido y descripción.
  *
  * @param avisoVersion versión del aviso de privacidad aceptada en la pantalla anterior
  * @param alEnviar navega a la confirmación con el folio y la clave
@@ -61,20 +79,56 @@ fun FormularioReporteScreen(
     val contexto = LocalContext.current
     val gestorUbicacion = remember { GestorUbicacion(contexto, viewModel) }
 
-    var ubicacionTexto by rememberSaveable { mutableStateOf("") }
-    var descripcion by rememberSaveable { mutableStateOf("") }
-    var cantidad by rememberSaveable { mutableStateOf("") }
-    var edad by rememberSaveable { mutableStateOf("") }
+    // Dirección (cada campo se guarda al girar la pantalla) y campos que la persona editó a mano.
+    var calle by rememberSaveable { mutableStateOf("") }
+    var numero by rememberSaveable { mutableStateOf("") }
+    var colonia by rememberSaveable { mutableStateOf("") }
+    var codigoPostal by rememberSaveable { mutableStateOf("") }
+    var referencias by rememberSaveable { mutableStateOf("") }
+    var editados by rememberSaveable { mutableStateOf("") } // nombres separados por comas
+    fun marcarEditado(campo: String) {
+        if (campo !in editados.split(",")) editados = "$editados,$campo"
+    }
+
+    var conteos by rememberSaveable { mutableStateOf(HashMap<String, Int>()) }
     var actividad by rememberSaveable { mutableStateOf("") }
+    var actividadOtro by rememberSaveable { mutableStateOf("") }
     var riesgo by rememberSaveable { mutableStateOf("") }
+    var descripcion by rememberSaveable { mutableStateOf("") }
     var permisoNegado by rememberSaveable { mutableStateOf(false) }
 
     var municipio by remember { mutableStateOf<Municipio?>(null) }
+    var municipioPropuesto by remember { mutableStateOf<MunicipioSugerido?>(null) }
     val catalogoMunicipios by viewModel.municipios.collectAsState()
-    LaunchedEffect(Unit) { viewModel.cargarMunicipios() }
+    val actividades by viewModel.actividades.collectAsState()
+    LaunchedEffect(Unit) {
+        viewModel.cargarMunicipios()
+        viewModel.cargarActividades()
+    }
 
     val envio by viewModel.envio.collectAsState()
-    val gps by viewModel.ubicacion.collectAsState()
+    val punto by viewModel.ubicacion.collectAsState()
+    val sugerencia by viewModel.sugerencia.collectAsState()
+    val buscando by viewModel.buscandoDireccion.collectAsState()
+    val avisoGeo by viewModel.avisoGeo.collectAsState()
+
+    // Aplica cada sugerencia del mapa una sola vez: rellena lo que no se editó y propone el municipio.
+    LaunchedEffect(sugerencia?.id) {
+        val s = sugerencia?.datos ?: return@LaunchedEffect
+        val nueva = ValidadorReporte.aplicarSugerencia(
+            DatosDireccion(calle, numero, colonia, codigoPostal, referencias), editados.split(",").toSet(),
+            s.direccion.calle, s.direccion.numeroExterior, s.direccion.colonia, s.direccion.codigoPostal
+        )
+        calle = nueva.calle; numero = nueva.numero; colonia = nueva.colonia; codigoPostal = nueva.codigoPostal
+        val sugerido = s.municipioSugerido
+        val lista = (catalogoMunicipios as? UiState.Exito)?.datos.orEmpty()
+        when {
+            sugerido == null -> municipioPropuesto = null
+            municipio == null -> { municipio = lista.find { it.id == sugerido.id }; municipioPropuesto = null }
+            municipio?.id != sugerido.id -> municipioPropuesto = sugerido
+            else -> municipioPropuesto = null
+        }
+    }
 
     val lanzadorPermiso = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permisos ->
         if (permisos.values.any { it }) {
@@ -97,16 +151,16 @@ fun FormularioReporteScreen(
         AvisoEmergencia()
         Text(
             "No escribas nombres, CURP ni domicilios de las niñas, niños o adolescentes.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.bodyMedium
         )
 
-        Titulo("¿Dónde ocurre?")
+        // ---------- ¿Dónde ocurre? ----------
+        Seccion("¿Dónde ocurre?")
         when (val c = catalogoMunicipios) {
             is UiState.Exito -> SelectorMunicipio(
                 municipios = c.datos,
                 seleccionado = municipio,
-                alElegir = { municipio = it },
+                alElegir = { municipio = it; municipioPropuesto = null },
                 error = (envio as? UiState.Error)?.mensaje?.takeIf { municipio == null && it.contains("municipio") }
                     ?.let { "Elige el municipio donde ocurre" }
             )
@@ -116,64 +170,85 @@ fun FormularioReporteScreen(
             }
             else -> Cargando()
         }
-        OutlinedTextField(
-            value = ubicacionTexto,
-            onValueChange = { if (it.length <= ValidadorReporte.MAX_UBICACION) ubicacionTexto = it },
-            label = { Text("Calle, colonia o punto de referencia") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        val lectura = gps
-        if (lectura == null) {
-            OutlinedButton(
-                onClick = {
-                    if (gestorUbicacion.tienePermiso()) {
-                        gestorUbicacion.capturarUbicacionActual()
-                    } else {
-                        lanzadorPermiso.launch(
-                            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            ) {
-                Text("Estoy en el lugar: usar mi ubicación actual")
+
+        NotaCampo("Toca el mapa o mantén presionado el marcador para moverlo. Es opcional.")
+        val geoPunto = remember(punto) { punto?.let { GeoPoint(it.latitud, it.longitud) } }
+        MapaUbicacion(punto = geoPunto, alMover = viewModel::alMoverMarcador)
+
+        OutlinedButton(
+            onClick = {
+                if (gestorUbicacion.tienePermiso()) gestorUbicacion.capturarUbicacionActual()
+                else lanzadorPermiso.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        ) {
+            Icon(Icons.Filled.LocationOn, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+            Text("Estoy en el lugar: usar mi ubicación", modifier = Modifier.padding(start = 8.dp))
+        }
+        if (permisoNegado) NotaCampo("Sin permiso de ubicación. Marca el punto en el mapa o escribe la dirección.")
+        punto?.let { p ->
+            if (p.esImprecisa) NotaCampo("Tu ubicación es poco precisa (más de 100 m). Ajusta el marcador si hace falta.")
+            TextButton(onClick = viewModel::quitarUbicacion, modifier = Modifier.heightIn(min = 48.dp)) { Text("No enviar el punto del mapa") }
+        }
+        if (buscando) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                NotaCampo("Buscando la dirección…")
             }
-            if (permisoNegado) {
-                Text(
-                    "Sin permiso de ubicación. Puedes enviar el reporte solo con la referencia escrita.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-        } else {
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Ubicación del lugar de los hechos", style = MaterialTheme.typography.labelLarge)
-                    Text(String.format(Locale.US, "%.5f, %.5f", lectura.latitud, lectura.longitud))
-                    if (lectura.esImprecisa) {
-                        Text(
-                            "La ubicación es poco precisa (más de 100 m). Agrega una referencia detallada.",
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                    TextButton(onClick = viewModel::quitarUbicacion) { Text("No enviar esta ubicación") }
+        }
+        avisoGeo?.let { NotaCampo(it) }
+        municipioPropuesto?.let { propuesto ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("El punto del mapa está en ${propuesto.nombre}, no en ${municipio?.nombre}.", style = MaterialTheme.typography.bodyMedium)
+                    Button(
+                        onClick = {
+                            municipio = (catalogoMunicipios as? UiState.Exito)?.datos?.find { it.id == propuesto.id }
+                            municipioPropuesto = null
+                        },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    ) { Text("Cambiar a ${propuesto.nombre}") }
                 }
             }
         }
 
-        Titulo("¿Cuántas niñas o niños viste?")
-        Opciones(ValidadorReporte.CANTIDADES.keys.toList(), cantidad) { cantidad = it }
+        CampoTexto("Calle", calle, ValidadorReporte.MAX_CALLE) { calle = it; marcarEditado("calle") }
+        CampoTexto("Número exterior (opcional)", numero, ValidadorReporte.MAX_NUMERO) { numero = it; marcarEditado("numero") }
+        CampoTexto("Colonia", colonia, ValidadorReporte.MAX_COLONIA) { colonia = it; marcarEditado("colonia") }
+        CampoTexto("Código postal", codigoPostal, 5, KeyboardType.Number) {
+            codigoPostal = it.filter(Char::isDigit); marcarEditado("codigoPostal")
+        }
+        CampoTexto("Referencias (opcional)", referencias, ValidadorReporte.MAX_REFERENCIAS, ayuda = "Ej.: frente al mercado, esquina con la calle 5") {
+            referencias = it
+        }
 
-        Titulo("Edad aproximada")
-        Opciones(ValidadorReporte.EDADES, edad) { edad = it }
+        // ---------- Menores ----------
+        Seccion("¿Cuántas niñas, niños o adolescentes viste?")
+        NotaCampo("Suma uno por cada persona en su grupo de edad.")
+        ContadorEdades(conteos) { rango, n -> conteos = HashMap(conteos).apply { put(rango, n.coerceAtLeast(0)) } }
 
-        Titulo("¿Qué actividad realizaban?")
-        Opciones(ValidadorReporte.ACTIVIDADES, actividad) { actividad = it }
+        // ---------- Actividad ----------
+        Seccion("¿Qué actividad realizaban?")
+        SelectorActividad(actividades, actividad) { actividad = it }
+        if (actividad == ValidadorReporte.ACTIVIDAD_OTRO) {
+            CampoTexto("Describe la actividad", actividadOtro, ValidadorReporte.MAX_ACTIVIDAD_OTRO) { actividadOtro = it }
+        }
 
-        Titulo("¿Percibes una situación de riesgo?")
-        Opciones(ValidadorReporte.RIESGOS, riesgo) { riesgo = it }
+        // ---------- Riesgo ----------
+        Seccion("¿Percibes una situación de riesgo?")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ValidadorReporte.RIESGOS.forEach { opcion ->
+                FilterChip(
+                    selected = riesgo == opcion,
+                    onClick = { riesgo = opcion },
+                    label = { Text(opcion) },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                )
+            }
+        }
 
-        Titulo("Describe lo que observaste")
+        // ---------- Descripción ----------
+        Seccion("Describe lo que observaste")
         OutlinedTextField(
             value = descripcion,
             onValueChange = { if (it.length <= ValidadorReporte.MAX_DESCRIPCION) descripcion = it },
@@ -186,33 +261,47 @@ fun FormularioReporteScreen(
         (envio as? UiState.Error)?.let { MensajeError(it.mensaje) }
 
         Button(
-            onClick = { viewModel.enviar(municipio, ubicacionTexto, cantidad, edad, actividad, riesgo, descripcion, avisoVersion) },
+            onClick = {
+                viewModel.enviar(
+                    municipio, DatosDireccion(calle, numero, colonia, codigoPostal, referencias),
+                    conteos, actividad, actividadOtro, riesgo, descripcion, avisoVersion
+                )
+            },
             enabled = envio !is UiState.Cargando,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(top = 8.dp)
         ) {
             Text(if (envio is UiState.Cargando) "Enviando…" else "Enviar reporte")
         }
     }
 }
 
-/** Subtítulo de sección del formulario. */
+/** Encabezado de sección del formulario (con espacio arriba para separar bloques). */
 @Composable
-private fun Titulo(texto: String) {
-    Text(texto, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+private fun Seccion(texto: String) {
+    Text(
+        texto,
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(top = 16.dp).semantics { heading() }
+    )
 }
 
-/** Grupo de chips de selección única. */
-@OptIn(ExperimentalLayoutApi::class)
+/** Campo de texto de una línea con límite de largo. */
 @Composable
-private fun Opciones(opciones: List<String>, seleccion: String, alElegir: (String) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        opciones.forEach { opcion ->
-            FilterChip(
-                selected = seleccion == opcion,
-                onClick = { alElegir(opcion) },
-                label = { Text(opcion) },
-                modifier = Modifier.heightIn(min = 48.dp)
-            )
-        }
-    }
+private fun CampoTexto(
+    etiqueta: String,
+    valor: String,
+    maximo: Int,
+    teclado: KeyboardType = KeyboardType.Text,
+    ayuda: String? = null,
+    alCambiar: (String) -> Unit
+) {
+    OutlinedTextField(
+        value = valor,
+        onValueChange = { if (it.length <= maximo) alCambiar(it) },
+        label = { Text(etiqueta) },
+        supportingText = ayuda?.let { { Text(it) } },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = teclado),
+        modifier = Modifier.fillMaxWidth()
+    )
 }

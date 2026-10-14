@@ -141,6 +141,18 @@ export interface ReporteDetalle extends ReporteResumen {
   latitud: number | null; longitud: number | null; descripcion: string; motivoDescarte: string | null;
   historial: { estatus: string; comentario: string | null; autor: string | null; fecha: string }[];
   transicionesPermitidas: string[];
+  /** Menores por grupo de edad (Fase 2; servidores anteriores no lo envían). */
+  grupos?: GrupoMenores[];
+  actividadOtro?: string | null;
+  direccion?: DireccionRespuesta | null;
+}
+/** Menores observados en un rango de edad. */
+export interface GrupoMenores { rango: string; cantidad: number }
+/** Dirección estructurada del lugar de los hechos. */
+export interface Direccion { calle: string; numeroExterior?: string; colonia: string; codigoPostal: string; referencias?: string }
+/** Dirección tal como la devuelve el servidor (campos opcionales). */
+export interface DireccionRespuesta {
+  calle: string | null; numeroExterior: string | null; colonia: string | null; codigoPostal: string | null; referencias: string | null;
 }
 /** Perfil y permisos del personal (D-18). */
 export interface Perfil { correo: string; perfil: string; grupos: string[]; permisos: { permiso: string; descripcion: string }[] }
@@ -150,9 +162,9 @@ export interface ResumenEstadisticas {
   porEstatus: { etiqueta: string; total: number }[]; porMes: { etiqueta: string; total: number }[];
 }
 
-/** Datos del formulario de reporte. */
+/** Datos del formulario de reporte (formato de la Fase 2: grupos de edad y dirección). */
 export interface NuevoReporte {
-  ubicacion: string; municipioId?: number; cantidadNinos: number; edadAproximada: string; actividad: string;
+  municipioId: number; direccion: Direccion; grupos: GrupoMenores[]; actividad: string; actividadOtro?: string;
   situacionRiesgo: string; descripcion: string; avisoPrivacidadVersion: string;
 }
 

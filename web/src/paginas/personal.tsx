@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useState } from 'react';
-import { api, fijarSesion, Municipio, ReporteDetalle } from '../api';
+import { api, fijarSesion, Municipio, ReporteDetalle, DireccionRespuesta, GrupoMenores } from '../api';
 import { Esqueleto, Marco, MensajeError, useCarga, useSesion, Vacio } from '../componentes';
 import { Enlace, useTitulo } from '../enrutador';
 import { claseEstatus, ESTATUS, EtiquetaEstatus, formatearFecha } from '../estatus';
@@ -174,10 +174,15 @@ function ContenidoDetalle({ id }: { id: number }) {
           <dl>
             <dt>Registrado</dt><dd>{formatearFecha(r.fechaCreacion)}</dd>
             <dt>Municipio</dt><dd>{r.municipio ?? 'No indicado'}</dd>
-            <dt>Lugar</dt><dd>{r.ubicacion}</dd>
+            {textoDireccion(r.direccion) ? (
+              <>
+                <dt>Dirección</dt><dd>{textoDireccion(r.direccion)}</dd>
+                {r.direccion?.referencias && (<><dt>Referencias</dt><dd>{r.direccion.referencias}</dd></>)}
+              </>
+            ) : (<><dt>Lugar</dt><dd>{r.ubicacion}</dd></>)}
             {r.latitud !== null && r.longitud !== null && (<><dt>Coordenadas</dt><dd>{r.latitud.toFixed(5)}, {r.longitud.toFixed(5)}</dd></>)}
-            <dt>Actividad</dt><dd>{r.actividad}</dd>
-            <dt>Menores</dt><dd>{r.cantidadNinos} de {r.edadAproximada} años</dd>
+            <dt>Actividad</dt><dd>{r.actividadOtro ? `${r.actividad}: ${r.actividadOtro}` : r.actividad}</dd>
+            <dt>Menores</dt><dd>{textoMenores(r.grupos, r.cantidadNinos, r.edadAproximada)}</dd>
             <dt>¿Riesgo percibido?</dt><dd>{r.situacionRiesgo}</dd>
             <dt>Descripción</dt><dd>{r.descripcion}</dd>
             {r.motivoDescarte && (<><dt>Motivo de descarte</dt><dd>{r.motivoDescarte}</dd></>)}
@@ -351,4 +356,20 @@ function ContenidoPerfil() {
 /** Página del perfil. */
 export function Perfil() {
   return <ConSesion titulo="Mi perfil"><ContenidoPerfil /></ConSesion>;
+}
+
+/** "2 de 0 a 5 años · 1 de 12 a 17 años (total 3)" (igual que la app); con servidores anteriores usa el total y el rango heredados. */
+export function textoMenores(grupos: GrupoMenores[] | undefined, cantidad: number, edad: string): string {
+  const lista = grupos?.length ? grupos : [{ rango: edad, cantidad }];
+  const partes = lista.map((g) => (g.rango === 'Sin determinar' ? `${g.cantidad} de edad sin determinar` : `${g.cantidad} de ${g.rango.replace('-', ' a ')} años`));
+  const total = lista.reduce((a, g) => a + g.cantidad, 0);
+  return lista.length === 1 ? partes[0] : `${partes.join(' · ')} (total ${total})`;
+}
+
+/** Dirección en una línea, o null si el reporte no tiene dirección estructurada. */
+export function textoDireccion(d: DireccionRespuesta | null | undefined): string | null {
+  if (!d) return null;
+  const calle = [d.calle, d.numeroExterior].filter(Boolean).join(' ');
+  const partes = [calle, d.colonia && `Col. ${d.colonia}`, d.codigoPostal && `C.P. ${d.codigoPostal}`].filter(Boolean);
+  return partes.length ? partes.join(', ') : null;
 }

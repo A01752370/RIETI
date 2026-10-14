@@ -7,12 +7,12 @@ import {
 } from '../catalogos/catalogo.entities';
 import { Usuario } from '../auth/usuario.entity';
 import {
-  Caso, Folio, Reporte, ReporteCaso, Seguimiento, Ubicacion,
+  Caso, Folio, GrupoMenores, Reporte, ReporteCaso, Seguimiento, Ubicacion,
 } from '../reportes/reporte.entities';
 
 export const ENTIDADES = [
   Municipio, ContactoMunicipio, RolUsuario, Actividad, Riesgo, RangoEdad, EstatusReporte,
-  Usuario, Ubicacion, Reporte, Folio, Caso, ReporteCaso, Seguimiento,
+  Usuario, Ubicacion, Reporte, Folio, Caso, ReporteCaso, Seguimiento, GrupoMenores,
 ];
 
 /**

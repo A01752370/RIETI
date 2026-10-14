@@ -5,7 +5,10 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In } from 'typeorm';
 import { Actividad, EstatusReporte, Municipio, RangoEdad, Riesgo } from '../catalogos/catalogo.entities';
 import { Usuario } from '../auth/usuario.entity';
-import { Caso, Folio, Reporte, ReporteCaso, Seguimiento, Ubicacion } from './reporte.entities';
+import { Caso, Folio, GrupoMenores, Reporte, ReporteCaso, Seguimiento, Ubicacion } from './reporte.entities';
+import {
+  componerUbicacion, esCodigoPostalEdomex, normalizarGrupos, rangoPrincipal, redondearCoordenada, totalMenores,
+} from './formulario';
 import {
   AgregarSeguimientoDto, CambiarEstatusDto, ConsultaPublicaDto, CrearReporteDto, EventoPublicoDto,
   EventoSeguimientoDto, ListarReportesDto, PaginaDto, ReporteCreadoDto, ReporteDetalleDto, ReporteResumenDto,
@@ -60,27 +63,51 @@ export class ReportesService {
     const claveConsulta = generarClave();
     const claveConsultaHash = await hashearClave(claveConsulta);
 
+    // Formato nuevo (grupos + dirección) o anterior (APK instaladas); ver CrearReporteDto.
+    const grupos = normalizarGrupos(dto);
+    const formatoNuevo = dto.grupos !== undefined;
+    if (formatoNuevo && dto.actividad.trim() === 'Otro' && !dto.actividadOtro) {
+      throw new BadRequestException({ codigo: 'VALOR_NO_VALIDO', mensaje: 'Describe la actividad que observaste' });
+    }
+    const latitud = redondearCoordenada(dto.latitud);
+    const longitud = redondearCoordenada(dto.longitud);
+    const descripcionUbicacion = dto.ubicacion ?? componerUbicacion(dto.direccion!);
+
     const { codigo, fecha } = await this.ds.transaction(async (m) => {
-      const [actividad, riesgo, rangoEdad, estatus] = await Promise.all([
+      const [actividad, riesgo, estatus, ...rangos] = await Promise.all([
         this.catalogo(m, Actividad, dto.actividad, 'actividad'),
         this.catalogo(m, Riesgo, dto.situacionRiesgo, 'situacionRiesgo'),
-        this.catalogo(m, RangoEdad, dto.edadAproximada, 'edadAproximada'),
         this.catalogo(m, EstatusReporte, ESTATUS_INICIAL, 'estatus'),
-      ]);
+        ...grupos.map((g) => this.catalogo(m, RangoEdad, g.rango, 'grupos.rango')),
+      ]) as [Actividad, Riesgo, EstatusReporte, ...RangoEdad[]];
+      const rangoPorNombre = new Map(rangos.map((r) => [r.nombre, r]));
       const municipio = await this.municipioValido(m, dto.municipioId);
+      if (latitud !== null && longitud !== null) await this.validarPuntoEnMunicipio(m, municipio, latitud, longitud);
+      if (dto.direccion) await this.validarCodigoPostal(m, municipio, dto.direccion.codigoPostal);
 
       const reporte = await m.save(m.create(Reporte, {
         ubicacion: m.create(Ubicacion, {
-          descripcion: dto.ubicacion,
-          latitud: dto.latitud ?? null,
-          longitud: dto.longitud ?? null,
+          descripcion: descripcionUbicacion,
+          latitud,
+          longitud,
+          calle: dto.direccion?.calle ?? null,
+          numeroExterior: dto.direccion?.numeroExterior || null,
+          colonia: dto.direccion?.colonia ?? null,
+          codigoPostal: dto.direccion?.codigoPostal ?? null,
+          referencias: dto.direccion?.referencias || null,
         }),
-        actividad, riesgo, rangoEdad, municipio,
-        cantidadNinos: dto.cantidadNinos,
+        actividad, riesgo, municipio,
+        // Columnas heredadas: el rango con más menores y el total (las leen la bandeja y las APK anteriores).
+        rangoEdad: rangoPorNombre.get(rangoPrincipal(grupos))!,
+        cantidadNinos: totalMenores(grupos),
+        actividadOtro: actividad.nombre === 'Otro' ? dto.actividadOtro || null : null,
         descripcion: dto.descripcion,
         claveConsultaHash,
         avisoPrivacidadVersion: dto.avisoPrivacidadVersion,
       }));
+      await m.save(grupos.map((g) => m.create(GrupoMenores, {
+        idReporte: reporte.id, idRangoEdad: rangoPorNombre.get(g.rango)!.id, cantidad: g.cantidad,
+      })));
 
       // Consecutivo anual atómico (sin carreras entre peticiones concurrentes).
       const anio = new Date().getFullYear();
@@ -171,11 +198,21 @@ export class ReportesService {
     if (!reporte) throw new NotFoundException('Reporte no encontrado');
     const [resumen] = await this.aplanar([reporte]);
     const rc = await this.ds.getRepository(ReporteCaso).findOneBy({ idReporte: id });
+    const grupos = await this.ds.getRepository(GrupoMenores).find({ where: { idReporte: id } });
+    const u = reporte.ubicacion;
+    const posicion = (r: string) => ['0-5', '6-11', '12-17', 'Sin determinar'].indexOf(r);
     return {
       ...resumen,
-      latitud: reporte.ubicacion.latitud,
-      longitud: reporte.ubicacion.longitud,
+      latitud: u.latitud,
+      longitud: u.longitud,
       descripcion: reporte.descripcion,
+      grupos: grupos
+        .map((g) => ({ rango: g.rangoEdad.nombre, cantidad: g.cantidad }))
+        .sort((a, b) => posicion(a.rango) - posicion(b.rango)),
+      actividadOtro: reporte.actividadOtro,
+      direccion: u.calle || u.colonia || u.codigoPostal
+        ? { calle: u.calle, numeroExterior: u.numeroExterior, colonia: u.colonia, codigoPostal: u.codigoPostal, referencias: u.referencias }
+        : null,
       motivoDescarte: rc?.caso.motivoDescarte ?? null,
       historial: await this.bitacora(id),
       transicionesPermitidas: transicionesPermitidas(resumen.estatus),
@@ -230,6 +267,47 @@ export class ReportesService {
     const municipio = await m.findOneBy(Municipio, { id, activo: true });
     if (!municipio) throw new BadRequestException({ codigo: 'VALOR_NO_VALIDO', mensaje: 'El municipio seleccionado no es válido' });
     return municipio;
+  }
+
+  /**
+   * Valida que el punto del mapa caiga dentro del municipio elegido (o a menos de
+   * 300 m de su límite, por la imprecisión del GPS y de los polígonos simplificados).
+   * Si el municipio no tiene polígono cargado, no se valida.
+   *
+   * @throws BadRequestException `UBICACION_FUERA_DEL_MUNICIPIO`, con el municipio donde sí cae el punto
+   */
+  private async validarPuntoEnMunicipio(m: EntityManager, municipio: Municipio, lat: number, lng: number): Promise<void> {
+    const [r]: { tiene: boolean; dentro: boolean; donde: string | null }[] = await m.query(
+      `SELECT
+         EXISTS (SELECT 1 FROM municipio_geom WHERE id_municipio = $1) AS tiene,
+         EXISTS (SELECT 1 FROM municipio_geom WHERE id_municipio = $1
+                 AND ST_DWithin(geom::geography, ST_SetSRID(ST_MakePoint($3, $2), 4326)::geography, 300)) AS dentro,
+         (SELECT mu.nombre FROM municipio_geom g JOIN municipio mu ON mu.id_municipio = g.id_municipio
+          WHERE ST_Contains(g.geom, ST_SetSRID(ST_MakePoint($3, $2), 4326)) LIMIT 1) AS donde`,
+      [municipio.id, lat, lng]);
+    if (!r.tiene || r.dentro) return;
+    const lugar = r.donde ? `en ${r.donde}` : 'fuera del Estado de México';
+    throw new BadRequestException({
+      codigo: 'UBICACION_FUERA_DEL_MUNICIPIO',
+      mensaje: `El punto del mapa está ${lugar}, no en ${municipio.nombre}. Corrige el municipio o mueve el marcador.`,
+    });
+  }
+
+  /**
+   * Valida el código postal: siempre que sea del Estado de México (50000–57999) y,
+   * si se cargó el catálogo de SEPOMEX en `codigo_postal_municipio`, que corresponda al municipio.
+   *
+   * @throws BadRequestException `CODIGO_POSTAL_NO_VALIDO`
+   */
+  private async validarCodigoPostal(m: EntityManager, municipio: Municipio, cp: string): Promise<void> {
+    if (!esCodigoPostalEdomex(cp)) {
+      throw new BadRequestException({ codigo: 'CODIGO_POSTAL_NO_VALIDO', mensaje: 'El código postal no es del Estado de México (empieza con 50 a 57)' });
+    }
+    const filas: { clave_inegi: string }[] = await m.query(
+      'SELECT clave_inegi FROM codigo_postal_municipio WHERE codigo_postal = $1', [cp]);
+    if (filas.length > 0 && municipio.claveInegi && !filas.some((f) => f.clave_inegi === municipio.claveInegi)) {
+      throw new BadRequestException({ codigo: 'CODIGO_POSTAL_NO_VALIDO', mensaje: `El código postal ${cp} no corresponde a ${municipio.nombre}` });
+    }
   }
 
   /** Busca un valor de catálogo por nombre; 400 si no existe. */

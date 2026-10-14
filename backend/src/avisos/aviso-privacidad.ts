@@ -6,7 +6,7 @@ import { Publico } from '../auth/roles';
  * cliente envíe exactamente esta versión, como constancia de que la persona
  * la vio y aceptó (RF-44, RNF-26).
  */
-export const AVISO_PRIVACIDAD_VERSION = '2026-10-v1';
+export const AVISO_PRIVACIDAD_VERSION = '2026-10-v2';
 
 /** Sección del aviso: título y sus párrafos. */
 export interface SeccionAviso {
@@ -21,8 +21,8 @@ export interface SeccionAviso {
  *
  * BORRADOR para la demo: el texto definitivo lo debe validar el área jurídica
  * del SIPINNA municipal antes de publicar la app (ver docs/ESTADO-ENTREGA.md).
- * Los títulos solo organizan el mismo texto legal de la versión `2026-10-v1`;
- * cambiar el contenido exige una versión nueva.
+ * `2026-10-v2` (Fase 2) agrega la sección "Mapa y dirección" y ajusta "Tu reporte
+ * es anónimo". Cambiar el contenido exige una versión nueva.
  */
 export const AVISO_PRIVACIDAD_SECCIONES: readonly SeccionAviso[] = [
   {
@@ -38,7 +38,14 @@ export const AVISO_PRIVACIDAD_SECCIONES: readonly SeccionAviso[] = [
   {
     titulo: 'Tu reporte es anónimo',
     parrafos: [
-      'Tu reporte es anónimo: no pedimos tu nombre ni tus datos de contacto, y la app no envía la ubicación de tu teléfono ni identificadores de tu dispositivo. Solo se guarda la ubicación del lugar de los hechos que tú indiques.',
+      'Tu reporte es anónimo: no pedimos tu nombre ni tus datos de contacto, y la app no envía identificadores de tu dispositivo. Solo se guarda la dirección del lugar de los hechos y, si la marcas, su ubicación en el mapa.',
+    ],
+  },
+  {
+    titulo: 'Mapa y dirección',
+    parrafos: [
+      'Si marcas el lugar en el mapa o usas tu ubicación actual, ese punto se guarda como lugar de los hechos (no como tu ubicación) y solo lo ve el personal autorizado del SIPINNA.',
+      'Para sugerirte la dirección y mostrarte el mapa, nuestro servidor consulta el servicio de mapas OpenStreetMap con el punto aproximado. Tu teléfono no se comunica directamente con ese servicio, así que no recibe tu dirección IP ni datos de tu dispositivo.',
     ],
   },
   {

@@ -46,6 +46,32 @@ sequenceDiagram
     C->>C: Muestra folio y clave una sola vez (no se guardan)
 ```
 
+### Fase 2: mapa, dirección y grupos de edad
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as App (ciudadano)
+    participant API as API /api/v1
+    participant DB as PostgreSQL + PostGIS
+    participant OSM as OpenStreetMap
+    C->>API: GET /catalogos/actividades
+    C->>API: GET /geo/teselas/{z}/{x}/{y}.png (al mover el mapa)
+    API->>OSM: tesela (si no está en caché), User-Agent de RIETI
+    API-->>C: PNG
+    C->>C: Toca el mapa o "Usar mi ubicación" (marcador = lugar de los hechos)
+    C->>API: GET /geo/reversa?lat&lng
+    API->>DB: ¿En qué municipio cae? (polígonos INEGI)
+    API->>OSM: Nominatim con coordenadas redondeadas (≤ 1 req/s, caché)
+    API-->>C: {direccion sugerida, municipioSugerido, atribucion}
+    C->>C: Rellena solo los campos vacíos; ofrece cambiar el municipio si no coincide
+    C->>API: POST /reportes {direccion, grupos, actividad, actividadOtro?, lat?, lng?, municipioId, ...}
+    API->>DB: ¿El punto cae en el municipio (±300 m)? ¿CP del Estado de México?
+    API-->>C: 201 {folio, claveConsulta} o 400 con el motivo
+```
+
+El teléfono nunca se comunica con OpenStreetMap: el proveedor solo ve la IP del servidor.
+
 ## Flujo 2 — Consulta ciudadana (CU-08)
 
 ```mermaid
@@ -113,5 +139,7 @@ sequenceDiagram
 | Transición no válida | `TRANSICION_INVALIDA`, `MOTIVO_REQUERIDO`, `COMENTARIO_REQUERIDO` | Muestra el mensaje |
 
 ## Compatibilidad
+
+Fase 2: `POST /reportes` sigue aceptando el formato anterior (texto de ubicación, cantidad y edad), así que las APK instaladas siguen funcionando. La validación nueva (punto dentro del municipio) también les aplica si envían coordenadas.
 
 Este contrato reemplaza al anterior (`/reportes`, `/reportes/folio/:folio`, `PATCH /reportes/:id` sin prefijo). Las APK compiladas antes de esta rama **dejan de funcionar** cuando se despliega el backend nuevo; hay que instalar la APK de esta rama.

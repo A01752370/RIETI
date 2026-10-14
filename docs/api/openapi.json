@@ -992,6 +992,164 @@
           }
         }
       }
+    },
+    "/api/v1/catalogos/actividades": {
+      "get": {
+        "tags": [
+          "Público"
+        ],
+        "summary": "Catálogo de actividades en el orden del selector (\"Otro\" al final).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Actividad"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/geo/reversa": {
+      "get": {
+        "tags": [
+          "Público"
+        ],
+        "summary": "Dirección sugerida (OpenStreetMap, mediada por el backend) y municipio donde cae el punto (INEGI). 30/min por IP.",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "lng",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeoReversa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Coordenadas inválidas o FUERA_DE_COBERTURA",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "GEOCODIFICACION_OCUPADA",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/geo/teselas/{z}/{x}/{y}.png": {
+      "get": {
+        "tags": [
+          "Público"
+        ],
+        "summary": "Tesela del mapa (PNG) del Estado de México, zoom 8–18, servida por el backend (la app no contacta a terceros). 600/min por IP.",
+        "parameters": [
+          {
+            "name": "z",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "x",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "y",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PNG",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "TESELA_FUERA_DE_COBERTURA",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "TESELA_NO_DISPONIBLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1278,7 +1436,7 @@
         "properties": {
           "version": {
             "type": "string",
-            "example": "2026-10-v1"
+            "example": "2026-10-v2"
           },
           "parrafos": {
             "type": "array",
@@ -1361,9 +1519,6 @@
         "type": "object",
         "required": [
           "municipioId",
-          "ubicacion",
-          "cantidadNinos",
-          "edadAproximada",
           "actividad",
           "situacionRiesgo",
           "descripcion",
@@ -1373,7 +1528,7 @@
           "ubicacion": {
             "type": "string",
             "maxLength": 300,
-            "description": "Referencia del lugar de los hechos"
+            "description": "Formato anterior; obligatorio si no se envía direccion."
           },
           "latitud": {
             "type": "number",
@@ -1391,11 +1546,13 @@
           "cantidadNinos": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 99
+            "maximum": 99,
+            "description": "Formato anterior; obligatorio si no se envía grupos."
           },
           "edadAproximada": {
             "type": "string",
-            "example": "6-11"
+            "example": "6-11",
+            "description": "Formato anterior; obligatorio si no se envía grupos."
           },
           "actividad": {
             "type": "string",
@@ -1420,11 +1577,29 @@
           },
           "avisoPrivacidadVersion": {
             "type": "string",
-            "example": "2026-10-v1",
+            "example": "2026-10-v2",
             "description": "Debe ser la versión vigente"
+          },
+          "direccion": {
+            "$ref": "#/components/schemas/Direccion"
+          },
+          "grupos": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "$ref": "#/components/schemas/GrupoMenores"
+            },
+            "description": "Sin rangos repetidos; total ≤ 50."
+          },
+          "actividadOtro": {
+            "type": "string",
+            "maxLength": 120,
+            "description": "Obligatorio en el formato nuevo si actividad es \"Otro\"."
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Dos formatos: anterior (ubicacion + cantidadNinos + edadAproximada) y nuevo (direccion + grupos). En el nuevo, ubicacion/cantidadNinos/edadAproximada son opcionales y se derivan. Si llegan latitud y longitud, el punto debe caer en el municipio (tolerancia 300 m)."
       },
       "ReporteCreado": {
         "type": "object",
@@ -1676,7 +1851,10 @@
               "descripcion",
               "motivoDescarte",
               "historial",
-              "transicionesPermitidas"
+              "transicionesPermitidas",
+              "grupos",
+              "actividadOtro",
+              "direccion"
             ],
             "properties": {
               "latitud": {
@@ -1713,6 +1891,24 @@
                     "Descartado"
                   ]
                 }
+              },
+              "grupos": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/GrupoMenores"
+                }
+              },
+              "actividadOtro": {
+                "type": "string",
+                "nullable": true
+              },
+              "direccion": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/DireccionRespuesta"
+                  }
+                ],
+                "nullable": true
               }
             }
           }
@@ -1811,6 +2007,176 @@
           }
         },
         "additionalProperties": false
+      },
+      "GrupoMenores": {
+        "type": "object",
+        "required": [
+          "rango",
+          "cantidad"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "rango": {
+            "type": "string",
+            "enum": [
+              "0-5",
+              "6-11",
+              "12-17",
+              "Sin determinar"
+            ]
+          },
+          "cantidad": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          }
+        }
+      },
+      "Direccion": {
+        "type": "object",
+        "required": [
+          "calle",
+          "colonia",
+          "codigoPostal"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "calle": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "numeroExterior": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "colonia": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "codigoPostal": {
+            "type": "string",
+            "pattern": "^[0-9]{5}$",
+            "description": "Del Estado de México (50000–57999)."
+          },
+          "referencias": {
+            "type": "string",
+            "maxLength": 300
+          }
+        }
+      },
+      "DireccionRespuesta": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "calle",
+          "numeroExterior",
+          "colonia",
+          "codigoPostal",
+          "referencias"
+        ],
+        "properties": {
+          "calle": {
+            "type": "string",
+            "nullable": true
+          },
+          "numeroExterior": {
+            "type": "string",
+            "nullable": true
+          },
+          "colonia": {
+            "type": "string",
+            "nullable": true
+          },
+          "codigoPostal": {
+            "type": "string",
+            "nullable": true
+          },
+          "referencias": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "Actividad": {
+        "type": "object",
+        "required": [
+          "nombre",
+          "requiereDetalle"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string"
+          },
+          "requiereDetalle": {
+            "type": "boolean",
+            "description": "true para \"Otro\"."
+          }
+        }
+      },
+      "GeoReversa": {
+        "type": "object",
+        "required": [
+          "direccion",
+          "municipioSugerido",
+          "direccionDisponible",
+          "atribucion"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "direccion": {
+            "type": "object",
+            "required": [
+              "calle",
+              "numeroExterior",
+              "colonia",
+              "codigoPostal"
+            ],
+            "properties": {
+              "calle": {
+                "type": "string",
+                "nullable": true
+              },
+              "numeroExterior": {
+                "type": "string",
+                "nullable": true
+              },
+              "colonia": {
+                "type": "string",
+                "nullable": true
+              },
+              "codigoPostal": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          },
+          "municipioSugerido": {
+            "nullable": true,
+            "type": "object",
+            "required": [
+              "id",
+              "nombre"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "nombre": {
+                "type": "string"
+              }
+            },
+            "description": "Municipio donde cae el punto según los polígonos del INEGI."
+          },
+          "direccionDisponible": {
+            "type": "boolean",
+            "description": "false si el servicio externo no respondió."
+          },
+          "atribucion": {
+            "type": "string",
+            "example": "© colaboradores de OpenStreetMap"
+          }
+        }
       }
     }
   }

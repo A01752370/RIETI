@@ -48,6 +48,7 @@ export async function borrarReportePorFolio(m: EntityManager, folio: string): Pr
   await m.query('DELETE FROM reporte_caso WHERE id_reporte = $1', [idReporte]);
   await m.query('DELETE FROM caso WHERE id_caso = ANY($1::int[])', [idsCaso]);
   await m.query('DELETE FROM folio WHERE id_reporte = $1', [idReporte]);
+  await m.query('DELETE FROM reporte_menores_grupo WHERE id_reporte = $1', [idReporte]);
   await m.query('DELETE FROM reporte WHERE id_reporte = $1', [idReporte]);
   await m.query('DELETE FROM ubicacion WHERE id_ubicacion = $1', [idUbicacion]);
 

@@ -11,6 +11,7 @@ import { CatalogosController } from './catalogos/catalogos.controller';
 import { EstadisticasController } from './estadisticas/estadisticas.controller';
 import { RedController } from './red/red.controller';
 import { ReportesModule } from './reportes/reportes.module';
+import { GeoModule } from './geo/geo.module';
 
 /**
  * Módulo raíz. El orden de los guards globales importa: primero el límite de
@@ -23,6 +24,7 @@ import { ReportesModule } from './reportes/reportes.module';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     AuthModule,
     ReportesModule,
+    GeoModule,
   ],
   controllers: [HealthController, AvisosController, CatalogosController, RedController, EstadisticasController],
   providers: [

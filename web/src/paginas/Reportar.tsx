@@ -1,43 +1,134 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { api, Municipio, ReporteCreado } from '../api';
+import { api, Municipio, NuevoReporte, ReporteCreado } from '../api';
 import { Esqueleto, Marco, MensajeError, useCarga, TextoAviso } from '../componentes';
 import { Enlace, useTitulo } from '../enrutador';
 import { SelectorMunicipio } from '../SelectorMunicipio';
 
-/** Opciones de cantidad y su valor aproximado (igual que en la app Android). */
-export const CANTIDADES: Record<string, number> = { '1': 1, '2 a 3': 2, '4 o más': 4 };
 export const MAX_DESCRIPCION = 2000;
-export const MAX_UBICACION = 300;
+/** Tope de menores en un reporte (igual que en el servidor y la app). */
+export const TOTAL_MAXIMO = 50;
+/** Rangos de edad y su texto (igual que en la app Android). */
+export const EDADES: { rango: string; etiqueta: string }[] = [
+  { rango: '0-5', etiqueta: 'De 0 a 5 años' },
+  { rango: '6-11', etiqueta: 'De 6 a 11 años' },
+  { rango: '12-17', etiqueta: 'De 12 a 17 años' },
+  { rango: 'Sin determinar', etiqueta: 'No estoy seguro/a de la edad' },
+];
 
 /** Valores del formulario. */
 export interface Formulario {
   municipio: Municipio | null;
-  ubicacion: string;
-  cantidad: string;
-  edad: string;
+  calle: string;
+  numero: string;
+  colonia: string;
+  codigoPostal: string;
+  referencias: string;
+  conteos: Record<string, number>;
   actividad: string;
+  actividadOtro: string;
   riesgo: string;
   descripcion: string;
 }
 
-export const FORMULARIO_VACIO: Formulario = { municipio: null, ubicacion: '', cantidad: '', edad: '', actividad: '', riesgo: '', descripcion: '' };
+export const FORMULARIO_VACIO: Formulario = {
+  municipio: null, calle: '', numero: '', colonia: '', codigoPostal: '', referencias: '', conteos: {},
+  actividad: '', actividadOtro: '', riesgo: '', descripcion: '',
+};
+
+/** Suma de menores. */
+export const totalMenores = (c: Record<string, number>) => Object.values(c).reduce((a, b) => a + b, 0);
+
+/** Los códigos postales del Estado de México van de 50000 a 57999. */
+export const esCodigoPostalEdomex = (cp: string) => /^\d{5}$/.test(cp) && Number(cp) >= 50000 && Number(cp) <= 57999;
+
+/** Clave del campo que muestra el error (los contadores comparten uno). */
+type CampoError = keyof Formulario | 'grupos';
 
 /**
  * Valida el formulario antes de enviarlo (el servidor vuelve a validar todo).
  * @returns errores por campo; vacío si todo está bien
  */
-export function validarFormulario(f: Formulario): Partial<Record<keyof Formulario, string>> {
-  const e: Partial<Record<keyof Formulario, string>> = {};
+export function validarFormulario(f: Formulario): Partial<Record<CampoError, string>> {
+  const e: Partial<Record<CampoError, string>> = {};
   if (!f.municipio) e.municipio = 'Elige el municipio donde ocurre.';
-  if (!f.ubicacion.trim()) e.ubicacion = 'Escribe una referencia del lugar (calle, colonia o punto conocido).';
-  else if (f.ubicacion.length > MAX_UBICACION) e.ubicacion = `Usa máximo ${MAX_UBICACION} caracteres.`;
-  if (!(f.cantidad in CANTIDADES)) e.cantidad = 'Elige cuántas niñas o niños viste.';
-  if (!f.edad) e.edad = 'Elige la edad aproximada.';
+  if (!f.calle.trim()) e.calle = 'Escribe la calle.';
+  if (!f.colonia.trim()) e.colonia = 'Escribe la colonia.';
+  if (!/^\d{5}$/.test(f.codigoPostal)) e.codigoPostal = 'El código postal debe tener 5 dígitos.';
+  else if (!esCodigoPostalEdomex(f.codigoPostal)) e.codigoPostal = 'El código postal no es del Estado de México (empieza con 50 a 57).';
+  const total = totalMenores(f.conteos);
+  if (total < 1) e.grupos = 'Indica cuántas niñas, niños o adolescentes viste.';
+  else if (total > TOTAL_MAXIMO) e.grupos = `El total no puede pasar de ${TOTAL_MAXIMO}.`;
   if (!f.actividad) e.actividad = 'Elige la actividad que observaste.';
+  else if (f.actividad === 'Otro' && !f.actividadOtro.trim()) e.actividadOtro = 'Describe la actividad que observaste.';
   if (!f.riesgo) e.riesgo = 'Indica si percibes una situación de riesgo.';
   if (!f.descripcion.trim()) e.descripcion = 'Describe brevemente lo que observaste.';
   else if (f.descripcion.length > MAX_DESCRIPCION) e.descripcion = `Usa máximo ${MAX_DESCRIPCION} caracteres.`;
   return e;
+}
+
+/** Cuerpo de `POST /reportes` con el formato nuevo. */
+export function aNuevoReporte(f: Formulario, version: string): NuevoReporte {
+  return {
+    municipioId: f.municipio!.id,
+    direccion: {
+      calle: f.calle.trim(), colonia: f.colonia.trim(), codigoPostal: f.codigoPostal,
+      ...(f.numero.trim() ? { numeroExterior: f.numero.trim() } : {}),
+      ...(f.referencias.trim() ? { referencias: f.referencias.trim() } : {}),
+    },
+    grupos: EDADES.filter((e) => (f.conteos[e.rango] ?? 0) > 0).map((e) => ({ rango: e.rango, cantidad: f.conteos[e.rango] })),
+    actividad: f.actividad,
+    ...(f.actividad === 'Otro' ? { actividadOtro: f.actividadOtro.trim() } : {}),
+    situacionRiesgo: f.riesgo,
+    descripcion: f.descripcion.trim(),
+    avisoPrivacidadVersion: version,
+  };
+}
+
+/** Campo de texto con etiqueta, ayuda y error accesibles. */
+function Campo({ id, etiqueta, valor, alCambiar, error, ayuda, max, modo }: {
+  id: string; etiqueta: string; valor: string; alCambiar: (v: string) => void; error?: string; ayuda?: string; max: number;
+  modo?: 'numeric';
+}) {
+  const describe = [ayuda && `ayuda-${id}`, error && `error-${id}`].filter(Boolean).join(' ') || undefined;
+  return (
+    <div className="campo">
+      <label htmlFor={id}>{etiqueta}</label>
+      {ayuda && <span id={`ayuda-${id}`} className="ayuda">{ayuda}</span>}
+      <input id={id} type="text" inputMode={modo} maxLength={max} value={valor} onChange={(e) => alCambiar(e.target.value)}
+        aria-describedby={describe} aria-invalid={error ? true : undefined} />
+      {error && <span id={`error-${id}`} className="error-campo">{error}</span>}
+    </div>
+  );
+}
+
+/** Contadores por grupo de edad (botones − y + con etiqueta accesible) y total. */
+function ContadorEdades({ conteos, alCambiar, error }: {
+  conteos: Record<string, number>; alCambiar: (c: Record<string, number>) => void; error?: string;
+}) {
+  const total = totalMenores(conteos);
+  return (
+    <fieldset className="campo" aria-describedby={error ? 'error-grupos' : undefined}>
+      <legend>¿Cuántas niñas, niños o adolescentes viste?</legend>
+      <span className="ayuda">Suma uno por cada persona en su grupo de edad.</span>
+      <div className="contadores">
+        {EDADES.map(({ rango, etiqueta }) => {
+          const n = conteos[rango] ?? 0;
+          return (
+            <div key={rango} className={n > 0 ? 'contador contador-activo' : 'contador'}>
+              <span className="contador-etiqueta">{etiqueta}</span>
+              <button type="button" className="boton-redondo" aria-label={`Quitar uno: ${etiqueta}`} disabled={n === 0}
+                onClick={() => alCambiar({ ...conteos, [rango]: n - 1 })}>−</button>
+              <output className="contador-valor" aria-live="polite" aria-label={`${n}, ${etiqueta}`}>{n}</output>
+              <button type="button" className="boton-redondo" aria-label={`Agregar uno: ${etiqueta}`} disabled={total >= TOTAL_MAXIMO}
+                onClick={() => alCambiar({ ...conteos, [rango]: n + 1 })}>+</button>
+            </div>
+          );
+        })}
+      </div>
+      <p className="contador-total" aria-live="polite">Total: {total}{total >= TOTAL_MAXIMO ? ` (máximo ${TOTAL_MAXIMO})` : ''}</p>
+      {error && <span id="error-grupos" className="error-campo">{error}</span>}
+    </fieldset>
+  );
 }
 
 /** Grupo de opciones de selección única (radios accesibles con forma de chip). */
@@ -127,7 +218,7 @@ export function Reportar() {
   const [version, setVersion] = useState<string | null>(null);
   const [creado, setCreado] = useState<ReporteCreado | null>(null);
   const [f, setF] = useState<Formulario>(FORMULARIO_VACIO);
-  const [errores, setErrores] = useState<Partial<Record<keyof Formulario, string>>>({});
+  const [errores, setErrores] = useState<Partial<Record<CampoError, string>>>({});
   const [errorEnvio, setErrorEnvio] = useState<unknown>(null);
   const [enviando, setEnviando] = useState(false);
   const resumen = useRef<HTMLDivElement>(null);
@@ -142,11 +233,7 @@ export function Reportar() {
     if (Object.keys(errs).length > 0) { setTimeout(() => resumen.current?.focus(), 0); return; }
     setEnviando(true); setErrorEnvio(null);
     try {
-      setCreado(await api.crearReporte({
-        municipioId: f.municipio!.id, ubicacion: f.ubicacion.trim(), cantidadNinos: CANTIDADES[f.cantidad],
-        edadAproximada: f.edad, actividad: f.actividad, situacionRiesgo: f.riesgo, descripcion: f.descripcion.trim(),
-        avisoPrivacidadVersion: version!,
-      }));
+      setCreado(await api.crearReporte(aNuevoReporte(f, version!)));
       window.scrollTo(0, 0);
     } catch (err) { setErrorEnvio(err); } finally { setEnviando(false); }
   };
@@ -180,17 +267,33 @@ export function Reportar() {
 
         <SelectorMunicipio municipios={municipios} valor={f.municipio} alCambiar={(m) => cambiar('municipio', m)} error={errores.municipio} />
 
-        <div className="campo">
-          <label htmlFor="ubicacion">¿Dónde ocurre?</label>
-          <span id="ayuda-ubicacion" className="ayuda">Calle, colonia o punto de referencia. No escribas tu propia dirección.</span>
-          <input id="ubicacion" type="text" maxLength={MAX_UBICACION} value={f.ubicacion} onChange={(e) => cambiar('ubicacion', e.target.value)}
-            aria-describedby={errores.ubicacion ? 'ayuda-ubicacion error-ubicacion' : 'ayuda-ubicacion'} aria-invalid={errores.ubicacion ? true : undefined} />
-          {errores.ubicacion && <span id="error-ubicacion" className="error-campo">{errores.ubicacion}</span>}
-        </div>
+        <fieldset className="campo">
+          <legend>¿Dónde ocurre?</legend>
+          <span className="ayuda">Dirección del lugar de los hechos, no la tuya.</span>
+          <Campo id="calle" etiqueta="Calle" valor={f.calle} alCambiar={(v) => cambiar('calle', v)} error={errores.calle} max={120} />
+          <Campo id="numero" etiqueta="Número exterior (opcional)" valor={f.numero} alCambiar={(v) => cambiar('numero', v)} max={20} />
+          <Campo id="colonia" etiqueta="Colonia" valor={f.colonia} alCambiar={(v) => cambiar('colonia', v)} error={errores.colonia} max={120} />
+          <Campo id="codigoPostal" etiqueta="Código postal" valor={f.codigoPostal} modo="numeric" max={5}
+            alCambiar={(v) => cambiar('codigoPostal', v.replace(/\D/g, ''))} error={errores.codigoPostal} />
+          <Campo id="referencias" etiqueta="Referencias (opcional)" ayuda="Ej.: frente al mercado, esquina con la calle 5"
+            valor={f.referencias} alCambiar={(v) => cambiar('referencias', v)} max={300} />
+        </fieldset>
 
-        <Opciones nombre="cantidad" leyenda="¿Cuántas niñas o niños viste?" opciones={Object.keys(CANTIDADES)} valor={f.cantidad} alCambiar={(v) => cambiar('cantidad', v)} error={errores.cantidad} />
-        <Opciones nombre="edad" leyenda="Edad aproximada (años)" opciones={cat.rangosEdad} valor={f.edad} alCambiar={(v) => cambiar('edad', v)} error={errores.edad} />
-        <Opciones nombre="actividad" leyenda="¿Qué actividad realizaban?" opciones={cat.actividades} valor={f.actividad} alCambiar={(v) => cambiar('actividad', v)} error={errores.actividad} />
+        <ContadorEdades conteos={f.conteos} alCambiar={(c) => cambiar('conteos', c)} error={errores.grupos} />
+
+        <div className="campo">
+          <label htmlFor="actividad">¿Qué actividad realizaban?</label>
+          <select id="actividad" value={f.actividad} onChange={(e) => cambiar('actividad', e.target.value)}
+            aria-describedby={errores.actividad ? 'error-actividad' : undefined} aria-invalid={errores.actividad ? true : undefined}>
+            <option value="">Elige una opción</option>
+            {cat.actividades.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          {errores.actividad && <span id="error-actividad" className="error-campo">{errores.actividad}</span>}
+        </div>
+        {f.actividad === 'Otro' && (
+          <Campo id="actividadOtro" etiqueta="Describe la actividad" valor={f.actividadOtro}
+            alCambiar={(v) => cambiar('actividadOtro', v)} error={errores.actividadOtro} max={120} />
+        )}
         <Opciones nombre="riesgo" leyenda="¿Percibes una situación de riesgo?" opciones={cat.riesgos} valor={f.riesgo} alCambiar={(v) => cambiar('riesgo', v)} error={errores.riesgo} />
 
         <div className="campo">
