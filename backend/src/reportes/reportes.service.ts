@@ -11,11 +11,15 @@ import {
 } from './formulario';
 import {
   AgregarSeguimientoDto, CambiarEstatusDto, ConsultaPublicaDto, CrearReporteDto, EventoPublicoDto,
-  EventoSeguimientoDto, ListarReportesDto, PaginaDto, ReporteCreadoDto, ReporteDetalleDto, ReporteResumenDto,
+  EventoSeguimientoDto, FiltrosBandejaDto, ListarReportesDto, PaginaDto, ReporteCreadoDto, ReporteDetalleDto, ReporteResumenDto,
 } from './reporte.dto';
 import { generarClave, hashearClave, verificarClave } from './clave-consulta';
 import { ESTATUS, ESTATUS_INICIAL, transicionesPermitidas, validarTransicion } from './estatus';
 import { LimitadorIntentos } from './limitador-intentos';
+import { celdaCsv } from '../estadisticas/agregados';
+
+/** Filas máximas de una exportación CSV. */
+export const MAX_EXPORTACION = 5000;
 
 /** Hash Argon2id de una clave que nadie conoce: se verifica cuando el folio no existe para igualar tiempos. */
 const HASH_SENUELO = '$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
@@ -169,27 +173,78 @@ export class ReportesService {
     };
   }
 
-  /** CU-09: bandeja del personal, del más reciente al más antiguo, con filtro por estatus. */
-  async listar({ estatus, municipioId, pagina, tamano }: ListarReportesDto): Promise<PaginaDto<ReporteResumenDto>> {
-    const filtro = estatus ?? null;
-    const municipio = municipioId ?? null;
-    const desde = `
+  /**
+   * FROM/WHERE parametrizado de la bandeja y la exportación ($1…$8). El orden de
+   * los parámetros lo fija {@link parametrosBandeja}.
+   */
+  private static readonly DESDE_BANDEJA = `
       FROM reporte r
       JOIN reporte_caso rc ON rc.id_reporte = r.id_reporte
       JOIN caso c ON c.id_caso = rc.id_caso
       JOIN estatus_reporte e ON e.id_estatus = c.id_estatus
+      JOIN actividad a ON a.id_actividad = r.id_actividad
+      JOIN folio f ON f.id_reporte = r.id_reporte
       WHERE ($1::text IS NULL OR e.nombre = $1::text)
-        AND ($2::int IS NULL OR r.id_municipio = $2::int)`;
-    const [{ total }] = await this.ds.query(`SELECT count(DISTINCT r.id_reporte)::int AS total ${desde}`, [filtro, municipio]);
+        AND ($2::int IS NULL OR r.id_municipio = $2::int)
+        AND ($3::text IS NULL OR a.nombre = $3::text)
+        AND ($4::date IS NULL OR (r.fecha_creacion AT TIME ZONE 'America/Mexico_City')::date >= $4::date)
+        AND ($5::date IS NULL OR (r.fecha_creacion AT TIME ZONE 'America/Mexico_City')::date <= $5::date)
+        AND ($6::text IS NULL OR f.codigo LIKE '%' || $6::text || '%')
+        AND ($7::int IS NULL OR (e.nombre IN ('Recibido', 'En revisión')
+             AND c.fecha_actualizacion < now() - make_interval(days => $7::int)))`;
+
+  private parametrosBandeja(f: FiltrosBandejaDto): unknown[] {
+    // El folio ya viene validado (solo letras, dígitos y guiones), así que LIKE no recibe comodines.
+    return [f.estatus ?? null, f.municipioId ?? null, f.actividad ?? null, f.desde ?? null, f.hasta ?? null,
+      f.folio ?? null, f.sinAtenderDias ?? null];
+  }
+
+  /** CU-09: bandeja del personal con filtros, búsqueda por folio, orden y paginación. */
+  async listar(f: ListarReportesDto): Promise<PaginaDto<ReporteResumenDto>> {
+    const { pagina, tamano } = f;
+    const desde = ReportesService.DESDE_BANDEJA;
+    const params = this.parametrosBandeja(f);
+    const direccion = f.orden === 'antiguos' ? 'ASC' : 'DESC';
+    const [{ total }] = await this.ds.query(`SELECT count(DISTINCT r.id_reporte)::int AS total ${desde}`, params);
     const filas: { id: number }[] = await this.ds.query(
       `SELECT DISTINCT r.id_reporte AS id, r.fecha_creacion ${desde}
-       ORDER BY r.fecha_creacion DESC, r.id_reporte DESC
-       LIMIT $3 OFFSET $4`, [filtro, municipio, tamano, (pagina - 1) * tamano]);
+       ORDER BY r.fecha_creacion ${direccion}, r.id_reporte ${direccion}
+       LIMIT $8 OFFSET $9`, [...params, tamano, (pagina - 1) * tamano]);
 
     const ids = filas.map((f) => Number(f.id));
     const reportes = ids.length === 0 ? [] : await this.ds.getRepository(Reporte).findBy({ id: In(ids) });
     const porId = new Map((await this.aplanar(reportes)).map((r) => [r.id, r]));
     return { elementos: ids.map((id) => porId.get(id)!).filter(Boolean), total, pagina, tamano };
+  }
+
+  /**
+   * Exportación CSV de la bandeja con los mismos filtros (máximo {@link MAX_EXPORTACION} filas).
+   *
+   * Minimización: solo columnas de la bandeja (sin descripción libre, sin
+   * coordenadas ni dirección exacta: solo la colonia). Celdas protegidas contra
+   * inyección de fórmulas.
+   */
+  async exportarCsv(f: FiltrosBandejaDto): Promise<string> {
+    const direccion = f.orden === 'antiguos' ? 'ASC' : 'DESC';
+    const filas: Record<string, string | number | null>[] = await this.ds.query(
+      `SELECT f.codigo AS folio,
+              to_char(r.fecha_creacion AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD HH24:MI') AS fecha,
+              e.nombre AS estatus, m.nombre AS municipio, u.colonia, a.nombre AS actividad, r.cantidad_ninos AS menores,
+              (SELECT string_agg(re.nombre || ': ' || g.cantidad, '; ' ORDER BY re.id_rango_edad)
+                 FROM reporte_menores_grupo g JOIN rango_edad re ON re.id_rango_edad = g.id_rango_edad
+                WHERE g.id_reporte = r.id_reporte) AS grupos,
+              ri.nombre AS riesgo,
+              to_char(r.fecha_actualizacion AT TIME ZONE 'America/Mexico_City', 'YYYY-MM-DD HH24:MI') AS actualizado
+       ${ReportesService.DESDE_BANDEJA.replace('WHERE', `JOIN ubicacion u ON u.id_ubicacion = r.id_ubicacion
+         JOIN riesgo ri ON ri.id_riesgo = r.id_riesgo
+         LEFT JOIN municipio m ON m.id_municipio = r.id_municipio WHERE`)}
+       ORDER BY r.fecha_creacion ${direccion}, r.id_reporte ${direccion}
+       LIMIT $8`, [...this.parametrosBandeja(f), MAX_EXPORTACION]);
+    const columnas = ['folio', 'fecha', 'estatus', 'municipio', 'colonia', 'actividad', 'menores', 'grupos', 'riesgo', 'actualizado'];
+    const encabezado = ['Folio', 'Fecha', 'Estatus', 'Municipio', 'Colonia', 'Actividad', 'Menores', 'Grupos de edad', 'Riesgo percibido', 'Última actualización'];
+    const lineas = [encabezado.map(celdaCsv).join(','), ...filas.map((x) => columnas.map((c) => celdaCsv(x[c])).join(','))];
+    // BOM para que Excel abra los acentos correctamente.
+    return `\uFEFF${lineas.join('\r\n')}\r\n`;
   }
 
   /** CU-09: detalle completo con bitácora y transiciones permitidas. */

@@ -25,6 +25,11 @@ const PERMISO_ESPERADO: Record<string, Permiso> = {
   'PATCH reportes/:id/estatus': 'reportes.gestionar',
   'POST reportes/:id/seguimientos': 'reportes.gestionar',
   'GET estadisticas/resumen': 'estadisticas.ver',
+  'GET estadisticas/distribuciones': 'estadisticas.ver',
+  'GET estadisticas/tiempos': 'estadisticas.ver',
+  'GET estadisticas/sin-atender': 'estadisticas.ver',
+  'GET estadisticas/mapa-calor': 'estadisticas.ver',
+  'GET reportes/exportar.csv': 'reportes.exportar',
   'PUT red-municipios/:municipioId': 'red.editar',
   'GET auth/perfil': 'perfil.ver',
 };

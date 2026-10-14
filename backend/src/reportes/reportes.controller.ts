@@ -1,10 +1,10 @@
-import { Body, Controller, Get, HttpCode, Param, ParseIntPipe, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Header, HttpCode, Param, ParseIntPipe, Patch, Post, Query, Req } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Publico, Requiere } from '../auth/roles';
 import { RequestAutenticado } from '../auth/jwt.guard';
 import {
   AgregarSeguimientoDto, CambiarEstatusDto, ConsultaPublicaDto, ConsultarReporteDto, CrearReporteDto,
-  ListarReportesDto, PaginaDto, ReporteCreadoDto, ReporteDetalleDto, ReporteResumenDto,
+  FiltrosBandejaDto, ListarReportesDto, PaginaDto, ReporteCreadoDto, ReporteDetalleDto, ReporteResumenDto,
 } from './reporte.dto';
 import { ReportesService } from './reportes.service';
 
@@ -47,6 +47,21 @@ export class ReportesController {
   }
 
   /** CU-09: detalle del reporte con bitácora y transiciones permitidas. */
+  /**
+   * Exporta la bandeja filtrada a CSV (máximo 5,000 filas). Solo columnas de la
+   * bandeja: sin descripción libre ni coordenadas (minimización). 10 por minuto.
+   * Debe declararse antes de `:id` para que Express no la tome como un id.
+   */
+  @Requiere('reportes.exportar')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Get('exportar.csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="reportes-rieti.csv"')
+  @Header('Cache-Control', 'no-store')
+  exportar(@Query() f: FiltrosBandejaDto): Promise<string> {
+    return this.reportes.exportarCsv(f);
+  }
+
   @Requiere('reportes.ver')
   @Get(':id')
   detalle(@Param('id', ParseIntPipe) id: number): Promise<ReporteDetalleDto> {

@@ -309,7 +309,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "format": "date"
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
             }
           },
           {
@@ -317,7 +317,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "format": "date"
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
             }
           },
           {
@@ -326,6 +326,21 @@
             "schema": {
               "type": "integer",
               "minimum": 1
+            }
+          },
+          {
+            "name": "estatus",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actividad",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
             }
           }
         ],
@@ -548,6 +563,61 @@
               "minimum": 1,
               "maximum": 100,
               "default": 20
+            }
+          },
+          {
+            "name": "actividad",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "folio",
+            "in": "query",
+            "description": "Folio completo o una parte (letras, dígitos y guiones).",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9-]{1,20}$"
+            }
+          },
+          {
+            "name": "sinAtenderDias",
+            "in": "query",
+            "description": "Solo pendientes sin cambios en más de N días.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 365
+            }
+          },
+          {
+            "name": "orden",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "recientes",
+                "antiguos"
+              ],
+              "default": "recientes"
             }
           }
         ],
@@ -1150,6 +1220,545 @@
           }
         }
       }
+    },
+    "/api/v1/estadisticas/distribuciones": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Distribución por municipio, actividad y grupo de edad (estadisticas.ver; celdas pequeñas ocultas).",
+        "parameters": [
+          {
+            "name": "desde",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "municipioId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "estatus",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actividad",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Distribuciones"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cognito": []
+          }
+        ]
+      }
+    },
+    "/api/v1/estadisticas/tiempos": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Tiempo promedio en cada estatus, calculado con la bitácora (estadisticas.ver).",
+        "parameters": [
+          {
+            "name": "desde",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "municipioId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "estatus",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actividad",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tiempos"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cognito": []
+          }
+        ]
+      }
+    },
+    "/api/v1/estadisticas/sin-atender": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Casos en Recibido o En revisión sin cambios en más de N días (estadisticas.ver).",
+        "parameters": [
+          {
+            "name": "desde",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "municipioId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "estatus",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actividad",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          },
+          {
+            "name": "dias",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 365,
+              "default": 7
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SinAtender"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cognito": []
+          }
+        ]
+      }
+    },
+    "/api/v1/estadisticas/mapa-calor": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Mapa de calor por celdas de ≈ 550 m (estadisticas.ver; celdas con pocos reportes ocultas).",
+        "parameters": [
+          {
+            "name": "desde",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "municipioId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "estatus",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actividad",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MapaCalor"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cognito": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reportes/exportar.csv": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Exporta la bandeja filtrada a CSV (reportes.exportar; máx. 5,000 filas; sin descripción ni coordenadas; celdas protegidas contra fórmulas).",
+        "parameters": [
+          {
+            "name": "estatus",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Recibido",
+                "En revisión",
+                "En atención",
+                "Canalizado",
+                "Concluido",
+                "Descartado"
+              ]
+            }
+          },
+          {
+            "name": "municipioId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "actividad",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "folio",
+            "in": "query",
+            "description": "Folio completo o una parte (letras, dígitos y guiones).",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9-]{1,20}$"
+            }
+          },
+          {
+            "name": "sinAtenderDias",
+            "in": "query",
+            "description": "Solo pendientes sin cambios en más de N días.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 365
+            }
+          },
+          {
+            "name": "orden",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "recientes",
+                "antiguos"
+              ],
+              "default": "recientes"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV (UTF-8 con BOM)",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cognito": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1283,11 +1892,12 @@
       "ResumenEstadisticas": {
         "type": "object",
         "required": [
-          "total",
           "nuevosUltimos7Dias",
-          "sinMunicipio",
+          "pendientes",
           "porEstatus",
-          "porMes"
+          "porMes",
+          "sinMunicipio",
+          "total"
         ],
         "properties": {
           "total": {
@@ -1345,6 +1955,10 @@
               },
               "additionalProperties": false
             }
+          },
+          "pendientes": {
+            "type": "integer",
+            "description": "Casos en Recibido o En revisión."
           }
         },
         "additionalProperties": false
@@ -2175,6 +2789,170 @@
           "atribucion": {
             "type": "string",
             "example": "© colaboradores de OpenStreetMap"
+          }
+        }
+      },
+      "ConteoProtegido": {
+        "type": "object",
+        "required": [
+          "etiqueta",
+          "total"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "etiqueta": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer",
+            "nullable": true,
+            "description": "null si es menor que el umbral."
+          }
+        }
+      },
+      "Distribuciones": {
+        "type": "object",
+        "required": [
+          "umbral",
+          "porMunicipio",
+          "porActividad",
+          "porGrupoEdad"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "umbral": {
+            "type": "integer"
+          },
+          "porMunicipio": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConteoProtegido"
+            }
+          },
+          "porActividad": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConteoProtegido"
+            }
+          },
+          "porGrupoEdad": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConteoProtegido"
+            },
+            "description": "Menores por grupo de edad."
+          }
+        }
+      },
+      "Tiempos": {
+        "type": "object",
+        "required": [
+          "umbral",
+          "porEstatus"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "umbral": {
+            "type": "integer"
+          },
+          "porEstatus": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "estatus",
+                "horasPromedio",
+                "casos"
+              ],
+              "properties": {
+                "estatus": {
+                  "type": "string"
+                },
+                "horasPromedio": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "casos": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "SinAtender": {
+        "type": "object",
+        "required": [
+          "dias",
+          "total",
+          "umbral",
+          "porMunicipio"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "dias": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "umbral": {
+            "type": "integer"
+          },
+          "porMunicipio": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConteoProtegido"
+            }
+          }
+        }
+      },
+      "MapaCalor": {
+        "type": "object",
+        "required": [
+          "umbral",
+          "tamanoCelda",
+          "celdas",
+          "ocultas",
+          "sinUbicacion"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "umbral": {
+            "type": "integer"
+          },
+          "tamanoCelda": {
+            "type": "number",
+            "description": "Grados (≈ 550 m)."
+          },
+          "celdas": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "lat",
+                "lng",
+                "total"
+              ],
+              "properties": {
+                "lat": {
+                  "type": "number"
+                },
+                "lng": {
+                  "type": "number"
+                },
+                "total": {
+                  "type": "integer"
+                }
+              },
+              "description": "Centro de la celda, nunca la ubicación de un reporte."
+            }
+          },
+          "ocultas": {
+            "type": "integer"
+          },
+          "sinUbicacion": {
+            "type": "integer"
           }
         }
       }

@@ -586,6 +586,109 @@ describeBd('API RIETI (e2e)', () => {
     });
   });
 
+  describe('panel del personal (Fase 3)', () => {
+    const personal = { Authorization: 'Bearer token-personal' };
+    const RUTAS = ['distribuciones', 'tiempos', 'sin-atender', 'mapa-calor'];
+
+    it('las estadísticas nuevas exigen sesión y rol', async () => {
+      for (const r of RUTAS) {
+        await http().get(`/api/v1/estadisticas/${r}`).expect(401);
+        await http().get(`/api/v1/estadisticas/${r}`).set('Authorization', 'Bearer token-sin-rol').expect(403);
+      }
+      await http().get('/api/v1/reportes/exportar.csv').expect(401);
+      await http().get('/api/v1/reportes/exportar.csv').set('Authorization', 'Bearer token-sin-rol').expect(403);
+    });
+
+    it('distribuciones: solo conteos, con umbral (celdas pequeñas en null)', async () => {
+      const r = await http().get('/api/v1/estadisticas/distribuciones').set(personal).expect(200);
+      expect(r.body.umbral).toBe(3);
+      for (const lista of [r.body.porMunicipio, r.body.porActividad, r.body.porGrupoEdad]) {
+        for (const c of lista) expect(c.total === null || c.total >= 3).toBe(true);
+      }
+      const edades = r.body.porGrupoEdad.map((c: { etiqueta: string }) => c.etiqueta);
+      expect(edades).toContain('0-5');
+      expect(r.body.porMunicipio.find((c: { etiqueta: string }) => c.etiqueta === 'Atizapán de Zaragoza').total).toBeGreaterThanOrEqual(3);
+      expect(JSON.stringify(r.body)).not.toMatch(/RIETI-|Dos menores|López Mateos/);
+    });
+
+    it('tiempos por estatus: los 6 estatus en orden y nada de datos individuales', async () => {
+      const r = await http().get('/api/v1/estadisticas/tiempos').set(personal).expect(200);
+      expect(r.body.porEstatus.map((t: { estatus: string }) => t.estatus))
+        .toEqual(['Recibido', 'En revisión', 'En atención', 'Canalizado', 'Concluido', 'Descartado']);
+      for (const t of r.body.porEstatus) expect(t.horasPromedio === null || t.casos >= 3).toBe(true);
+    });
+
+    it('casos sin atender: cuenta pendientes viejos y la bandeja los lista con el mismo filtro', async () => {
+      expect((await http().get('/api/v1/estadisticas/sin-atender?dias=1').set(personal).expect(200)).body.total).toBe(0);
+      // Se envejece un caso Recibido 10 días (solo en la base de prueba).
+      const [{ id_caso: idCaso, codigo }] = await adminDs.query(`
+        SELECT c.id_caso, f.codigo FROM caso c JOIN estatus_reporte e ON e.id_estatus = c.id_estatus
+        JOIN reporte_caso rc ON rc.id_caso = c.id_caso JOIN folio f ON f.id_reporte = rc.id_reporte
+        WHERE e.nombre = 'Recibido' ORDER BY c.id_caso LIMIT 1`);
+      await adminDs.query("UPDATE caso SET fecha_actualizacion = now() - interval '10 days' WHERE id_caso = $1", [idCaso]);
+      const r = await http().get('/api/v1/estadisticas/sin-atender?dias=7').set(personal).expect(200);
+      expect(r.body).toMatchObject({ dias: 7, total: 1, umbral: 3 });
+      expect(r.body.porMunicipio[0].total).toBeNull(); // 1 < umbral
+      const b = await http().get('/api/v1/reportes?sinAtenderDias=7').set(personal).expect(200);
+      expect(b.body.elementos.map((e: { folio: string }) => e.folio)).toEqual([codigo]);
+      await http().get('/api/v1/estadisticas/sin-atender?dias=0').set(personal).expect(400);
+    });
+
+    it('mapa de calor: centros de celda (nunca la coordenada de un reporte) y umbral', async () => {
+      const r = await http().get('/api/v1/estadisticas/mapa-calor').set(personal).expect(200);
+      expect(r.body.tamanoCelda).toBe(0.005);
+      expect(r.body.celdas.length).toBeGreaterThanOrEqual(1);
+      for (const c of r.body.celdas) {
+        expect(c.total).toBeGreaterThanOrEqual(3);
+        expect([c.lat, c.lng]).not.toEqual([19.5594, -99.2512]);
+      }
+      expect(JSON.stringify(r.body)).not.toMatch(/RIETI-/);
+    });
+
+    it('bandeja: búsqueda por folio, filtro por actividad y fecha, y orden', async () => {
+      const recientes = (await http().get('/api/v1/reportes?tamano=100').set(personal).expect(200)).body.elementos;
+      const antiguos = (await http().get('/api/v1/reportes?tamano=100&orden=antiguos').set(personal).expect(200)).body.elementos;
+      expect(antiguos.map((e: { id: number }) => e.id)).toEqual([...recientes].reverse().map((e: { id: number }) => e.id));
+
+      const folio: string = recientes[0].folio;
+      const porFolio = await http().get(`/api/v1/reportes?folio=${folio.slice(-6).toLowerCase()}`).set(personal).expect(200);
+      expect(porFolio.body.elementos.map((e: { folio: string }) => e.folio)).toContain(folio);
+      await http().get('/api/v1/reportes?folio=%25%27%3B').set(personal).expect(400); // %'; no pasa la validación
+
+      const cruceros = await http().get(`/api/v1/reportes?actividad=${encodeURIComponent('Limpieza de parabrisas o actividades en cruceros')}`).set(personal).expect(200);
+      expect(cruceros.body.total).toBeGreaterThanOrEqual(1);
+      expect(cruceros.body.elementos.every((e: { actividad: string }) => e.actividad.startsWith('Limpieza'))).toBe(true);
+      expect((await http().get('/api/v1/reportes?desde=2099-01-01').set(personal).expect(200)).body.total).toBe(0);
+    });
+
+    it('CSV: columnas de la bandeja, sin descripción ni coordenadas, y sin inyección de fórmulas', async () => {
+      // Reporte con una colonia que intenta inyectar una fórmula.
+      const { ubicacion, cantidadNinos, edadAproximada, ...resto } = reporteValido();
+      expect(ubicacion && cantidadNinos && edadAproximada).toBeTruthy();
+      await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send({
+        ...resto, grupos: [{ rango: '6-11', cantidad: 1 }],
+        direccion: { calle: 'Calle 5', colonia: '=HYPERLINK("http://evil")', codigoPostal: '52900' },
+      }).expect(201);
+
+      const r = await http().get('/api/v1/reportes/exportar.csv').set(personal).expect(200);
+      expect(r.headers['content-type']).toContain('text/csv');
+      expect(r.headers['content-disposition']).toContain('attachment');
+      expect(r.text.charCodeAt(0)).toBe(0xfeff);
+      const lineas = r.text.slice(1).trim().split('\r\n');
+      expect(lineas[0]).toBe('Folio,Fecha,Estatus,Municipio,Colonia,Actividad,Menores,Grupos de edad,Riesgo percibido,Última actualización');
+      expect(r.text).not.toMatch(/Dos menores vendiendo|19\.5594|-99\.2512/);
+      expect(r.text).toContain(`"'=HYPERLINK(""http://evil"")"`);
+      expect(r.text).not.toMatch(/(^|,)=HYPERLINK/m);
+
+      const filtrado = await http().get('/api/v1/reportes/exportar.csv?desde=2099-01-01').set(personal).expect(200);
+      expect(filtrado.text.slice(1).trim().split('\r\n')).toHaveLength(1); // solo encabezado
+    });
+
+    it('el administrador también exporta (reportes.exportar)', async () => {
+      await http().get('/api/v1/reportes/exportar.csv').set('Authorization', 'Bearer token-admin').expect(200);
+    });
+  });
+
   describe('estadísticas (solo agregados)', () => {
     const personal = { Authorization: 'Bearer token-personal' };
 
@@ -596,7 +699,7 @@ describeBd('API RIETI (e2e)', () => {
 
     it('devuelve solo conteos, con los 6 estatus en orden', async () => {
       const r = await http().get('/api/v1/estadisticas/resumen').set(personal).expect(200);
-      expect(Object.keys(r.body).sort()).toEqual(['nuevosUltimos7Dias', 'porEstatus', 'porMes', 'sinMunicipio', 'total']);
+      expect(Object.keys(r.body).sort()).toEqual(['nuevosUltimos7Dias', 'pendientes', 'porEstatus', 'porMes', 'sinMunicipio', 'total']);
       expect(r.body.porEstatus.map((e: { etiqueta: string }) => e.etiqueta))
         .toEqual(['Recibido', 'En revisión', 'En atención', 'Canalizado', 'Concluido', 'Descartado']);
       const suma = (l: { total: number }[]) => l.reduce((a, e) => a + e.total, 0);
