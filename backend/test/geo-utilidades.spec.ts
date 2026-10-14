@@ -1,5 +1,5 @@
 import {
-  CacheLru, direccionDesdeNominatim, enCajaEdomex, Espaciador, latATeselaY, lonATeselaX, redondearParaGeocodificar, teselaPermitida,
+  Semaforo, CacheLru, direccionDesdeNominatim, enCajaEdomex, Espaciador, latATeselaY, lonATeselaX, redondearParaGeocodificar, teselaPermitida,
 } from '../src/geo/geo-utilidades';
 
 describe('caja del Estado de México', () => {
@@ -69,5 +69,27 @@ describe('espaciador (1 petición por segundo)', () => {
     expect(e.reservar()).toBe(1000);
     expect(e.reservar()).toBe(2000);
     expect(e.reservar()).toBeNull(); // la cuarta tendría que esperar 3 s
+  });
+});
+
+describe('semáforo de descargas', () => {
+  it('deja pasar hasta el máximo, encola el resto y lo despierta al liberar', async () => {
+    const sem = new Semaforo(2, 2);
+    expect(await sem.adquirir(1000)).toBe(true);
+    expect(await sem.adquirir(1000)).toBe(true);
+    const tercero = sem.adquirir(1000);
+    expect(sem.enEspera).toBe(1);
+    sem.liberar();
+    expect(await tercero).toBe(true);
+    expect(sem.ocupados).toBe(2);
+  });
+
+  it('rechaza si la cola está llena o se agota la espera', async () => {
+    const sem = new Semaforo(1, 1);
+    await sem.adquirir(1000);
+    const enCola = sem.adquirir(20);
+    expect(await sem.adquirir(1000)).toBe(false); // cola llena
+    expect(await enCola).toBe(false);              // espera agotada
+    expect(sem.enEspera).toBe(0);
   });
 });

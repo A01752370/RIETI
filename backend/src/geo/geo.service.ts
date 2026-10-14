@@ -3,7 +3,7 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { FUENTE_GEO, FuenteGeo } from './fuente-geo';
 import {
-  CacheLru, DireccionSugerida, direccionDesdeNominatim, enCajaEdomex, Espaciador, redondearParaGeocodificar, teselaPermitida,
+  CacheLru, DireccionSugerida, direccionDesdeNominatim, enCajaEdomex, Espaciador, redondearParaGeocodificar, Semaforo, teselaPermitida,
 } from './geo-utilidades';
 
 /** Municipio del catálogo en el que cae un punto. */
@@ -39,7 +39,8 @@ export class GeoService {
   private readonly cacheDirecciones = new CacheLru<DireccionSugerida>(5000, 7 * 24 * 3600_000);
   private readonly cacheTeselas = new CacheLru<Buffer>(2000, 24 * 3600_000);
   private readonly espaciador = new Espaciador(1000, 3000);
-  private teselasEnCurso = 0;
+  /** Hasta 4 descargas simultáneas de teselas; las demás esperan en una cola de 64 (máx. 10 s). */
+  private readonly descargas = new Semaforo(4, 64);
 
   constructor(
     @InjectDataSource() private readonly ds: DataSource,
@@ -103,7 +104,7 @@ export class GeoService {
    * Tesela PNG del Estado de México (zoom 8–18), con caché.
    *
    * @throws NotFoundException `TESELA_FUERA_DE_COBERTURA`
-   * @throws HttpException 503 `TESELA_NO_DISPONIBLE` si el servidor externo falla o hay demasiadas en curso
+   * @throws HttpException 503 `TESELA_NO_DISPONIBLE` si el servidor externo falla o la cola de descargas está llena
    */
   async tesela(z: number, x: number, y: number): Promise<Buffer> {
     if (!teselaPermitida(z, x, y)) {
@@ -112,10 +113,12 @@ export class GeoService {
     const llave = `${z}/${x}/${y}`;
     const guardada = this.cacheTeselas.obtener(llave);
     if (guardada) return guardada;
-    // Pocas descargas simultáneas hacia el servidor externo (política de uso de OSM).
-    if (this.teselasEnCurso >= 4) throw this.teselaNoDisponible();
-    this.teselasEnCurso++;
+    // Pocas descargas simultáneas hacia el servidor externo (política de uso de OSM); el resto espera turno.
+    if (!(await this.descargas.adquirir(10_000))) throw this.teselaNoDisponible();
     try {
+      // Otra petición pudo haberla descargado mientras esta esperaba.
+      const recien = this.cacheTeselas.obtener(llave);
+      if (recien) return recien;
       const png = await this.fuente.tesela(z, x, y);
       this.cacheTeselas.guardar(llave, png);
       return png;
@@ -123,7 +126,7 @@ export class GeoService {
       this.logger.warn(`Tesela externa no disponible: ${(e as Error).message}`);
       throw this.teselaNoDisponible();
     } finally {
-      this.teselasEnCurso--;
+      this.descargas.liberar();
     }
   }
 

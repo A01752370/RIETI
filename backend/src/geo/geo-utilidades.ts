@@ -131,3 +131,48 @@ export class Espaciador {
     return espera;
   }
 }
+
+/**
+ * Semáforo con cola acotada: limita las descargas simultáneas hacia el servidor
+ * externo (política de uso de OSM) sin rechazar de inmediato las ráfagas normales
+ * de un mapa (Leaflet pide 15–20 teselas a la vez). Si la cola está llena o la
+ * espera se agota, rechaza.
+ */
+export class Semaforo {
+  private enCurso = 0;
+  private readonly cola: Array<() => void> = [];
+
+  constructor(private readonly maximo: number, private readonly colaMaxima: number) {}
+
+  /** Espera un turno. @returns false si la cola está llena o se agotó la espera. */
+  async adquirir(esperaMaximaMs: number): Promise<boolean> {
+    if (this.enCurso < this.maximo) {
+      this.enCurso++;
+      return true;
+    }
+    if (this.cola.length >= this.colaMaxima) return false;
+    return new Promise<boolean>((resolver) => {
+      const turno = () => { clearTimeout(reloj); this.enCurso++; resolver(true); };
+      const reloj = setTimeout(() => {
+        const i = this.cola.indexOf(turno);
+        if (i >= 0) this.cola.splice(i, 1);
+        resolver(false);
+      }, esperaMaximaMs);
+      this.cola.push(turno);
+    });
+  }
+
+  /** Libera el turno y despierta al siguiente en la cola. */
+  liberar(): void {
+    this.enCurso--;
+    this.cola.shift()?.();
+  }
+
+  get ocupados(): number {
+    return this.enCurso;
+  }
+
+  get enEspera(): number {
+    return this.cola.length;
+  }
+}

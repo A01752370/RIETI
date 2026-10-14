@@ -205,3 +205,10 @@ details summary { cursor: pointer; min-height: var(--objetivo-tactil); display: 
 .boton-redondo:disabled { opacity: 0.4; cursor: not-allowed; }
 .boton-redondo:focus-visible { outline: 3px solid var(--color-primario); outline-offset: 2px; }
 .contador-total { font-weight: 600; margin-top: 0.5rem; }
+
+/* Panel y bandeja (Fase 3). */
+.mapa-calor { height: 420px; width: 100%; border-radius: 12px; border: 1px solid var(--color-borde); }
+.relleno-oculto { fill: var(--color-borde); }
+.fila-busqueda { display: flex; gap: 0.5rem; }
+.fila-busqueda input { flex: 1; }
+.paginacion { display: flex; align-items: center; justify-content: center; gap: 1rem; margin: 1rem 0; }

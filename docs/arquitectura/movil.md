@@ -45,7 +45,8 @@ flowchart TD
     C -->|Volver al inicio| I
     I -->|Consultar mi reporte| Q[Consulta<br/>folio + clave]
     I -->|Soy personal SIPINNA| L[Login]
-    L --> B[Bandeja]
+    L --> P[Inicio del personal]
+    P -->|tarjeta o "Ver todos"| B[Bandeja]
     B --> D[Detalle y seguimiento]
     B -->|Salir| I
 ```
@@ -58,7 +59,8 @@ flowchart TD
 | Confirmación | `ConfirmacionScreen.kt` | Tarjeta de éxito, aviso "guarda esto", folio y clave en tarjetas separadas (monoespaciada), botones Copiar folio / Copiar clave / Copiar ambos / Compartir. El portapapeles recibe solo el valor limpio, marcado como sensible. |
 | Consulta | `ConsultaScreen.kt` | Folio + clave → estatus e historial público. Interpreta lo pegado con `ExtractorFolioClave` (bloque completo en cualquier campo, minúsculas, espacios, sin guiones) y tiene botón "Pegar". |
 | Login | `LoginScreen.kt` | Correo y contraseña (oculta) del personal. |
-| Bandeja | `BandejaScreen.kt` | Reportes del más reciente al más antiguo, filtro por estatus, cerrar sesión. |
+| Inicio del personal | `InicioPersonalScreen.kt` | Tarjetas grandes de pendientes y casos sin cambios en más de 7 días, cuadrícula por estatus (cada tarjeta abre la bandeja filtrada), deslizar para actualizar. Sin mapa ni gráficas complejas. |
+| Bandeja | `BandejaScreen.kt` | Reportes del más reciente al más antiguo, filtro por estatus o "sin atender" (desde el inicio), cerrar sesión. |
 | Detalle | `DetalleReporteScreen.kt` | Datos del reporte, cambio de estatus (solo opciones válidas que manda el servidor), notas y bitácora. |
 
 El grafo vive en `view/MainActivity.kt` y las rutas en `view/Rutas.kt`. Si el servidor responde `NO_AUTENTICADO` en la bandeja o el detalle, la app descarta el token y regresa al login.

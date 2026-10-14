@@ -127,3 +127,28 @@ data class CambiarEstatusRequest(
 data class AgregarSeguimientoRequest(
     val comentario: String
 )
+
+/**
+ * Resumen agregado para el inicio del personal (`GET /api/v1/estadisticas/resumen`).
+ *
+ * @property total reportes en total
+ * @property nuevosUltimos7Dias reportes de los últimos 7 días
+ * @property pendientes casos en Recibido o En revisión
+ * @property porEstatus conteo por estatus, en el orden del proceso
+ */
+data class ResumenPersonal(
+    val total: Int,
+    val nuevosUltimos7Dias: Int,
+    val pendientes: Int = 0,
+    val porEstatus: List<ConteoEstatus>
+)
+
+/** Conteo de un estatus. */
+data class ConteoEstatus(val etiqueta: String, val total: Int)
+
+/**
+ * Casos pendientes sin cambios en más de [dias] días (`GET /api/v1/estadisticas/sin-atender`).
+ *
+ * @property total número de casos
+ */
+data class SinAtender(val dias: Int, val total: Int)

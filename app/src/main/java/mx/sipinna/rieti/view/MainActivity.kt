@@ -97,14 +97,28 @@ private fun AppRieti() {
         composable(Rutas.LOGIN) {
             LoginScreen(
                 alIniciarSesion = {
-                    nav.navigate(Rutas.BANDEJA) { popUpTo(Rutas.INICIO) }
+                    nav.navigate(Rutas.INICIO_PERSONAL) { popUpTo(Rutas.INICIO) }
                 },
                 alRegresar = { nav.popBackStack() }
             )
         }
-        composable(Rutas.BANDEJA) {
+        composable(Rutas.INICIO_PERSONAL) {
+            InicioPersonalScreen(
+                alAbrirBandeja = { estatus, sinAtender -> nav.navigate(Rutas.bandeja(estatus, sinAtender)) },
+                alCerrarSesion = { volverAlInicio(nav) },
+                alSesionExpirada = { irAlLogin(nav) }
+            )
+        }
+        composable(
+            route = Rutas.BANDEJA,
+            arguments = listOf(
+                navArgument("estatus") { type = NavType.StringType; defaultValue = "" },
+                navArgument("sinAtender") { type = NavType.IntType; defaultValue = 0 }
+            )
+        ) {
             BandejaScreen(
                 alAbrirReporte = { id -> nav.navigate(Rutas.detalle(id)) },
+                alRegresar = { nav.popBackStack() },
                 alCerrarSesion = { volverAlInicio(nav) },
                 alSesionExpirada = { irAlLogin(nav) }
             )

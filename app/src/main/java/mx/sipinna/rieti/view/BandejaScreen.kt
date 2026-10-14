@@ -33,18 +33,21 @@ import mx.sipinna.rieti.viewmodel.UiState
  * antiguo, con filtro por estatus.
  *
  * @param alAbrirReporte abre el detalle del reporte
+ * @param alRegresar vuelve al inicio del personal
  * @param alCerrarSesion descarta el token y vuelve al inicio
  * @param alSesionExpirada el servidor respondió 401: hay que volver a iniciar sesión
  */
 @Composable
 fun BandejaScreen(
     alAbrirReporte: (Int) -> Unit,
+    alRegresar: () -> Unit,
     alCerrarSesion: () -> Unit,
     alSesionExpirada: () -> Unit,
     viewModel: BandejaViewModel = viewModel()
 ) {
     val estado by viewModel.reportes.collectAsState()
     val filtro by viewModel.filtro.collectAsState()
+    val sinAtender by viewModel.sinAtenderDias.collectAsState()
 
     // Se recarga cada vez que se vuelve a la bandeja (p. ej. tras cambiar un estatus).
     LaunchedEffect(Unit) { viewModel.cargar() }
@@ -54,6 +57,7 @@ fun BandejaScreen(
 
     PantallaRieti(
         titulo = "Bandeja de reportes",
+        alRegresar = alRegresar,
         desplazable = false,
         acciones = {
             AccionBarra("Salir") {
@@ -63,11 +67,16 @@ fun BandejaScreen(
         }
     ) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            sinAtender?.let { dias ->
+                item {
+                    FilterChip(selected = true, onClick = { viewModel.filtrar(null) }, label = { Text("Sin cambios en más de $dias días ✕") })
+                }
+            }
             item {
-                FilterChip(selected = filtro == null, onClick = { viewModel.filtrar(null) }, label = { Text("Todos") })
+                FilterChip(selected = filtro == null && sinAtender == null, onClick = { viewModel.filtrar(null) }, label = { Text("Todos") })
             }
             items(ESTATUS_CANONICOS) { e ->
-                FilterChip(selected = filtro == e, onClick = { viewModel.filtrar(e) }, label = { Text(e) })
+                FilterChip(selected = filtro == e && sinAtender == null, onClick = { viewModel.filtrar(e) }, label = { Text(e) })
             }
         }
 
@@ -84,7 +93,13 @@ fun BandejaScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (e.datos.elementos.isEmpty()) {
-                    EstadoVacio(if (filtro == null) "Todavía no hay reportes." else "No hay reportes en “$filtro”. Toca “Todos” para ver el resto.")
+                    EstadoVacio(
+                        when {
+                            sinAtender != null -> "No hay casos pendientes sin cambios en más de $sinAtender días."
+                            filtro == null -> "Todavía no hay reportes."
+                            else -> "No hay reportes en “$filtro”. Toca “Todos” para ver el resto."
+                        }
+                    )
                 }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(e.datos.elementos, key = { it.id }) { r -> FilaReporte(r) { alAbrirReporte(r.id) } }
@@ -107,7 +122,7 @@ private fun FilaReporte(r: ReporteResumen, alTocar: () -> Unit) {
             Text(r.municipio ?: "Municipio no indicado", style = MaterialTheme.typography.titleSmall)
             Text(r.ubicacion, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
-                "${r.actividad} · ${r.cantidadNinos} menor(es) de ${r.edadAproximada} años · Riesgo: ${r.situacionRiesgo}",
+                "${r.actividad} · ${r.cantidadNinos} menor(es) · Riesgo: ${r.situacionRiesgo}",
                 style = MaterialTheme.typography.bodySmall
             )
             Text(formatearFecha(r.fechaCreacion), style = MaterialTheme.typography.bodySmall,

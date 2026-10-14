@@ -13,6 +13,8 @@ import mx.sipinna.rieti.model.Pagina
 import mx.sipinna.rieti.model.ReporteCreado
 import mx.sipinna.rieti.model.ReporteDetalle
 import mx.sipinna.rieti.model.ReporteResumen
+import mx.sipinna.rieti.model.ResumenPersonal
+import mx.sipinna.rieti.model.SinAtender
 import mx.sipinna.rieti.network.ApiService
 import mx.sipinna.rieti.network.ServicioRemoto
 
@@ -45,6 +47,16 @@ class ReportesRepositorio(private val api: ApiService = ServicioRemoto.api) {
         ejecutar { api.consultar(ConsultaRequest(folio.trim(), clave.trim())) }
 
     /** Bandeja del personal; [estatus] null = todos. */
+    /** Resumen agregado para el inicio del personal. */
+    suspend fun resumen(): Resultado<ResumenPersonal> = ejecutar { api.resumen() }
+
+    /** Casos pendientes sin cambios en más de [dias] días. */
+    suspend fun sinAtender(dias: Int): Resultado<SinAtender> = ejecutar { api.sinAtender(dias) }
+
+    /** Bandeja con filtro opcional de casos sin atender. */
+    suspend fun listarSinAtender(dias: Int, pagina: Int = 1, tamano: Int = 50): Resultado<Pagina<ReporteResumen>> =
+        ejecutar { api.listarReportes(null, pagina, tamano, dias) }
+
     suspend fun listar(estatus: String?, pagina: Int = 1, tamano: Int = 50): Resultado<Pagina<ReporteResumen>> =
         ejecutar { api.listarReportes(estatus, pagina, tamano) }
 
