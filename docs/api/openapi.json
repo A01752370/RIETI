@@ -510,7 +510,14 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {},
+          {
+            "ciudadanoJwt": []
+          }
+        ],
+        "description": "Anónimo por defecto; acepta opcionalmente el token de ciudadano para vincular el reporte."
       },
       "get": {
         "tags": [
@@ -1759,6 +1766,582 @@
           }
         ]
       }
+    },
+    "/api/v1/ciudadanos/registro": {
+      "post": {
+        "tags": [
+          "Cuentas de ciudadano"
+        ],
+        "summary": "Crea una cuenta (respuesta uniforme exista o no el correo; 5/min por IP).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CiudadanoCredenciales"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ciudadanos/confirmar": {
+      "post": {
+        "tags": [
+          "Cuentas de ciudadano"
+        ],
+        "summary": "Activa la cuenta con el código de 6 dígitos enviado al correo.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CiudadanoConfirmar"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ciudadanos/reenviar-codigo": {
+      "post": {
+        "tags": [
+          "Cuentas de ciudadano"
+        ],
+        "summary": "Reenvía el código (respuesta uniforme; 3/min).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CiudadanoCorreo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ciudadanos/login": {
+      "post": {
+        "tags": [
+          "Cuentas de ciudadano"
+        ],
+        "summary": "Inicia sesión (5/min). 401 CREDENCIALES_INVALIDAS; 403 CUENTA_NO_CONFIRMADA.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CiudadanoCredenciales"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SesionCiudadano"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ciudadanos/refresh": {
+      "post": {
+        "tags": [
+          "Cuentas de ciudadano"
+        ],
+        "summary": "Renueva el access token con el refresh token.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CiudadanoRefrescar"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SesionCiudadano"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ciudadanos/olvide-contrasena": {
+      "post": {
+        "tags": [
+          "Cuentas de ciudadano"
+        ],
+        "summary": "Envía un código para restablecer la contraseña (respuesta uniforme; 3/min).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CiudadanoCorreo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ciudadanos/restablecer-contrasena": {
+      "post": {
+        "tags": [
+          "Cuentas de ciudadano"
+        ],
+        "summary": "Restablece la contraseña con el código.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CiudadanoRestablecer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ciudadano/cuenta": {
+      "get": {
+        "tags": [
+          "Cuentas de ciudadano"
+        ],
+        "summary": "Perfil de la cuenta (correo desde Cognito).",
+        "security": [
+          {
+            "ciudadanoJwt": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CuentaCiudadano"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Cuentas de ciudadano"
+        ],
+        "summary": "Elimina la cuenta; sus reportes se conservan sin vínculo.",
+        "security": [
+          {
+            "ciudadanoJwt": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ciudadano/cuenta/contrasena": {
+      "post": {
+        "tags": [
+          "Cuentas de ciudadano"
+        ],
+        "summary": "Cambia la contraseña (5/min).",
+        "security": [
+          {
+            "ciudadanoJwt": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CiudadanoCambiarContrasena"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ciudadano/cuenta/cerrar-sesion": {
+      "post": {
+        "tags": [
+          "Cuentas de ciudadano"
+        ],
+        "summary": "Cierra la sesión en todos los dispositivos.",
+        "security": [
+          {
+            "ciudadanoJwt": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mensaje"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ciudadano/reportes": {
+      "get": {
+        "tags": [
+          "Cuentas de ciudadano"
+        ],
+        "summary": "Reportes vinculados a la cuenta: estatus e historial público, sin notas internas.",
+        "security": [
+          {
+            "ciudadanoJwt": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MiReporte"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1768,6 +2351,12 @@
         "scheme": "bearer",
         "bearerFormat": "JWT",
         "description": "Access token de Amazon Cognito (grupos Administrador o PersonalSIPINNA)."
+      },
+      "ciudadanoJwt": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Access token del pool de **ciudadanos** (distinto del personal)."
       }
     },
     "schemas": {
@@ -2050,7 +2639,7 @@
         "properties": {
           "version": {
             "type": "string",
-            "example": "2026-10-v2"
+            "example": "2026-10-v3"
           },
           "parrafos": {
             "type": "array",
@@ -2191,7 +2780,7 @@
           },
           "avisoPrivacidadVersion": {
             "type": "string",
-            "example": "2026-10-v2",
+            "example": "2026-10-v3",
             "description": "Debe ser la versión vigente"
           },
           "direccion": {
@@ -2210,6 +2799,11 @@
             "type": "string",
             "maxLength": 120,
             "description": "Obligatorio en el formato nuevo si actividad es \"Otro\"."
+          },
+          "vincularCuenta": {
+            "type": "boolean",
+            "default": false,
+            "description": "Con un token de ciudadano, liga el reporte a la cuenta (Fase 4). Sin token responde 400 SESION_REQUERIDA."
           }
         },
         "additionalProperties": false,
@@ -2953,6 +3547,226 @@
           },
           "sinUbicacion": {
             "type": "integer"
+          }
+        }
+      },
+      "CiudadanoCorreo": {
+        "type": "object",
+        "required": [
+          "correo"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "correo": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          }
+        }
+      },
+      "CiudadanoCredenciales": {
+        "type": "object",
+        "required": [
+          "correo",
+          "password"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "correo": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 256
+          }
+        }
+      },
+      "CiudadanoConfirmar": {
+        "type": "object",
+        "required": [
+          "correo",
+          "codigo"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "correo": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "codigo": {
+            "type": "string",
+            "pattern": "^\\d{6}$"
+          }
+        }
+      },
+      "CiudadanoRestablecer": {
+        "type": "object",
+        "required": [
+          "correo",
+          "codigo",
+          "password"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "correo": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "codigo": {
+            "type": "string",
+            "pattern": "^\\d{6}$"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 256
+          }
+        }
+      },
+      "CiudadanoRefrescar": {
+        "type": "object",
+        "required": [
+          "refreshToken"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 4096
+          }
+        }
+      },
+      "CiudadanoCambiarContrasena": {
+        "type": "object",
+        "required": [
+          "actual",
+          "nueva"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "actual": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "nueva": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 256
+          }
+        }
+      },
+      "Mensaje": {
+        "type": "object",
+        "required": [
+          "mensaje"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "mensaje": {
+            "type": "string"
+          }
+        }
+      },
+      "SesionCiudadano": {
+        "type": "object",
+        "required": [
+          "accessToken",
+          "expiresIn"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "Solo al iniciar sesión."
+          },
+          "expiresIn": {
+            "type": "integer"
+          }
+        }
+      },
+      "CuentaCiudadano": {
+        "type": "object",
+        "required": [
+          "correo",
+          "fechaCreacion",
+          "reportesVinculados"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "correo": {
+            "type": "string",
+            "description": "Se lee de Cognito; RIETI no lo guarda."
+          },
+          "fechaCreacion": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reportesVinculados": {
+            "type": "integer"
+          }
+        }
+      },
+      "MiReporte": {
+        "type": "object",
+        "required": [
+          "folio",
+          "estatus",
+          "municipio",
+          "actividad",
+          "fechaCreacion",
+          "fechaActualizacion",
+          "historial"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "folio": {
+            "type": "string"
+          },
+          "estatus": {
+            "type": "string"
+          },
+          "municipio": {
+            "type": "string",
+            "nullable": true
+          },
+          "actividad": {
+            "type": "string"
+          },
+          "fechaCreacion": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fechaActualizacion": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "historial": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "estatus",
+                "fecha"
+              ],
+              "properties": {
+                "estatus": {
+                  "type": "string"
+                },
+                "fecha": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
           }
         }
       }

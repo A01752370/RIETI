@@ -118,6 +118,11 @@ jobs:
           task-definition: backend/task-definition.json
           container-name: ${{ vars.ECS_CONTAINER }}
           image: ${{ steps.imagen.outputs.uri }}
+          # Pool de cuentas de ciudadano (Fase 4). No son secretos; vienen de las variables del repositorio
+          # para no reemplazar la task definition de Terraform.
+          environment-variables: |
+            COGNITO_CIUDADANOS_POOL_ID=${{ vars.COGNITO_CIUDADANOS_POOL_ID }}
+            COGNITO_CIUDADANOS_CLIENT_ID=${{ vars.COGNITO_CIUDADANOS_CLIENT_ID }}
 
       - name: Desplegar en ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2

@@ -39,3 +39,11 @@ export interface UsuarioAutenticado {
   /** `usuario.id_usuario` en la base de datos. */
   idUsuario: number;
 }
+
+/** Ciudadano autenticado (Fase 4) que el guard deja en `request.ciudadano`. */
+export interface CiudadanoAutenticado {
+  /** Identificador inmutable en el pool de ciudadanos de Cognito. */
+  sub: string;
+  /** `cuentas_ciudadano.id_cuenta`. */
+  idCuenta: number;
+}

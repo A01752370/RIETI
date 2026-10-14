@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { PATH_METADATA, METHOD_METADATA } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
-import { Permiso, PERMISO_KEY, PUBLICO_KEY, ROLES_KEY } from '../../src/auth/roles';
+import { CIUDADANO_KEY, Permiso, PERMISO_KEY, PUBLICO_KEY, ROLES_KEY } from '../../src/auth/roles';
 import { AuthController } from '../../src/auth/auth.controller';
 import { ReportesController } from '../../src/reportes/reportes.controller';
 import { HealthController } from '../../src/health/health.controller';
@@ -10,11 +10,12 @@ import { CatalogosController } from '../../src/catalogos/catalogos.controller';
 import { RedController } from '../../src/red/red.controller';
 import { EstadisticasController } from '../../src/estadisticas/estadisticas.controller';
 import { GeoController } from '../../src/geo/geo.controller';
+import { CuentaCiudadanoController, CuentasPublicasController } from '../../src/ciudadanos/ciudadanos.controller';
 
 /** Todos los controladores del API. Un controlador nuevo se agrega aquí. */
 export const CONTROLADORES = [
   AuthController, ReportesController, HealthController, AvisosController, CatalogosController, RedController, EstadisticasController,
-  GeoController,
+  GeoController, CuentasPublicasController, CuentaCiudadanoController,
 ];
 
 /** Ruta declarada en un controlador, con sus metadatos de acceso. */
@@ -26,6 +27,8 @@ export interface RutaDeclarada {
   publica: boolean;
   roles: string[] | undefined;
   permiso: Permiso | undefined;
+  /** 'requerido' u 'opcional' si la ruta usa tokens del pool de ciudadanos. */
+  ciudadano: 'requerido' | 'opcional' | undefined;
 }
 
 /** Recorre los métodos de un controlador y devuelve su ruta, verbo y metadatos de acceso. */
@@ -47,6 +50,7 @@ export function rutasDe(ctrl: new (...a: never[]) => unknown): RutaDeclarada[] {
         publica: publicoClase || Reflect.getMetadata(PUBLICO_KEY, fn) === true,
         roles: Reflect.getMetadata(ROLES_KEY, fn) as string[] | undefined,
         permiso: Reflect.getMetadata(PERMISO_KEY, fn) as Permiso | undefined,
+        ciudadano: Reflect.getMetadata(CIUDADANO_KEY, fn) as 'requerido' | 'opcional' | undefined,
       };
     })
     .filter((r): r is RutaDeclarada => r !== null);

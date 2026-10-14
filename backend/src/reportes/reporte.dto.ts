@@ -1,6 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
-  ArrayMaxSize, ArrayMinSize, Equals, IsArray, IsIn, IsInt, IsLatitude, IsLongitude, IsNotEmpty, IsOptional, IsString,
+  ArrayMaxSize, ArrayMinSize, Equals, IsArray, IsBoolean, IsIn, IsInt, IsLatitude, IsLongitude, IsNotEmpty, IsOptional, IsString,
   Matches, Max, MaxLength, Min, ValidateIf, ValidateNested,
 } from 'class-validator';
 import { AVISO_PRIVACIDAD_VERSION } from '../avisos/aviso-privacidad';
@@ -152,6 +152,14 @@ export class CrearReporteDto {
   @IsInt({ message: 'Elige el municipio donde ocurre' })
   @Min(1, { message: 'Elige el municipio donde ocurre' })
   municipioId: number;
+
+  /**
+   * Vincular este reporte a la cuenta de ciudadano (Fase 4). Solo surte efecto
+   * con un token de ciudadano; por defecto el reporte es anónimo.
+   */
+  @IsOptional()
+  @IsBoolean()
+  vincularCuenta?: boolean;
 
   /** Versión del aviso de privacidad que la persona aceptó; debe ser la vigente. */
   @Equals(AVISO_PRIVACIDAD_VERSION, { message: 'Debes aceptar el aviso de privacidad vigente' })

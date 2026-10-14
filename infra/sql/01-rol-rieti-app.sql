@@ -52,6 +52,12 @@ GRANT SELECT, INSERT ON seguimiento TO rieti_app;
 -- reemplaza la lista de un municipio, por eso aquí sí hay DELETE.
 GRANT SELECT, INSERT, DELETE ON contacto_municipio TO rieti_app;
 
+-- Cuentas opcionales de ciudadano (Fase 4): solo sub de Cognito y fechas. Eliminar la cuenta
+-- borra la fila (el reporte se conserva, desvinculado por ON DELETE SET NULL).
+GRANT SELECT, INSERT, DELETE ON cuentas_ciudadano TO rieti_app;
+GRANT UPDATE (ultimo_acceso) ON cuentas_ciudadano TO rieti_app;
+GRANT UPDATE (cuenta_ciudadano_id) ON reporte TO rieti_app;
+
 -- Consecutivo de folios.
 GRANT SELECT, INSERT, UPDATE ON folio_contador TO rieti_app;
 

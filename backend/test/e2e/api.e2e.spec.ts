@@ -45,6 +45,29 @@ const fuenteGeoFalsa = {
   },
 };
 
+/** Doble del verificador del pool de CIUDADANOS: solo conoce estos tokens (distintos de los del personal). */
+const TOKENS_CIUDADANO: Record<string, { sub: string }> = {
+  'token-ciudadano-1': { sub: '55555555-5555-4555-8555-555555555555' },
+  'token-ciudadano-2': { sub: '66666666-6666-4666-8666-666666666666' },
+};
+
+/** Doble del proveedor de cuentas (Cognito): registra llamadas y nunca sale a internet. */
+const cuentasFalsas = {
+  async registrar(correo: string) {
+    if (correo === 'existe@ejemplo.mx') {
+      const { ErrorCuenta } = await import('../../src/ciudadanos/proveedor-cuentas');
+      throw new ErrorCuenta('YA_EXISTE');
+    }
+  },
+  async confirmar() {}, async reenviarCodigo() {}, async olvideContrasena() {}, async restablecerContrasena() {},
+  async iniciarSesion() { return { accessToken: 'token-ciudadano-1', refreshToken: 'refresh-de-prueba-1234567890', expiresIn: 3600 }; },
+  async refrescar() { return { accessToken: 'token-ciudadano-1', expiresIn: 3600 }; },
+  async cambiarContrasena() {}, async cerrarSesionGlobal() {},
+  eliminados: 0,
+  async eliminar() { this.eliminados++; },
+  async correo() { return 'persona@ejemplo.mx'; },
+};
+
 let siguienteIp = 1;
 /** IP de cliente distinta por grupo de peticiones. */
 const nuevaIp = () => `203.0.113.${siguienteIp++}, 127.0.0.1`;
@@ -59,7 +82,7 @@ const reporteValido = () => ({
   situacionRiesgo: 'No sé',
   descripcion: 'Dos menores vendiendo dulces entre los autos durante la tarde.',
   municipioId: 1, // Atizapán de Zaragoza (15013): conserva el id 1 tras la migración
-  avisoPrivacidadVersion: '2026-10-v2',
+  avisoPrivacidadVersion: '2026-10-v3',
 });
 
 describeBd('API RIETI (e2e)', () => {
@@ -110,6 +133,8 @@ describeBd('API RIETI (e2e)', () => {
     const { AppModule } = await import('../../src/app.module');
     const { VERIFICADOR_JWT } = await import('../../src/auth/jwt.guard');
     const { FUENTE_GEO } = await import('../../src/geo/fuente-geo');
+    const { VERIFICADOR_JWT_CIUDADANO } = await import('../../src/auth/jwt.guard');
+    const { PROVEEDOR_CUENTAS } = await import('../../src/ciudadanos/proveedor-cuentas');
     const { configurarApp } = await import('../../src/configurar-app');
 
     const modulo = await Test.createTestingModule({ imports: [AppModule] })
@@ -122,6 +147,15 @@ describeBd('API RIETI (e2e)', () => {
       })
       .overrideProvider(FUENTE_GEO)
       .useValue(fuenteGeoFalsa)
+      .overrideProvider(VERIFICADOR_JWT_CIUDADANO)
+      .useValue({
+        verify: async (t: string) => {
+          if (!TOKENS_CIUDADANO[t]) throw new Error('token inválido');
+          return TOKENS_CIUDADANO[t];
+        },
+      })
+      .overrideProvider(PROVEEDOR_CUENTAS)
+      .useValue(cuentasFalsas)
       .compile();
     app = modulo.createNestApplication<NestExpressApplication>({ bodyParser: false, logger: false });
     configurarApp(app);
@@ -163,7 +197,7 @@ describeBd('API RIETI (e2e)', () => {
 
     it('aviso de privacidad vigente', async () => {
       const r = await http().get('/api/v1/avisos-privacidad/vigente').expect(200);
-      expect(r.body.version).toBe('2026-10-v2');
+      expect(r.body.version).toBe('2026-10-v3');
       expect(r.body.parrafos.length).toBeGreaterThan(0);
       // Secciones con título: mismo texto, mismo orden (las APK instaladas siguen leyendo `parrafos`).
       expect(r.body.secciones.flatMap((s: { parrafos: string[] }) => s.parrafos)).toEqual(r.body.parrafos);
@@ -193,7 +227,7 @@ describeBd('API RIETI (e2e)', () => {
          FROM reporte r JOIN folio f ON f.id_reporte = r.id_reporte WHERE f.codigo = $1`, [folio]);
       expect(fila.h).toMatch(/^\$argon2id\$/);
       expect(fila.h).not.toContain(clave.replace(/-/g, ''));
-      expect(fila.v).toBe('2026-10-v2');
+      expect(fila.v).toBe('2026-10-v3');
     });
 
     it('el esquema no tiene columnas de IP ni de dispositivo (RNF-29)', async () => {
@@ -686,6 +720,82 @@ describeBd('API RIETI (e2e)', () => {
 
     it('el administrador también exporta (reportes.exportar)', async () => {
       await http().get('/api/v1/reportes/exportar.csv').set('Authorization', 'Bearer token-admin').expect(200);
+    });
+  });
+
+  describe('cuentas de ciudadano (Fase 4)', () => {
+    const ciudadano1 = { Authorization: 'Bearer token-ciudadano-1' };
+    const ciudadano2 = { Authorization: 'Bearer token-ciudadano-2' };
+    let folioVinculado = '';
+
+    it('A32: el registro responde igual exista o no el correo', async () => {
+      const nuevo = await http().post('/api/v1/ciudadanos/registro').set('X-Forwarded-For', nuevaIp())
+        .send({ correo: 'nueva@ejemplo.mx', password: 'ContrasenaSegura1' }).expect(202);
+      const existente = await http().post('/api/v1/ciudadanos/registro').set('X-Forwarded-For', nuevaIp())
+        .send({ correo: 'existe@ejemplo.mx', password: 'ContrasenaSegura1' }).expect(202);
+      expect(existente.body).toEqual(nuevo.body);
+      await http().post('/api/v1/ciudadanos/registro').set('X-Forwarded-For', nuevaIp())
+        .send({ correo: 'corta@ejemplo.mx', password: 'corta' }).expect(400);
+    });
+
+    it('login entrega tokens; confirmar valida el formato del código', async () => {
+      const r = await http().post('/api/v1/ciudadanos/login').set('X-Forwarded-For', nuevaIp())
+        .send({ correo: 'persona@ejemplo.mx', password: 'ContrasenaSegura1' }).expect(200);
+      expect(r.body).toMatchObject({ accessToken: 'token-ciudadano-1', expiresIn: 3600 });
+      await http().post('/api/v1/ciudadanos/confirmar').set('X-Forwarded-For', nuevaIp())
+        .send({ correo: 'persona@ejemplo.mx', codigo: '12ab' }).expect(400);
+    });
+
+    it('separación estricta: token de ciudadano no abre rutas del personal y viceversa', async () => {
+      await http().get('/api/v1/reportes').set(ciudadano1).expect(401);
+      await http().get('/api/v1/estadisticas/resumen').set(ciudadano1).expect(401);
+      await http().get('/api/v1/ciudadano/cuenta').set('Authorization', 'Bearer token-personal').expect(401);
+      await http().get('/api/v1/ciudadano/reportes').set('Authorization', 'Bearer token-admin').expect(401);
+      await http().get('/api/v1/ciudadano/reportes').expect(401);
+    });
+
+    it('un reporte con token pero sin vincularCuenta sigue siendo anónimo; con vincularCuenta queda ligado', async () => {
+      await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).set(ciudadano1).send(reporteValido()).expect(201);
+      expect((await http().get('/api/v1/ciudadano/reportes').set(ciudadano1).expect(200)).body).toEqual([]);
+
+      const r = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).set(ciudadano1)
+        .send({ ...reporteValido(), vincularCuenta: true }).expect(201);
+      folioVinculado = r.body.folio;
+      const mios = (await http().get('/api/v1/ciudadano/reportes').set(ciudadano1).expect(200)).body;
+      expect(mios.map((x: { folio: string }) => x.folio)).toEqual([folioVinculado]);
+      expect(mios[0]).toMatchObject({ estatus: 'Recibido', municipio: 'Atizapán de Zaragoza' });
+      expect(mios[0].historial[0].estatus).toBe('Recibido');
+      expect(JSON.stringify(mios)).not.toMatch(/Dos menores|López Mateos/);
+    });
+
+    it('vincularCuenta sin sesión → 400; token de ciudadano inválido → 401', async () => {
+      const sin = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send({ ...reporteValido(), vincularCuenta: true }).expect(400);
+      expect(sin.body.codigo).toBe('SESION_REQUERIDA');
+      await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).set('Authorization', 'Bearer inventado').send(reporteValido()).expect(401);
+    });
+
+    it('otra cuenta no ve los reportes ajenos y el personal no ve la cuenta vinculada', async () => {
+      expect((await http().get('/api/v1/ciudadano/reportes').set(ciudadano2).expect(200)).body).toEqual([]);
+      const [{ id_reporte: id }] = await adminDs.query('SELECT id_reporte FROM folio WHERE codigo = $1', [folioVinculado]);
+      const d = await http().get(`/api/v1/reportes/${id}`).set('Authorization', 'Bearer token-personal').expect(200);
+      expect(JSON.stringify(d.body)).not.toMatch(/cuenta|persona@ejemplo/i);
+    });
+
+    it('perfil: correo desde Cognito (RIETI no lo guarda) y conteo de reportes', async () => {
+      const r = await http().get('/api/v1/ciudadano/cuenta').set(ciudadano1).expect(200);
+      expect(r.body).toMatchObject({ correo: 'persona@ejemplo.mx', reportesVinculados: 1 });
+      const columnas = (await adminDs.query(
+        "SELECT column_name FROM information_schema.columns WHERE table_name = 'cuentas_ciudadano'")).map((c: { column_name: string }) => c.column_name);
+      expect(columnas.sort()).toEqual(['cognito_sub', 'fecha_creacion', 'id_cuenta', 'ultimo_acceso']);
+    });
+
+    it('eliminar la cuenta conserva el reporte, ya sin vínculo', async () => {
+      await http().delete('/api/v1/ciudadano/cuenta').set(ciudadano1).expect(200);
+      expect(cuentasFalsas.eliminados).toBe(1);
+      const [fila] = await adminDs.query(
+        'SELECT r.cuenta_ciudadano_id FROM reporte r JOIN folio f ON f.id_reporte = r.id_reporte WHERE f.codigo = $1', [folioVinculado]);
+      expect(fila).toEqual({ cuenta_ciudadano_id: null });
+      expect(await adminDs.query("SELECT 1 FROM cuentas_ciudadano WHERE cognito_sub = '55555555-5555-4555-8555-555555555555'")).toEqual([]);
     });
   });
 

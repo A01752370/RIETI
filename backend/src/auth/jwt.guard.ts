@@ -1,10 +1,12 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { Reflector } from '@nestjs/core';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
-import { PUBLICO_KEY, ROLES_KEY } from './roles';
-import { UsuarioAutenticado } from './auth.dto';
+import { CIUDADANO_KEY, PUBLICO_KEY, ROLES_KEY } from './roles';
+import { CiudadanoAutenticado, UsuarioAutenticado } from './auth.dto';
 
 /** Lo mínimo que el guard necesita de un verificador de access tokens. */
 export interface VerificadorJwt {
@@ -24,8 +26,22 @@ export function crearVerificadorCognito(): VerificadorJwt {
   }) as unknown as VerificadorJwt;
 }
 
-/** Petición de Express con el usuario que deja el guard. */
-export type RequestAutenticado = Request & { usuario?: UsuarioAutenticado };
+/** Token de inyección del verificador del pool de **ciudadanos** (Fase 4). */
+export const VERIFICADOR_JWT_CIUDADANO = Symbol('VERIFICADOR_JWT_CIUDADANO');
+
+/**
+ * Verificador real de access tokens del pool de ciudadanos. Si el pool no está
+ * configurado, todo token se rechaza (las cuentas quedan deshabilitadas).
+ */
+export function crearVerificadorCiudadanos(): VerificadorJwt {
+  const pool = process.env.COGNITO_CIUDADANOS_POOL_ID;
+  const cliente = process.env.COGNITO_CIUDADANOS_CLIENT_ID;
+  if (!pool || !cliente) return { verify: async () => { throw new Error('Cuentas de ciudadano no configuradas'); } };
+  return CognitoJwtVerifier.create({ userPoolId: pool, clientId: cliente, tokenUse: 'access' }) as unknown as VerificadorJwt;
+}
+
+/** Petición de Express con el usuario (personal) o el ciudadano que deja el guard. */
+export type RequestAutenticado = Request & { usuario?: UsuarioAutenticado; ciudadano?: CiudadanoAutenticado };
 
 /**
  * Guard global de autenticación y autorización (RNF-18, ataques A2, A4 y A11).
@@ -44,10 +60,14 @@ export class JwtGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly auth: AuthService,
     @Inject(VERIFICADOR_JWT) private readonly verificador: VerificadorJwt,
+    @Inject(VERIFICADOR_JWT_CIUDADANO) private readonly verificadorCiudadano: VerificadorJwt,
+    @InjectDataSource() private readonly ds: DataSource,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const objetivos = [ctx.getHandler(), ctx.getClass()];
+    const modoCiudadano = this.reflector.getAllAndOverride<'requerido' | 'opcional' | undefined>(CIUDADANO_KEY, objetivos);
+    if (modoCiudadano) return this.autenticarCiudadano(ctx.switchToHttp().getRequest<RequestAutenticado>(), modoCiudadano === 'opcional');
     if (this.reflector.getAllAndOverride<boolean | undefined>(PUBLICO_KEY, objetivos)) return true;
     const roles = this.reflector.getAllAndOverride<string[] | undefined>(ROLES_KEY, objetivos);
 
@@ -72,6 +92,32 @@ export class JwtGuard implements CanActivate {
       throw new ForbiddenException({ codigo: 'USUARIO_INACTIVO', mensaje: 'Tu cuenta no está activa en RIETI' });
     }
     req.usuario = { sub, grupos, idUsuario: usuario.id };
+    return true;
+  }
+
+  /**
+   * Rutas de ciudadano (Fase 4): solo tokens del pool de ciudadanos. Registra o
+   * actualiza la fila de `cuentas_ciudadano` (solo `sub` y fechas).
+   *
+   * @param opcional true si la ruta también acepta peticiones anónimas
+   */
+  private async autenticarCiudadano(req: RequestAutenticado, opcional: boolean): Promise<boolean> {
+    const [tipo, token] = (req.headers.authorization ?? '').split(' ');
+    if (tipo !== 'Bearer' || !token) {
+      if (opcional) return true;
+      throw new UnauthorizedException();
+    }
+    let sub: string;
+    try {
+      sub = (await this.verificadorCiudadano.verify(token)).sub;
+    } catch {
+      throw new UnauthorizedException();
+    }
+    const [{ id_cuenta: idCuenta }] = await this.ds.query(
+      `INSERT INTO cuentas_ciudadano (cognito_sub) VALUES ($1)
+       ON CONFLICT (cognito_sub) DO UPDATE SET ultimo_acceso = now()
+       RETURNING id_cuenta`, [sub]);
+    req.ciudadano = { sub, idCuenta: Number(idCuenta) };
     return true;
   }
 }

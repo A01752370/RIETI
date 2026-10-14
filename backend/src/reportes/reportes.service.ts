@@ -61,9 +61,10 @@ export class ReportesService {
 
   /**
    * CU-04: registra un reporte anónimo y abre su caso en estatus Recibido.
+   * @param idCuenta cuenta de ciudadano a la que se vincula (solo si la persona lo pidió), o null
    * @returns folio y clave de consulta (la clave en claro solo existe en esta respuesta)
    */
-  async crear(dto: CrearReporteDto): Promise<ReporteCreadoDto> {
+  async crear(dto: CrearReporteDto, idCuenta: number | null = null): Promise<ReporteCreadoDto> {
     const claveConsulta = generarClave();
     const claveConsultaHash = await hashearClave(claveConsulta);
 
@@ -108,6 +109,7 @@ export class ReportesService {
         descripcion: dto.descripcion,
         claveConsultaHash,
         avisoPrivacidadVersion: dto.avisoPrivacidadVersion,
+        cuentaCiudadanoId: idCuenta,
       }));
       await m.save(grupos.map((g) => m.create(GrupoMenores, {
         idReporte: reporte.id, idRangoEdad: rangoPorNombre.get(g.rango)!.id, cantidad: g.cantidad,
