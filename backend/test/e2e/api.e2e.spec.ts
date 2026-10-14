@@ -59,7 +59,7 @@ const reporteValido = () => ({
   situacionRiesgo: 'No sé',
   descripcion: 'Dos menores vendiendo dulces entre los autos durante la tarde.',
   municipioId: 1, // Atizapán de Zaragoza (15013): conserva el id 1 tras la migración
-  avisoPrivacidadVersion: '2026-10-v1',
+  avisoPrivacidadVersion: '2026-10-v2',
 });
 
 describeBd('API RIETI (e2e)', () => {
@@ -163,7 +163,7 @@ describeBd('API RIETI (e2e)', () => {
 
     it('aviso de privacidad vigente', async () => {
       const r = await http().get('/api/v1/avisos-privacidad/vigente').expect(200);
-      expect(r.body.version).toBe('2026-10-v1');
+      expect(r.body.version).toBe('2026-10-v2');
       expect(r.body.parrafos.length).toBeGreaterThan(0);
       // Secciones con título: mismo texto, mismo orden (las APK instaladas siguen leyendo `parrafos`).
       expect(r.body.secciones.flatMap((s: { parrafos: string[] }) => s.parrafos)).toEqual(r.body.parrafos);
@@ -193,7 +193,7 @@ describeBd('API RIETI (e2e)', () => {
          FROM reporte r JOIN folio f ON f.id_reporte = r.id_reporte WHERE f.codigo = $1`, [folio]);
       expect(fila.h).toMatch(/^\$argon2id\$/);
       expect(fila.h).not.toContain(clave.replace(/-/g, ''));
-      expect(fila.v).toBe('2026-10-v1');
+      expect(fila.v).toBe('2026-10-v2');
     });
 
     it('el esquema no tiene columnas de IP ni de dispositivo (RNF-29)', async () => {

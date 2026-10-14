@@ -67,6 +67,10 @@ dependencies {
     // Servicios de ubicación de Google Play (GPS)
     implementation(libs.google.play.services.location)
 
+    // Mapa OSM (Fase 2): osmdroid es Java puro, sin servicios de Google ni bibliotecas nativas (< 1 MB).
+    // Las teselas las sirve el backend (api/v1/geo/teselas), así que la app no contacta a terceros.
+    implementation(libs.osmdroid.android)
+
     // Pruebas unitarias en la JVM (lógica pura: validación y manejo de errores)
     testImplementation(libs.junit)
 }

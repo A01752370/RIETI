@@ -1,11 +1,13 @@
 package mx.sipinna.rieti.network
 
+import mx.sipinna.rieti.model.Actividad
 import mx.sipinna.rieti.model.AgregarSeguimientoRequest
 import mx.sipinna.rieti.model.AvisoPrivacidad
 import mx.sipinna.rieti.model.CambiarEstatusRequest
 import mx.sipinna.rieti.model.ConsultaPublica
 import mx.sipinna.rieti.model.ConsultaRequest
 import mx.sipinna.rieti.model.CrearReporteRequest
+import mx.sipinna.rieti.model.GeoReversa
 import mx.sipinna.rieti.model.LoginRequest
 import mx.sipinna.rieti.model.LoginResponse
 import mx.sipinna.rieti.model.Municipio
@@ -39,6 +41,17 @@ interface ApiService {
     /** D-16: los 125 municipios del Estado de México, en orden alfabético (público). */
     @GET("api/v1/catalogos/municipios")
     suspend fun municipios(): List<Municipio>
+
+    /** Catálogo de actividades en el orden del selector, "Otro" al final (público). */
+    @GET("api/v1/catalogos/actividades")
+    suspend fun actividades(): List<Actividad>
+
+    /**
+     * Dirección sugerida y municipio de un punto del mapa (público). El servidor
+     * consulta al proveedor del mapa; la app nunca llama directo a terceros.
+     */
+    @GET("api/v1/geo/reversa")
+    suspend fun reversa(@Query("lat") lat: Double, @Query("lng") lng: Double): GeoReversa
 
     /** CU-04: registra un reporte anónimo; devuelve folio y clave (público). */
     @POST("api/v1/reportes")

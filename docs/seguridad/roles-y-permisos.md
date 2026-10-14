@@ -26,7 +26,9 @@
 | Acción | Ruta | Ciudadano anónimo | Enlace municipal | Administrador |
 |---|---|---|---|---|
 | Ver el aviso de privacidad | `GET /avisos-privacidad/vigente` | ✅ | ✅ | ✅ |
-| Ver catálogos y municipios | `GET /catalogos`, `GET /catalogos/municipios` | ✅ | ✅ | ✅ |
+| Ver catálogos, municipios y actividades | `GET /catalogos`, `GET /catalogos/municipios`, `GET /catalogos/actividades` | ✅ | ✅ | ✅ |
+| Dirección sugerida y municipio de un punto | `GET /geo/reversa` | ✅ (30/min por IP; solo Estado de México) | ✅ | ✅ |
+| Teselas del mapa | `GET /geo/teselas/:z/:x/:y.png` | ✅ (600/min por IP; solo Estado de México, zoom 8–18) | ✅ | ✅ |
 | Crear un reporte anónimo | `POST /reportes` | ✅ (5 por minuto por IP) | ✅ | ✅ |
 | Consultar un reporte con folio + clave (solo estatus y fechas) | `POST /reportes/consulta` | ✅ | ✅ | ✅ |
 | Ver el directorio de la red | `GET /red-municipios` | ✅ | ✅ | ✅ |

@@ -1436,7 +1436,7 @@
         "properties": {
           "version": {
             "type": "string",
-            "example": "2026-10-v1"
+            "example": "2026-10-v2"
           },
           "parrafos": {
             "type": "array",
@@ -1577,7 +1577,7 @@
           },
           "avisoPrivacidadVersion": {
             "type": "string",
-            "example": "2026-10-v1",
+            "example": "2026-10-v2",
             "description": "Debe ser la versión vigente"
           },
           "direccion": {

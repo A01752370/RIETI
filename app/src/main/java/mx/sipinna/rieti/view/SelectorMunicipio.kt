@@ -10,6 +10,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,8 +27,8 @@ import mx.sipinna.rieti.viewmodel.ValidadorReporte
 /**
  * Selector de municipio con búsqueda (D-16): un campo de texto que filtra la
  * lista de los 125 municipios mientras se escribe (sin importar acentos) y un
- * menú desplegable para elegir. No hay valor preseleccionado ni se usa la
- * ubicación del teléfono para adivinarlo.
+ * menú desplegable para elegir. No hay valor preseleccionado; si la persona
+ * marca un punto en el mapa, el formulario puede sugerir el municipio donde cae.
  *
  * Accesible con TalkBack: el campo tiene etiqueta y ayuda, y cada opción del
  * menú es un elemento con su nombre.
@@ -46,6 +47,8 @@ fun SelectorMunicipio(
     error: String?
 ) {
     var texto by rememberSaveable { mutableStateOf(seleccionado?.nombre ?: "") }
+    // Si el municipio se elige desde fuera (sugerido por el mapa), el campo lo refleja.
+    LaunchedEffect(seleccionado) { if (seleccionado != null && texto != seleccionado.nombre) texto = seleccionado.nombre }
     var abierto by remember { mutableStateOf(false) }
     val opciones = remember(texto, municipios) { ValidadorReporte.filtrarMunicipios(municipios, texto) }
 

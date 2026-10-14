@@ -83,6 +83,15 @@
 
 ---
 
+### 2.4 Decisiones de la retroalimentación del profesor (desde el 14-oct-2026)
+| ID | Decisión |
+|---|---|
+| D-19 | *Reservada: cuentas de ciudadano opcionales (Fase 4).* |
+| D-20 | Menores por **grupo de edad** en una tabla hija (`reporte_menores_grupo`), no JSONB: integridad con el catálogo, `CHECK` en la base y agregados SQL. El total y el rango heredados se derivan para las APK instaladas. Tope de 50 por reporte. |
+| D-21 | Mapa con **osmdroid** y datos de **OpenStreetMap mediados por el backend** (teselas y geocodificación inversa). Amazon Location Service no existe en `mx-central-1`. Para producción se recomienda un proveedor con contrato y llave detrás de la misma interfaz. |
+| D-22 | El punto del mapa debe caer en el municipio elegido (polígonos INEGI, ±300 m). El CP se valida contra el rango del Estado de México; el catálogo de SEPOMEX **no se versiona** (su licencia prohíbe distribuirlo) y su carga queda a decisión del área jurídica. |
+| D-23 | Las coordenadas del lugar se guardan redondeadas a 5 decimales (≈ 1 m) y solo las ve el personal; hacia terceros salen redondeadas a 4 (≈ 11 m). El aviso de privacidad pasa a `2026-10-v2`. |
+
 ## 3. Alcance del MVP (MoSCoW)
 
 Mapeo a requisitos de Etapa 1. **Must = necesario para la demo y para la rúbrica.**

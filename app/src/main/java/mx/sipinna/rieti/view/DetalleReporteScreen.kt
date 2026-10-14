@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.util.Locale
 import mx.sipinna.rieti.model.ReporteDetalle
+import mx.sipinna.rieti.viewmodel.FormatoReporte
 import mx.sipinna.rieti.viewmodel.DetalleReporteViewModel
 import mx.sipinna.rieti.viewmodel.UiState
 
@@ -84,12 +85,18 @@ private fun DatosReporte(r: ReporteDetalle) {
             }
             Campo("Registrado", formatearFecha(r.fechaCreacion))
             Campo("Municipio", r.municipio ?: "No indicado")
-            Campo("Lugar", r.ubicacion)
+            val direccion = FormatoReporte.direccion(r.direccion)
+            if (direccion != null) {
+                Campo("Dirección", direccion)
+                r.direccion?.referencias?.takeIf { it.isNotBlank() }?.let { Campo("Referencias", it) }
+            } else {
+                Campo("Lugar", r.ubicacion)
+            }
             if (r.latitud != null && r.longitud != null) {
                 Campo("Coordenadas", String.format(Locale.US, "%.5f, %.5f", r.latitud, r.longitud))
             }
-            Campo("Actividad", r.actividad)
-            Campo("Menores", "${r.cantidadNinos} de ${r.edadAproximada} años")
+            Campo("Actividad", FormatoReporte.actividad(r.actividad, r.actividadOtro))
+            Campo("Menores", FormatoReporte.menores(r.grupos, r.cantidadNinos, r.edadAproximada))
             Campo("¿Riesgo percibido?", r.situacionRiesgo)
             Campo("Descripción", r.descripcion)
             r.motivoDescarte?.let { Campo("Motivo de descarte", it) }

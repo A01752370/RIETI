@@ -5,7 +5,8 @@ import { consulta, errorDesdeRespuesta, MENSAJES, Municipio } from './api';
 import { claseEstatus, ESTATUS, SIGNIFICADO } from './estatus';
 import { App } from './main';
 import { BarrasPorEstatus, SeriePorMes } from './paginas/personal';
-import { FORMULARIO_VACIO, validarFormulario } from './paginas/Reportar';
+import { aNuevoReporte, FORMULARIO_VACIO, validarFormulario } from './paginas/Reportar';
+import { textoDireccion, textoMenores } from './paginas/personal';
 import { filtrarMunicipios, normalizar, SelectorMunicipio } from './SelectorMunicipio';
 
 afterEach(cleanup);
@@ -80,15 +81,41 @@ describe('selector de municipios (D-16)', () => {
 });
 
 describe('validación del formulario de reporte', () => {
+  const completo = {
+    ...FORMULARIO_VACIO, municipio: MUNICIPIOS[0], calle: 'Av. López Mateos', numero: '12', colonia: 'Centro', codigoPostal: '52900',
+    conteos: { '0-5': 2, '12-17': 1 }, actividad: 'Venta ambulante', riesgo: 'No sé', descripcion: 'Dos menores vendiendo',
+  };
   it('pide todos los campos, incluido el municipio', () => {
     expect(Object.keys(validarFormulario(FORMULARIO_VACIO)).sort())
-      .toEqual(['actividad', 'cantidad', 'descripcion', 'edad', 'municipio', 'riesgo', 'ubicacion'].sort());
+      .toEqual(['actividad', 'calle', 'codigoPostal', 'colonia', 'descripcion', 'grupos', 'municipio', 'riesgo'].sort());
   });
   it('acepta un formulario completo', () => {
-    expect(validarFormulario({
-      municipio: MUNICIPIOS[0], ubicacion: 'Crucero', cantidad: '2 a 3', edad: '6-11',
-      actividad: 'Venta ambulante', riesgo: 'No sé', descripcion: 'Dos menores vendiendo',
-    })).toEqual({});
+    expect(validarFormulario(completo)).toEqual({});
+  });
+  it('valida el código postal del Estado de México, el tope de 50 y "Otro"', () => {
+    expect(validarFormulario({ ...completo, codigoPostal: '06000' }).codigoPostal).toContain('Estado de México');
+    expect(validarFormulario({ ...completo, conteos: { '0-5': 30, '6-11': 21 } }).grupos).toContain('50');
+    expect(validarFormulario({ ...completo, actividad: 'Otro' }).actividadOtro).toBeTruthy();
+  });
+  it('arma el cuerpo con el formato nuevo: grupos en orden y sin campos vacíos', () => {
+    expect(aNuevoReporte({ ...completo, conteos: { '12-17': 1, '6-11': 0, '0-5': 2 } }, '2026-10-v1')).toEqual({
+      municipioId: MUNICIPIOS[0].id,
+      direccion: { calle: 'Av. López Mateos', numeroExterior: '12', colonia: 'Centro', codigoPostal: '52900' },
+      grupos: [{ rango: '0-5', cantidad: 2 }, { rango: '12-17', cantidad: 1 }],
+      actividad: 'Venta ambulante', situacionRiesgo: 'No sé', descripcion: 'Dos menores vendiendo', avisoPrivacidadVersion: '2026-10-v1',
+    });
+  });
+});
+
+describe('detalle del personal (Fase 2)', () => {
+  it('muestra los grupos de edad y el total', () => {
+    expect(textoMenores([{ rango: '0-5', cantidad: 2 }, { rango: '12-17', cantidad: 1 }], 3, '0-5')).toBe('2 de 0 a 5 años · 1 de 12 a 17 años (total 3)');
+    expect(textoMenores(undefined, 2, '6-11')).toBe('2 de 6 a 11 años');
+  });
+  it('arma la dirección en una línea', () => {
+    expect(textoDireccion({ calle: 'Av. López Mateos', numeroExterior: '12', colonia: 'Centro', codigoPostal: '52900', referencias: null }))
+      .toBe('Av. López Mateos 12, Col. Centro, C.P. 52900');
+    expect(textoDireccion(null)).toBeNull();
   });
 });
 

@@ -184,6 +184,20 @@ El script `infra/sql/01-rol-rieti-app.sql` crea un rol sin permisos de DDL, sin 
 
 Se recomienda hacerlo después de la presentación, con calma.
 
+## Opcional — Catálogo de códigos postales de SEPOMEX (Fase 2)
+
+**Antes de hacerlo:** el catálogo de Correos de México se ofrece "para uso particular", sin permitir su distribución. Confirmen con el área jurídica del SIPINNA que validar reportes con él es compatible con esos términos. Mientras la tabla `codigo_postal_municipio` esté vacía, el API solo valida que el CP sea del Estado de México (50000–57999).
+
+El script descarga el archivo oficial dentro de la tarea (no queda en el repositorio ni en la imagen). Usa las mismas variables del paso 3:
+
+```bash
+TAREA=$(aws ecs run-task --cluster "$CLUSTER" --launch-type FARGATE --task-definition "$TD"   --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}"   --overrides '{"containerOverrides":[{"name":"api","command":["node","dist/scripts/cargar-codigos-postales.js","--descargar","--confirmar"]}]}'   --query 'tasks[0].taskArn' --output text)
+aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TAREA"
+aws logs tail /ecs/rieti-prod-api --since 15m --filter-pattern '"Códigos postales"'
+```
+
+**Verificar:** el log dice `Códigos postales del Estado de México cargados: N pares leídos; N en la tabla.` (unos 2,400). Para revertir: `DELETE FROM codigo_postal_municipio;` con el usuario maestro.
+
 ## Si algo sale mal
 
 | Síntoma | Qué hacer |

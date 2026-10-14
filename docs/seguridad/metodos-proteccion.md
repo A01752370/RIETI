@@ -96,6 +96,9 @@ Las pruebas e2e corrieron en una máquina de desarrollo con PostgreSQL local. **
 
 | Control | Dónde | Mitiga | Verificación |
 |---|---|---|---|
+| Mapa y geocodificación mediados por el backend: la app nunca contacta al proveedor; coordenadas redondeadas a ≈ 11 m antes de salir; coordenadas guardadas a 5 decimales y visibles solo para el personal | `geo/`, `MapaUbicacion.kt`, `formulario.ts` | A26 | e2e (doble de la fuente) + revisión de código |
+| Proxy de mapas acotado: Estado de México, zoom 8–18, límites por IP, caché, concurrencia y 1 req/s a Nominatim | `geo-utilidades.ts`, `geo.service.ts`, `geo.controller.ts` | A27 | Unitarias (`geo-utilidades.spec.ts`) + e2e |
+| Punto dentro del municipio (±300 m) y CP del Estado de México; cruce CP–municipio opcional con el catálogo de SEPOMEX (no versionado por su licencia) | `reportes.service.ts`, `scripts/cargar-codigos-postales.ts` | A28 | e2e (Toluca y CDMX rechazados; CP de otro estado y de otro municipio rechazados) |
 | Folio y clave copiados por separado y marcados como sensibles (`EXTRA_IS_SENSITIVE`); la consulta acepta el bloque pegado sin pedir que se reescriba | `ConfirmacionScreen.kt`, `ExtractorFolioClave.kt` | A25 | `ExtractorFolioClaveTest` (19 casos) + prueba en emulador contra producción |
 | Sin columnas de IP, dispositivo ni publicidad; el API rechaza campos extra | Esquema, DTOs | A16 | e2e |
 | La ubicación GPS es opcional, se pide con un botón y se envía como **lugar de los hechos**; no se guarda en el teléfono | `FormularioReporteScreen.kt`, `FormularioReporteViewModel.kt` | A23 (RNF-28) | Revisión de código |

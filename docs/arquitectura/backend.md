@@ -43,7 +43,10 @@ src/
 |---|---|---|---|
 | GET | `/health`, `/health/ready` | Público (fuera del prefijo) | Sondas del ALB/ECS |
 | GET | `/api/v1/avisos-privacidad/vigente` | Público | CU-02 |
-| GET | `/api/v1/catalogos` | Público | Chips del formulario |
+| GET | `/api/v1/catalogos` | Público | Catálogos del formulario |
+| GET | `/api/v1/catalogos/actividades` | Público | Selector de actividad ("Otro" al final) |
+| GET | `/api/v1/geo/reversa?lat=&lng=` | Público, 30/min por IP | Dirección sugerida (OSM, mediada) y municipio del punto (INEGI) |
+| GET | `/api/v1/geo/teselas/:z/:x/:y.png` | Público, 600/min por IP | Mapa del Estado de México (proxy con caché) |
 | POST | `/api/v1/reportes` | Público, 5/min por IP | CU-04 |
 | POST | `/api/v1/reportes/consulta` | Público, 10/min por IP + bloqueo por folio | CU-08 |
 | POST | `/api/v1/auth/login` | Público, 5/min por IP | Login del personal |
@@ -75,9 +78,32 @@ flowchart LR
 
 Basado en el ER de la Etapa 2. Tablas: `municipio`, `rol_usuario`, `actividad`, `riesgo`, `rango_edad`, `estatus_reporte` (catálogos); `usuario` (personal, vinculado a Cognito por `cognito_sub`, sin contraseñas); `ubicacion` (lat/lng + columna generada `punto geography(Point,4326)` con índice GiST); `reporte`; `folio` + `folio_contador` (consecutivo anual atómico); `caso` y `reporte_caso`; `seguimiento` (bitácora solo de inserción, protegida por trigger).
 
+Fase 2: `reporte_menores_grupo` (menores por grupo de edad, tabla hija con llave `(id_reporte, id_rango_edad)`), `reporte.actividad_otro`, columnas de dirección en `ubicacion` (`calle`, `numero_exterior`, `colonia`, `codigo_postal`, `referencias`), `municipio_geom` (polígonos del INEGI, GiST) y `codigo_postal_municipio` (vacía; ver "Geografía").
+
 Migraciones:
 1. `1760000000000-EsquemaInicial`: esquema, PostGIS, pgAudit (si está precargado), trigger de la bitácora y catálogos.
 2. `1760100000000-ClaveConsultaYEstatus`: `reporte.clave_consulta_hash`, `reporte.aviso_privacidad_version`, `caso.motivo_descarte` y catálogo de estatus canónico (renombra Atendido → En atención y Cerrado → Concluido, agrega Descartado). Al renombrar en vez de borrar, las referencias de la bitácora se conservan.
+
+3. `1760200000000-MunicipiosYRed`: 125 municipios y directorio de la red (D-16, D-17).
+4. `1760300000000-FormularioYGeografia` (Fase 2): actividades ampliadas con `orden`, rango "Sin determinar", grupos de edad (con relleno de los reportes existentes), dirección, `actividad_otro`, polígonos municipales y tabla de CP. Aditiva, idempotente y con `down`; probada sobre una base con datos (`test/e2e/migracion-formulario.e2e.spec.ts`).
+
+### Formato de `POST /reportes`
+
+El API acepta dos formatos, porque hay APK instaladas:
+
+| Formato | Campos | Qué hace el servidor |
+|---|---|---|
+| Anterior | `ubicacion`, `cantidadNinos`, `edadAproximada` | Un solo grupo de edad; sin dirección estructurada |
+| Nuevo (Fase 2) | `direccion`, `grupos`, `actividadOtro` | Deriva `ubicacion` (texto), `cantidad_ninos` (suma) y `id_rango_edad` (grupo mayor; en empate, el más pequeño) |
+
+**Por qué tabla hija y no JSONB para los grupos:** integridad referencial con `rango_edad`, `CHECK` en la base, sin rangos repetidos por la llave primaria, y agregados directos en SQL para las estadísticas de la Fase 3.
+
+### Geografía
+
+- **Validación del punto:** si llegan `latitud` y `longitud`, deben caer dentro del municipio elegido o a menos de 300 m de su límite (`ST_DWithin` sobre `municipio_geom`); si no, `400 UBICACION_FUERA_DEL_MUNICIPIO` con el municipio donde sí cae. Las coordenadas se guardan redondeadas a 5 decimales (≈ 1 m).
+- **Polígonos:** INEGI, Marco Geoestadístico (dic-2025), simplificados a ≈ 20 m con `scripts/generar-geom-municipios.mjs` (reproducible).
+- **Código postal:** siempre se exige que sea del Estado de México (50000–57999, rango exclusivo del estado). El cruce CP–municipio solo se activa si un operador carga `codigo_postal_municipio` con `scripts/cargar-codigos-postales.ts`: el catálogo de SEPOMEX no permite su distribución, así que no se versiona.
+- **Geocodificación inversa y teselas mediadas:** la app y la web nunca llaman a terceros. El servidor consulta Nominatim (OSM) con coordenadas redondeadas a ≈ 11 m, con `User-Agent` identificable, máximo 1 petición por segundo por tarea y caché de 7 días; las teselas se sirven desde una caché en memoria (24 h), solo del Estado de México y con zoom 8–18. La fuente externa está detrás de la interfaz `FuenteGeo`, que las pruebas sustituyen por un doble.
 
 Las migraciones corren al arrancar (`migrationsRun`). Con un usuario sin permisos de DDL (`rieti_app`, D-08) se desactivan con `DB_MIGRAR_AL_INICIAR=false` y se corren aparte con el usuario maestro.
 

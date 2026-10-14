@@ -80,10 +80,20 @@ flowchart LR
 | Docker/Kubernetes | ECS Fargate | Contenedores gestionados equivalentes, sin administrar nodos. |
 | Etiquetado del proyecto (D-09) | Etiquetas `Project=RIETI`, `Environment`, `ManagedBy=Terraform` | D-09 se corrigió el 9-oct-2026 para usar `Project=RIETI`, la etiqueta realmente desplegada. |
 
+## Mapas y geocodificación (Fase 2)
+
+| Opción | Estado | Notas |
+|---|---|---|
+| Amazon Location Service en `mx-central-1` | **No disponible** | Sus endpoints (`places.geo.mx-central-1…`, `maps.geo.mx-central-1…`) no existen (verificado el 14-oct-2026 con la CLI y DNS). Usarlo en `us-east-1` sacaría las coordenadas de la región de México. |
+| OpenStreetMap (teselas y Nominatim) mediado por el backend | **En uso (demostración)** | Sin llaves. Cumple las políticas de uso (User-Agent con contacto, ≤ 1 req/s a Nominatim, caché, sin autocompletado por tecla). **No apto para tráfico de producción.** |
+| Proveedor comercial con plan gratuito y llave (p. ej. MapTiler, Stadia, Geoapify) | Recomendado para producción | El backend ya está preparado: basta otra implementación de `FuenteGeo` y la llave en Secrets Manager. La app no cambia porque siempre habla con nuestro API. |
+
+Las teselas pasan por CloudFront sin caché (política `CachingDisabled` del API) y el backend las guarda en memoria. Si el uso crece, conviene un comportamiento de CloudFront con caché para `/api/v1/geo/teselas/*` (cambio de infraestructura que requiere aprobación). El WAF limita a 300 peticiones por IP cada 5 minutos; osmdroid guarda teselas en la caché del teléfono, así que una sesión normal queda por debajo.
+
 ## Costo
 
 El plan del equipo estima ≈90–110 USD/mes (NAT, ALB, RDS, Fargate y WAF son los mayores). **No se verificó contra la facturación.** El presupuesto de AWS avisa al 80 % real y al 100 % pronosticado de 150 USD.
 
 ## Datos publicados en el repositorio
 
-El repositorio es público. El nombre del bucket de estado de Terraform contiene el ID de la cuenta de AWS; un ID de cuenta no es un secreto, pero el equipo puede cambiarlo por una variable si prefiere no publicarlo. No hay correos personales, llaves ni archivos de estado en el repositorio (verificado con `gitleaks` y búsqueda en los archivos versionados).
+El repositorio es público. Desde el 14-oct-2026 el nombre del bucket de estado (que contiene el ID de la cuenta) va en `infra/terraform/backend.hcl`, ignorado por git (ataque A24); el historial anterior todavía lo conserva. No hay correos personales, llaves ni archivos de estado en el repositorio (verificado con `gitleaks` y búsqueda en los archivos versionados).

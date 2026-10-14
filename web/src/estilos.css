@@ -191,3 +191,17 @@ details summary { cursor: pointer; min-height: var(--objetivo-tactil); display: 
 .seccion-aviso { margin-top: 1rem; }
 .seccion-aviso h2, .seccion-aviso h3 { color: var(--color-primario); margin-bottom: 0.25rem; }
 .seccion-aviso p { margin-top: 0.25rem; }
+
+/* Contadores por grupo de edad (Fase 2). */
+.contadores { display: grid; gap: 0.5rem; margin-top: 0.5rem; }
+.contador { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 1rem; border-radius: 12px;
+  background: var(--color-superficie); border: 2px solid transparent; }
+.contador-activo { border-color: var(--color-primario); }
+.contador-activo .contador-etiqueta { font-weight: 600; }
+.contador-etiqueta { flex: 1; }
+.contador-valor { min-width: 2ch; text-align: center; font-size: 1.25rem; font-weight: 600; }
+.boton-redondo { width: 48px; height: 48px; border-radius: 50%; border: 0; font-size: 1.5rem; line-height: 1;
+  background: var(--color-tinte-primario); color: var(--color-primario-oscuro); cursor: pointer; }
+.boton-redondo:disabled { opacity: 0.4; cursor: not-allowed; }
+.boton-redondo:focus-visible { outline: 3px solid var(--color-primario); outline-offset: 2px; }
+.contador-total { font-weight: 600; margin-top: 0.5rem; }
