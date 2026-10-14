@@ -16,6 +16,9 @@ private val EsquemaRieti = lightColorScheme(
     onPrimaryContainer = PrimarioOscuro,
     secondary = Secundario,
     onSecondary = Color.White,
+    // Botones tonales (acción secundaria): tinte teal con texto oscuro, 6.4:1.
+    secondaryContainer = TintePrimario,
+    onSecondaryContainer = PrimarioOscuro,
     tertiary = Acento,
     onTertiary = Color.White,
     tertiaryContainer = TinteAcento,

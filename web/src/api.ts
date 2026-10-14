@@ -107,8 +107,10 @@ export async function llamar<T>(ruta: string, opciones: { metodo?: string; cuerp
 
 // ---------- Tipos del contrato (docs/api/openapi.json) ----------
 
-/** Aviso de privacidad vigente. */
-export interface AvisoPrivacidad { version: string; parrafos: string[] }
+/** Sección del aviso de privacidad. */
+export interface SeccionAviso { titulo: string; parrafos: string[] }
+/** Aviso de privacidad vigente. `secciones` agrupa el mismo texto con títulos (servidores anteriores no lo envían). */
+export interface AvisoPrivacidad { version: string; parrafos: string[]; secciones?: SeccionAviso[] }
 /** Catálogos del formulario. */
 export interface Catalogos { actividades: string[]; rangosEdad: string[]; riesgos: string[]; estatus: string[] }
 /** Municipio del selector (D-16). */

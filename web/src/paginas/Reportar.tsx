@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { api, Municipio, ReporteCreado } from '../api';
-import { Esqueleto, Marco, MensajeError, useCarga } from '../componentes';
+import { Esqueleto, Marco, MensajeError, useCarga, TextoAviso } from '../componentes';
 import { Enlace, useTitulo } from '../enrutador';
 import { SelectorMunicipio } from '../SelectorMunicipio';
 
@@ -69,7 +69,7 @@ function PasoAviso({ alAceptar }: { alAceptar: (version: string) => void }) {
   return (
     <section className="tarjeta" aria-labelledby="titulo-aviso">
       <h2 id="titulo-aviso">Antes de empezar: aviso de privacidad</h2>
-      {aviso.datos.parrafos.map((p) => <p key={p}>{p}</p>)}
+      <TextoAviso aviso={aviso.datos} nivel={3} />
       <p className="texto-secundario pequeno">Versión {aviso.datos.version}</p>
       <label className="opcion">
         <input type="checkbox" checked={acepto} onChange={(e) => setAcepto(e.target.checked)} />

@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { api, ConsultaPublica, ErrorApi } from '../api';
-import { ALT, Esqueleto, LOGOS, Marco, MensajeError, useCarga, Vacio } from '../componentes';
+import { ALT, Esqueleto, LOGOS, Marco, MensajeError, useCarga, Vacio, TextoAviso } from '../componentes';
 import { Enlace, useTitulo } from '../enrutador';
 import { ESTATUS, EtiquetaEstatus, formatearFecha, SIGNIFICADO } from '../estatus';
 
@@ -87,7 +87,7 @@ export function AvisoPrivacidad() {
       {!!aviso.error && <MensajeError error={aviso.error} alReintentar={aviso.recargar} />}
       {aviso.datos && (
         <>
-          {aviso.datos.parrafos.map((p) => <p key={p}>{p}</p>)}
+          <TextoAviso aviso={aviso.datos} nivel={2} />
           <p className="texto-secundario pequeno">Versión {aviso.datos.version}</p>
         </>
       )}

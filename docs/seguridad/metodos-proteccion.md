@@ -96,6 +96,7 @@ Las pruebas e2e corrieron en una máquina de desarrollo con PostgreSQL local. **
 
 | Control | Dónde | Mitiga | Verificación |
 |---|---|---|---|
+| Folio y clave copiados por separado y marcados como sensibles (`EXTRA_IS_SENSITIVE`); la consulta acepta el bloque pegado sin pedir que se reescriba | `ConfirmacionScreen.kt`, `ExtractorFolioClave.kt` | A25 | `ExtractorFolioClaveTest` (19 casos) + prueba en emulador contra producción |
 | Sin columnas de IP, dispositivo ni publicidad; el API rechaza campos extra | Esquema, DTOs | A16 | e2e |
 | La ubicación GPS es opcional, se pide con un botón y se envía como **lugar de los hechos**; no se guarda en el teléfono | `FormularioReporteScreen.kt`, `FormularioReporteViewModel.kt` | A23 (RNF-28) | Revisión de código |
 | Se eliminó el mapa estático de un servicio externo, que enviaba coordenadas del reporte a un tercero | `app/` (se quitó Coil) | A16, A23 | Revisión de código |

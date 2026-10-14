@@ -1,5 +1,5 @@
 import { ReactNode, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { ErrorApi, MENSAJES, fijarSesion, obtenerSesion, suscribirSesion } from './api';
+import { AvisoPrivacidad, ErrorApi, MENSAJES, fijarSesion, obtenerSesion, suscribirSesion } from './api';
 import { Enlace, navegar } from './enrutador';
 
 /** Medidas reales de los logos (assets/logos), para reservar espacio y no deformarlos. */
@@ -122,6 +122,27 @@ export function Marco({ children, personal = false }: { children: ReactNode; per
 }
 
 /** Esqueleto de carga (sin contenido falso). */
+/**
+ * Texto del aviso de privacidad: por secciones con título si el servidor las envía;
+ * si no, los párrafos en orden.
+ *
+ * @param nivel nivel de encabezado de los títulos de sección (según dónde se muestre)
+ */
+export function TextoAviso({ aviso, nivel }: { aviso: AvisoPrivacidad; nivel: 2 | 3 }) {
+  const Titulo = nivel === 2 ? 'h2' : 'h3';
+  if (!aviso.secciones?.length) return <>{aviso.parrafos.map((p) => <p key={p}>{p}</p>)}</>;
+  return (
+    <>
+      {aviso.secciones.map((s) => (
+        <div key={s.titulo} className="seccion-aviso">
+          <Titulo>{s.titulo}</Titulo>
+          {s.parrafos.map((p) => <p key={p}>{p}</p>)}
+        </div>
+      ))}
+    </>
+  );
+}
+
 export function Esqueleto({ filas = 3 }: { filas?: number }) {
   return (
     <div className="esqueleto" role="status" aria-live="polite">
