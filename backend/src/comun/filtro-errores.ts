@@ -1,7 +1,7 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
 import { Response } from 'express';
 
-/** Formato único de error del API (`CLAUDE.md`, plan §6). */
+/** Formato único de error del API (`docs/GUIA-DESARROLLO.md`, plan §6). */
 export interface ErrorApi {
   /** Código estable en MAYÚSCULAS que la app puede usar para decidir qué mostrar. */
   codigo: string;

@@ -60,7 +60,7 @@ Si los cuatro resultados coinciden, el backend nuevo está en producción.
 
 ## Paso 3 — Borrar el reporte de prueba `RIETI-2026-000001`
 
-**Por qué:** es un reporte de prueba de la sesión de despliegue y no debe aparecer en la demo. La bitácora es solo de inserción, así que no se puede borrar con un `DELETE` normal; el script `backend/src/scripts/borrar-reporte.ts` desactiva y reactiva el trigger dentro de una sola transacción. Se ejecuta como **tarea única de ECS** con la misma imagen y red del API (no hace falta abrir la base de datos a internet).
+**Por qué:** es un reporte de prueba del despliegue inicial y no debe aparecer en la demo. La bitácora es solo de inserción, así que no se puede borrar con un `DELETE` normal; el script `backend/src/scripts/borrar-reporte.ts` desactiva y reactiva el trigger dentro de una sola transacción. Se ejecuta como **tarea única de ECS** con la misma imagen y red del API (no hace falta abrir la base de datos a internet).
 
 > Debe hacerse **después** del paso 2: el script viene en la imagen nueva.
 
@@ -133,7 +133,7 @@ alerta_emails = ["responsable@dominio.mx", "otra.persona@dominio.mx"]
 EOF
 # terraform.tfvars está en .gitignore: no se sube al repositorio.
 
-terraform init
+terraform init -backend-config=backend.hcl   # backend.hcl lo genera infra/bootstrap.sh; no está en git
 terraform plan -out tfplan
 ```
 

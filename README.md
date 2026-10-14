@@ -33,6 +33,7 @@ Proyecto del curso *Construcción de software y toma de decisiones (Gpo 402)*, T
 | Operación en AWS | [docs/RUNBOOK-AWS.md](docs/RUNBOOK-AWS.md) |
 | Auditoría de la cuenta AWS compartida | [docs/AUDITORIA-CUENTA.md](docs/AUDITORIA-CUENTA.md) |
 | Guion de prueba de la app | [docs/PRUEBA-APP.md](docs/PRUEBA-APP.md) |
+| Guía de desarrollo (reglas y convenciones) | [docs/GUIA-DESARROLLO.md](docs/GUIA-DESARROLLO.md) |
 | Plan de trabajo y decisiones del equipo | [docs/PLAN-RIETI.md](docs/PLAN-RIETI.md) |
 
 ## Cómo correr cada parte
