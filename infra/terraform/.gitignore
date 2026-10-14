@@ -6,3 +6,4 @@ plan.txt
 *.log
 *.tfvars
 errored.tfstate
+backend.hcl

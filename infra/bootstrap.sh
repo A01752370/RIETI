@@ -32,4 +32,8 @@ aws s3api put-bucket-policy --bucket "$BUCKET" --policy "{
 aws s3api put-bucket-tagging --bucket "$BUCKET" \
   --tagging 'TagSet=[{Key=Project,Value=RIETI},{Key=ManagedBy,Value=bootstrap}]'
 
-echo "Listo: s3://$BUCKET"
+# Configuración parcial del backend de Terraform (ignorada por git: contiene el ID de la cuenta).
+printf 'bucket = "%s"
+' "$BUCKET" > "$(dirname "$0")/terraform/backend.hcl"
+
+echo "Listo: s3://$BUCKET (escrito terraform/backend.hcl)"

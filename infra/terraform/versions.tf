@@ -9,9 +9,10 @@ terraform {
   }
 
   # Estado remoto cifrado y versionado; `use_lockfile` usa bloqueo nativo de S3 (sin DynamoDB).
-  # El bucket se crea una sola vez con infra/bootstrap.sh.
+  # El bucket se crea una sola vez con infra/bootstrap.sh, que también escribe `backend.hcl`
+  # (ignorado por git) con su nombre: `terraform init -backend-config=backend.hcl`.
+  # Así el ID de la cuenta no queda en el repositorio público.
   backend "s3" {
-    bucket       = "rieti-tfstate-806156384483-mx"
     key          = "prod/terraform.tfstate"
     region       = "mx-central-1"
     encrypt      = true

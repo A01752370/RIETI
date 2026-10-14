@@ -1,21 +1,18 @@
 # RIETI — Plan de despliegue y desarrollo hasta la presentación
 
-> **Para quién es este documento:** la sesión de desarrollo conectada al proyecto SIPINNA/RIETI (Android + backend + web + infraestructura).
+> **Para quién es este documento:** el equipo de desarrollo de RIETI (Android + backend + web + infraestructura).
 > **Fecha de redacción:** 9-oct-2026. **Presentación con el socio formador:** en 1–2 semanas (fecha exacta por confirmar).
 > **Dueño del documento:** Braulio "Bowser" Barbosa (rol Etapa 3 #1, App Android).
 > **Fuentes:** Etapa 1 (Requerimientos, 26-ago-2026), Etapa 2 (Diseño, 11-sep-2026), estado del repo/AWS reportado el 9-oct-2026 y las decisiones del equipo de la sección 2.
 
 ---
 
-## 0. Cómo arrancar la sesión
+## 0. Cómo usar este plan
 
-1. Lee `CLAUDE.md` (raíz del repo) y este plan completo.
-2. **Fase 0 primero** (sección 8): audita el estado real del repo y de AWS. Varias cosas de este plan están marcadas **[VERIFICAR]** porque quien redactó el plan no vio el código desplegado, solo lo que reportó la sesión que lo desplegó.
-3. Trabaja por fases, en ramas cortas y con PR. No hagas `terraform apply`, `terraform destroy` ni comandos de escritura de AWS sin aprobación explícita del usuario.
-4. Al terminar cada fase, actualiza la sección 12 (estado) de este archivo.
-
-**Prompt sugerido para iniciar:**
-> Lee `CLAUDE.md` y `docs/PLAN-RIETI.md`. Empieza por la Fase 0 (auditoría del estado real). Dame un resumen de lo que encuentres contra lo que dice el plan, marca las discrepancias y proponme el orden de la Fase 1 antes de escribir código.
+1. Las reglas permanentes del proyecto están en [`GUIA-DESARROLLO.md`](GUIA-DESARROLLO.md); este plan define el alcance, las decisiones y las fases.
+2. Las secciones 1 y 4 describen el estado al 9-oct-2026; las marcas **[VERIFICAR]** eran supuestos pendientes de comprobar en ese momento. El estado vigente está en [`ESTADO-ENTREGA.md`](ESTADO-ENTREGA.md).
+3. Se trabaja por fases, en ramas cortas y con PR. `terraform apply`, `terraform destroy` y comandos de escritura de AWS requieren aprobación explícita de quien administra la cuenta.
+4. Al terminar cada fase se actualiza la sección 12 (estado) y la bitácora de decisiones (sección 2).
 
 ---
 
@@ -23,7 +20,7 @@
 
 ### 1.1 Repositorio
 - `https://github.com/A01752370/RIETI` — monorepo: app Android en la raíz, `backend/` (NestJS), `infra/terraform/`, `.github/`.
-- Rama `main`: infraestructura y backend desplegados por otra sesión. Rama `android-integracion`: app Android que **compila** contra el repo actual (ya con push).
+- Rama `main`: infraestructura y backend desplegados. Rama `android-integracion`: app Android que **compila** contra el repo actual (ya con push).
 - **El repo debe ser público para la entrega** (rúbrica Etapa 3). Antes de hacerlo público, ver sección 10.4 (higiene de secretos).
 
 ### 1.2 Android (verificado hoy)
@@ -36,7 +33,7 @@
 | Pendiente de verificar | **La app aún no se ha corrido en emulador ni probado contra AWS.** |
 | Capas | No hay capa de repositorio ni `UiState` sellado; los ViewModels llaman directo a `ServicioRemoto`. |
 
-### 1.3 Backend / AWS (reportado por la sesión de despliegue; **[VERIFICAR]** todo contra el código y la consola)
+### 1.3 Backend / AWS (reportado tras el primer despliegue; **[VERIFICAR]** todo contra el código y la consola)
 - CloudFront (dominio `*.cloudfront.net`, sin Route 53 ni ACM) → ALB → ECS Fargate (NestJS) → RDS PostgreSQL (una AZ, backups de 1 día). WAF en el perímetro. NAT único. Bucket S3 de evidencias (con permisos, **sin endpoint de subida**). Cognito integrado.
 - Folio con 6 dígitos (`RIETI-2026-000001`). Existe un reporte de prueba `RIETI-2026-000001` que hay que borrar antes de la demo (la bitácora es solo de inserción; el borrado requiere desactivar el trigger como administrador).
 - **No hay usuarios del personal** (el de prueba se borró). El alta documentada es `admin-set-user-password --permanent` (ver `backend/README.md`).
@@ -44,7 +41,7 @@
 - Cuenta AWS en plan gratuito (crédito limitado que vence el 19-dic-2026). Infra ≈90–110 USD/mes.
 
 ### 1.4 Lo que **no** se ha visto
-- El código del backend desplegado (la sesión que lo escribió sí lo vio; quien redactó este plan no).
+- El código del backend desplegado (quien redactó este plan no lo había revisado).
 - Si `GET /reportes`, `PATCH /reportes/:id` y `GET /reportes/folio/:folio` exigen autenticación hoy.
 - Si TypeORM corre con `synchronize: true` en producción.
 - Si el ALB acepta tráfico directo de internet o solo de CloudFront.
@@ -63,7 +60,7 @@
 | D-04 | Sin alta disponibilidad (un NAT, RDS en una AZ, 1 tarea mínima): **decisión de costo**, documentada. |
 | D-07 | El primer usuario administrador de Cognito lo crea quien administra la cuenta de AWS; después los usuarios se crean desde la plataforma (ver D-06). |
 | D-09 | Alcance en AWS: solo recursos de este proyecto (etiqueta `Project=RIETI` y prefijo `rieti`, región `mx-central-1`). No se opera sobre ningún otro recurso de la cuenta. *Corregido el 9-oct-2026: la versión anterior decía `proyecto=rieti`, que ningún recurso tiene (ver `docs/AUDITORIA-CUENTA.md`).* |
-| D-10 | Las credenciales (llave AWS del perfil `rieti` y token de GitHub) se rotan al terminar la sesión de desarrollo. Tras rotar, usar OIDC de GitHub→AWS (sin llaves estáticas). |
+| D-10 | Las credenciales (llave AWS del perfil `rieti` y token de GitHub) se rotan al terminar el periodo de desarrollo. Tras rotar, usar OIDC de GitHub→AWS (sin llaves estáticas). |
 
 ### 2.2 Decisiones abiertas — con recomendación (confirmar con el equipo)
 | ID | Tema | Recomendación | Por qué |
@@ -432,7 +429,7 @@ Pruebas e2e A1–A5, A9, A11, A21; script `scripts/security/check-routes-have-gu
 Notas:
 - `docs/arquitectura/movil.md` y `aws.md` **ya existen como borradores** en el Project SIPINNA (`arquitectura-movil.md`, `arquitectura-aws.md`). El de AWS **está desactualizado** (hablaba de Route 53/ACM como planeados). Reescribirlos al final contra el estado real y la sección 4.
 - Incluir un **registro de decisiones (ADR)** corto con D-01…D-15.
-- Las actas de reunión las coordina el responsable de ese rol; la sesión de desarrollo solo crea plantilla y estructura.
+- Las actas de reunión las coordina el responsable de ese rol; en el repositorio solo vive la plantilla y la estructura.
 
 Plantilla de acta:
 ```markdown
@@ -498,12 +495,12 @@ Código con KDoc/TSDoc · pruebas · lint sin errores · sin secretos · sin PII
 | Contradicción Figma vs Etapa 1 (cuentas de ciudadano) | Cierta | Medio | Confirmar con el socio (D-12) |
 | Crédito/plan de AWS se agota o cuenta cerrada | Baja a corto plazo | Alto | D-01; plan de apagado; no dejar infra corriendo sin necesidad |
 | Fuga de secretos al hacer público el repo | Media | Alto | Fase 0 + `gitleaks` + push protection + rotación |
-| Cambios de la sesión de despliegue chocan con esta | Media | Medio | Una sola rama de integración, PRs pequeños, avisar al equipo |
+| Cambios en paralelo de varias ramas chocan entre sí | Media | Medio | Una sola rama de integración, PRs pequeños, avisar al equipo |
 | Dependencia de un servicio público de mapas estáticos | Media | Bajo | Alternativa con MapLibre/OSM o miniatura opcional |
 
 ---
 
-## 15. Pendientes del equipo (no son tareas de la sesión de desarrollo)
+## 15. Pendientes operativos del equipo
 
 - **Responsable de la cuenta AWS:** crear el primer usuario administrador de Cognito; configurar `alerta_emails` (D-05); decidir el momento de pausar/destruir infraestructura; confirmar autorización para el escaneo ZAP.
 - **Bowser:** rotar la llave de AWS (perfil `rieti`) y el token de GitHub al terminar (D-10); confirmar D-12 con el socio; coordinar actas de reunión.

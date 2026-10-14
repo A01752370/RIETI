@@ -1,0 +1,2 @@
+# Copiar a backend.hcl (ignorado por git) o generarlo con infra/bootstrap.sh.
+bucket = "rieti-tfstate-<id-de-cuenta>-mx"

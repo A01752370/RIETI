@@ -72,6 +72,6 @@ export const PUBLICO_KEY = 'publico';
 
 /**
  * Marca una ruta como pública (sin sesión). Por defecto **todas** las rutas
- * exigen JWT: hacer pública una ruta es una decisión explícita (CLAUDE.md, regla 6).
+ * exigen JWT: hacer pública una ruta es una decisión explícita (docs/GUIA-DESARROLLO.md, regla 6).
  */
 export const Publico = () => SetMetadata(PUBLICO_KEY, true);

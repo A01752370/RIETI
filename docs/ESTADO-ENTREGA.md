@@ -10,7 +10,7 @@
 | P0 Auditoría | Hecha (sección 2) |
 | P1 Flujo de punta a punta | Desplegado en AWS. Flujo ciudadano verificado por `curl` contra producción. **Falta la prueba de la app en emulador** (login, bandeja y estatus) |
 | P2 Seguridad mínima del backend | Hecha y probada; rol `rieti_app` preparado, no aplicado; RLS no hecha |
-| P3 Pantallas Android | Hechas; compilan y pasan pruebas; **no se ejecutaron en emulador en esta sesión** |
+| P3 Pantallas Android | Hechas; compilan y pasan pruebas; **no se ejecutaron en emulador antes de este corte** |
 | P4 Documentación | Hecha |
 | P5 Higiene del repositorio | Hecha |
 | P6 Web mínima | **No hecha** (hoja de ruta) |
@@ -62,7 +62,7 @@ Encontrado en `main` (commit `246f497`) y en AWS el 10-oct-2026 (solo lectura):
 | Login del personal en producción | Primer inicio de sesión del usuario creado | [PRUEBA-APP](PRUEBA-APP.md), sección 4 |
 | Borrar `RIETI-2026-000001` (y el de prueba `RIETI-2026-000002`) | Tarea única de ECS | [RUNBOOK-AWS](RUNBOOK-AWS.md), paso 3 |
 | `alerta_emails` | `terraform apply` de las suscripciones | [RUNBOOK-AWS](RUNBOOK-AWS.md), paso 5 |
-| Checks de CI de Android, e2e y gitleaks | No verificados por la sesión de desarrollo (sin acceso a GitHub Actions) | GitHub Actions |
+| Checks de CI de Android, e2e y gitleaks | No verificados por el equipo de desarrollo al corte (sin acceso a GitHub Actions) | GitHub Actions |
 
 ## 5. No hecho (hoja de ruta)
 
@@ -91,7 +91,7 @@ Encontrado en `main` (commit `246f497`) y en AWS el 10-oct-2026 (solo lectura):
 | Una sola AZ, respaldos de 1 día | Medio | Decisiones D-02 y D-04; snapshot manual antes de cambios. |
 | Credenciales usadas durante el desarrollo | Alto si no se rotan | Rotación pendiente del equipo (D-10). |
 | El aviso de privacidad es un borrador | Medio | Validarlo con el área jurídica del SIPINNA antes de publicar. |
-| La app no se probó en emulador en esta sesión | Medio | Guion paso a paso en [PRUEBA-APP](PRUEBA-APP.md). |
+| La app no se probó en emulador antes de este corte | Medio | Guion paso a paso en [PRUEBA-APP](PRUEBA-APP.md). |
 
 ## 7. Decisiones tomadas sin consultar
 
@@ -117,7 +117,7 @@ Todas son reversibles. Se tomaron por el plazo de 24 horas.
 | 16 | `rieti_app` como script SQL probado, **no** como migración automática; RLS no se implementa. | Crear el rol con inicio de sesión requiere secretos e infraestructura nuevos; los reportes aún no tienen municipio. |
 | 17 | Sin cambios en Terraform. `alerta_emails` va en `terraform.tfvars` (ignorado por git). | `terraform plan` sin diferencias; los correos no deben publicarse en el repo. |
 | 18 | Dependencias nuevas solo de desarrollo: `@types/node` 24, `@nestjs/testing`, `supertest`, `@types/supertest`; JUnit en Android. | Necesarias para las pruebas; no van en la imagen de producción. |
-| 19 | No se fusiona el PR desde esta sesión. | Fusionar despliega a producción; requiere aprobación explícita. |
+| 19 | El PR no se fusiona sin aprobación del equipo. | Fusionar despliega a producción; requiere aprobación explícita. |
 | 20 | `.idea/` fuera del repositorio. | Configuración local de cada integrante. |
 | 21 | La bandeja de la app carga la primera página (50) y muestra el total. | Suficiente para la demo; la paginación infinita queda pendiente. |
 
@@ -165,27 +165,27 @@ Lo de esta sección se probó en una máquina de desarrollo con PostgreSQL 16 + 
 
 ## 10. Estado al congelamiento (10-oct-2026)
 
-Fuente de cada dato: **[yo]** = comprobado en esta sesión con comandos o pruebas; **[Bowser]** = prueba manual reportada por Bowser; **[CI]** = resultado de GitHub Actions consultado con la API pública de GitHub.
+Fuente de cada dato: **[Dev]** = comprobado por el equipo de desarrollo con comandos o pruebas; **[Bowser]** = prueba manual reportada por Bowser; **[CI]** = resultado de GitHub Actions consultado con la API pública de GitHub.
 
 ### En producción (`main`)
 
 | Tema | Estado | Evidencia |
 |---|---|---|
-| Web pública y del personal servida por el backend | En producción | [yo] `GET /` → 200 HTML con CSP `'self'`; [Bowser] web probada en producción y funcionando |
-| Panel de estadísticas | En producción | [yo] Chrome real en local: tarjetas, barras, serie mensual y tablas alternativas, 0 violaciones de CSP; [Bowser] web en producción |
-| 125 municipios (D-16) | En producción | [yo] `GET /api/v1/catalogos/municipios` → 125 con claves únicas; Atizapán de Zaragoza = 15013 con su `id` original |
-| Red de municipios (D-17) | En producción, **solo datos de ejemplo** | [yo] `GET /api/v1/red-municipios` → 200, contactos `example.org`, `hayDatosDeEjemplo: true` |
-| Roles y permisos (D-18) | En producción | [yo] matriz en código + pruebas (`docs/seguridad/roles-y-permisos.md`); [yo] `GET /api/v1/auth/perfil` sin token → 401 |
-| Migración `MunicipiosYRed` | Aplicada | [yo] respuestas del API que dependen de sus columnas y tabla; prueba e2e sobre base con datos (local) |
-| Android: logos, selector de municipio con búsqueda, tokens, estatus con icono | En `main` (PR #6) | [yo] emulador aparte: inicio, aviso, formulario, búsqueda y selección de municipio; [Bowser] app nueva probada |
-| Android: ícono adaptativo (opción A) | En `main` | [yo] 0 píxeles fuera de la zona segura en 5 densidades; vista previa círculo/squircle/cuadrado sin cortes; launcher de emulador |
+| Web pública y del personal servida por el backend | En producción | [Dev] `GET /` → 200 HTML con CSP `'self'`; [Bowser] web probada en producción y funcionando |
+| Panel de estadísticas | En producción | [Dev] Chrome real en local: tarjetas, barras, serie mensual y tablas alternativas, 0 violaciones de CSP; [Bowser] web en producción |
+| 125 municipios (D-16) | En producción | [Dev] `GET /api/v1/catalogos/municipios` → 125 con claves únicas; Atizapán de Zaragoza = 15013 con su `id` original |
+| Red de municipios (D-17) | En producción, **solo datos de ejemplo** | [Dev] `GET /api/v1/red-municipios` → 200, contactos `example.org`, `hayDatosDeEjemplo: true` |
+| Roles y permisos (D-18) | En producción | [Dev] matriz en código + pruebas (`docs/seguridad/roles-y-permisos.md`); [Dev] `GET /api/v1/auth/perfil` sin token → 401 |
+| Migración `MunicipiosYRed` | Aplicada | [Dev] respuestas del API que dependen de sus columnas y tabla; prueba e2e sobre base con datos (local) |
+| Android: logos, selector de municipio con búsqueda, tokens, estatus con icono | En `main` (PR #6) | [Dev] emulador aparte: inicio, aviso, formulario, búsqueda y selección de municipio; [Bowser] app nueva probada |
+| Android: ícono adaptativo (opción A) | En `main` | [Dev] 0 píxeles fuera de la zona segura en 5 densidades; vista previa círculo/squircle/cuadrado sin cortes; launcher de emulador |
 | CI | En verde | [CI] merge de la web: test, e2e (maestro y rieti_app), imagen, build (web y Android), gitleaks y **deploy** en éxito; PR #6 e ícono: build y gitleaks en éxito |
 
 ### Pendiente de fusionar
 
 | Cambio | Estado | Evidencia |
 |---|---|---|
-| `municipioId` obligatorio en `POST /reportes` (rama `feat/municipio-obligatorio`) | PR por abrir/revisar | [yo] local: 53 unitarias; e2e 56/56 (maestro) y 57/57 (`rieti_app`); sin municipio → 400 "Elige el municipio donde ocurre"; 23 pruebas de web incluida A6 (XSS) |
+| `municipioId` obligatorio en `POST /reportes` (rama `feat/municipio-obligatorio`) | PR por abrir/revisar | [Dev] local: 53 unitarias; e2e 56/56 (maestro) y 57/57 (`rieti_app`); sin municipio → 400 "Elige el municipio donde ocurre"; 23 pruebas de web incluida A6 (XSS) |
 
 ### Limitaciones conocidas
 

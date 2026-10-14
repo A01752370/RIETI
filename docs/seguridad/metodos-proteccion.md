@@ -90,6 +90,7 @@ Las pruebas e2e corrieron en una máquina de desarrollo con PostgreSQL local. **
 | Bucket de evidencias privado (*Block Public Access*), cifrado, versionado | `s3.tf` | A14 | Configuración |
 | CI/CD con OIDC GitHub → AWS (sin llaves estáticas en GitHub) | `github.tf`, `backend.yml` | A19 | Configuración |
 | `.gitignore` de secretos (`.env`, `*.tfvars`, `*.tfstate`, llaves) y `gitleaks` en CI sobre todo el historial | `.gitignore`, `seguridad.yml` | A19 | `gitleaks`: sin hallazgos |
+| Identificadores de la cuenta fuera del repo: el nombre del bucket de estado (incluye el ID de cuenta) va en `infra/terraform/backend.hcl`, ignorado por git; la auditoría de cuenta omite alias de llaves e identidades de IAM | `versions.tf`, `bootstrap.sh`, `docs/AUDITORIA-CUENTA.md` | A24 | `terraform plan` sin cambios tras `init -reconfigure`; búsqueda de IDs de 12 dígitos en el árbol sin resultados |
 
 ### Privacidad por diseño
 

@@ -25,9 +25,9 @@ App Android ──HTTPS──► CloudFront (+ WAF) ──VPC origin──► AL
 
 ```bash
 export AWS_PROFILE=rieti
-./bootstrap.sh            # una sola vez: bucket de estado remoto
+./bootstrap.sh            # una sola vez: bucket de estado remoto + terraform/backend.hcl
 cd terraform
-terraform init
+terraform init -backend-config=backend.hcl   # generado por bootstrap.sh; ver backend.hcl.example
 terraform plan -out tfplan
 terraform apply tfplan
 ```
