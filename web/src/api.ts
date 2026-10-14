@@ -158,9 +158,25 @@ export interface DireccionRespuesta {
 export interface Perfil { correo: string; perfil: string; grupos: string[]; permisos: { permiso: string; descripcion: string }[] }
 /** Resumen del panel (solo agregados). */
 export interface ResumenEstadisticas {
-  total: number; nuevosUltimos7Dias: number; sinMunicipio: number;
+  total: number; nuevosUltimos7Dias: number; sinMunicipio: number; pendientes: number;
   porEstatus: { etiqueta: string; total: number }[]; porMes: { etiqueta: string; total: number }[];
 }
+/** Conteo que el servidor oculta (`null`) si es menor que el umbral. */
+export interface ConteoProtegido { etiqueta: string; total: number | null }
+/** Distribuciones del panel (Fase 3). */
+export interface Distribuciones { umbral: number; porMunicipio: ConteoProtegido[]; porActividad: ConteoProtegido[]; porGrupoEdad: ConteoProtegido[] }
+/** Tiempo promedio en cada estatus. */
+export interface Tiempos { umbral: number; porEstatus: { estatus: string; horasPromedio: number | null; casos: number }[] }
+/** Casos pendientes sin cambios en más de N días. */
+export interface SinAtender { dias: number; total: number; umbral: number; porMunicipio: ConteoProtegido[] }
+/** Celda del mapa de calor (centro de la celda, nunca la ubicación de un reporte). */
+export interface CeldaCalor { lat: number; lng: number; total: number }
+/** Mapa de calor agregado. */
+export interface MapaCalor { umbral: number; tamanoCelda: number; celdas: CeldaCalor[]; ocultas: number; sinUbicacion: number }
+/** Filtros comunes del panel. */
+export interface FiltrosPanel { desde?: string; hasta?: string; municipioId?: number; estatus?: string; actividad?: string }
+/** Filtros de la bandeja y la exportación. */
+export interface FiltrosBandeja extends FiltrosPanel { folio?: string; sinAtenderDias?: number; orden?: 'recientes' | 'antiguos' }
 
 /** Datos del formulario de reporte (formato de la Fase 2: grupos de edad y dirección). */
 export interface NuevoReporte {
@@ -169,7 +185,7 @@ export interface NuevoReporte {
 }
 
 /** Arma una cadena de consulta omitiendo valores vacíos. */
-export function consulta(params: Record<string, string | number | undefined | null>): string {
+export function consulta(params: { [k: string]: string | number | undefined | null }): string {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') p.set(k, String(v));
   const s = p.toString();
@@ -187,7 +203,7 @@ export const api = {
   login: (correo: string, password: string) =>
     llamar<{ accessToken: string; correo: string }>('/auth/login', { metodo: 'POST', cuerpo: { correo, password } }),
   perfil: () => llamar<Perfil>('/auth/perfil'),
-  reportes: (f: { estatus?: string; municipioId?: number; pagina?: number }) =>
+  reportes: (f: FiltrosBandeja & { pagina?: number }) =>
     llamar<Pagina<ReporteResumen>>(`/reportes${consulta({ ...f, tamano: 50 })}`),
   detalle: (id: number) => llamar<ReporteDetalle>(`/reportes/${id}`),
   cambiarEstatus: (id: number, estatus: string, comentario?: string, motivo?: string) =>
@@ -196,6 +212,39 @@ export const api = {
     }),
   agregarNota: (id: number, comentario: string) =>
     llamar<ReporteDetalle>(`/reportes/${id}/seguimientos`, { metodo: 'POST', cuerpo: { comentario } }),
-  estadisticas: (f: { desde?: string; hasta?: string; municipioId?: number }) =>
-    llamar<ResumenEstadisticas>(`/estadisticas/resumen${consulta(f)}`),
+  estadisticas: (f: FiltrosPanel) => llamar<ResumenEstadisticas>(`/estadisticas/resumen${consulta({ ...f })}`),
+  distribuciones: (f: FiltrosPanel) => llamar<Distribuciones>(`/estadisticas/distribuciones${consulta({ ...f })}`),
+  tiempos: (f: FiltrosPanel) => llamar<Tiempos>(`/estadisticas/tiempos${consulta({ ...f })}`),
+  sinAtender: (f: FiltrosPanel & { dias: number }) => llamar<SinAtender>(`/estadisticas/sin-atender${consulta({ ...f })}`),
+  mapaCalor: (f: FiltrosPanel) => llamar<MapaCalor>(`/estadisticas/mapa-calor${consulta({ ...f })}`),
 };
+
+/**
+ * Descarga la bandeja filtrada en CSV. Se pide con el token de la sesión y se
+ * entrega como archivo local (Blob), sin abrir otra página ni tocar la CSP.
+ */
+export async function descargarCsv(f: FiltrosBandeja): Promise<void> {
+  const cabeceras: Record<string, string> = { Accept: 'text/csv' };
+  const s = obtenerSesion();
+  if (s) cabeceras.Authorization = `Bearer ${s.token}`;
+  let r: Response;
+  try {
+    r = await fetch(`/api/v1/reportes/exportar.csv${consulta({ ...f })}`, { headers: cabeceras, credentials: 'omit', cache: 'no-store' });
+  } catch {
+    throw new ErrorApi('SIN_CONEXION', MENSAJES.SIN_CONEXION, 0);
+  }
+  if (!r.ok) {
+    let cuerpo: unknown = null;
+    try { cuerpo = await r.json(); } catch { /* sin cuerpo */ }
+    if (r.status === 401 && s) fijarSesion(null);
+    throw errorDesdeRespuesta(r.status, cuerpo);
+  }
+  const url = URL.createObjectURL(await r.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `reportes-rieti-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

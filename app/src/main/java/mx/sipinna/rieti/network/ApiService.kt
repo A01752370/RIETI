@@ -15,6 +15,8 @@ import mx.sipinna.rieti.model.Pagina
 import mx.sipinna.rieti.model.ReporteCreado
 import mx.sipinna.rieti.model.ReporteDetalle
 import mx.sipinna.rieti.model.ReporteResumen
+import mx.sipinna.rieti.model.ResumenPersonal
+import mx.sipinna.rieti.model.SinAtender
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.PATCH
@@ -70,8 +72,17 @@ interface ApiService {
     suspend fun listarReportes(
         @Query("estatus") estatus: String?,
         @Query("pagina") pagina: Int,
-        @Query("tamano") tamano: Int
+        @Query("tamano") tamano: Int,
+        @Query("sinAtenderDias") sinAtenderDias: Int? = null
     ): Pagina<ReporteResumen>
+
+    /** Resumen agregado para el inicio del personal (requiere sesión). */
+    @GET("api/v1/estadisticas/resumen")
+    suspend fun resumen(): ResumenPersonal
+
+    /** Casos pendientes sin cambios en más de N días (requiere sesión). */
+    @GET("api/v1/estadisticas/sin-atender")
+    suspend fun sinAtender(@Query("dias") dias: Int): SinAtender
 
     /** CU-09: detalle con bitácora y transiciones permitidas (requiere sesión). */
     @GET("api/v1/reportes/{id}")

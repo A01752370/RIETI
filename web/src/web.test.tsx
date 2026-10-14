@@ -6,7 +6,7 @@ import { claseEstatus, ESTATUS, SIGNIFICADO } from './estatus';
 import { App } from './main';
 import { BarrasPorEstatus, SeriePorMes } from './paginas/personal';
 import { aNuevoReporte, FORMULARIO_VACIO, validarFormulario } from './paginas/Reportar';
-import { textoDireccion, textoMenores } from './paginas/personal';
+import { BarrasConteo, formatearHoras, textoConteo, textoDireccion, textoMenores } from './paginas/personal';
 import { filtrarMunicipios, normalizar, SelectorMunicipio } from './SelectorMunicipio';
 
 afterEach(cleanup);
@@ -116,6 +116,24 @@ describe('detalle del personal (Fase 2)', () => {
     expect(textoDireccion({ calle: 'Av. López Mateos', numeroExterior: '12', colonia: 'Centro', codigoPostal: '52900', referencias: null }))
       .toBe('Av. López Mateos 12, Col. Centro, C.P. 52900');
     expect(textoDireccion(null)).toBeNull();
+  });
+});
+
+describe('panel (Fase 3)', () => {
+  it('formatea horas y días', () => {
+    expect(formatearHoras(null)).toBe('—');
+    expect(formatearHoras(5.25)).toBe('5.3 h');
+    expect(formatearHoras(72)).toBe('3 días');
+  });
+  it('los conteos ocultos por el umbral se leen como "menos de N"', () => {
+    expect(textoConteo(null, 3)).toBe('menos de 3');
+    expect(textoConteo(7, 3)).toBe('7');
+  });
+  it('las barras de conteos protegidos no usan estilos en línea y describen los ocultos', () => {
+    const { container } = render(<BarrasConteo titulo="Por municipio" umbral={3}
+      datos={[{ etiqueta: 'Atizapán de Zaragoza', total: 12 }, { etiqueta: 'Naucalpan de Juárez', total: null }]} />);
+    expect(container.innerHTML).not.toContain('style=');
+    expect(container.querySelector('svg')?.getAttribute('aria-label')).toContain('Naucalpan de Juárez: menos de 3');
   });
 });
 

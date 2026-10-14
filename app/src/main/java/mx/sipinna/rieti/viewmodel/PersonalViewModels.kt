@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import mx.sipinna.rieti.model.Pagina
 import mx.sipinna.rieti.model.ReporteDetalle
 import mx.sipinna.rieti.model.ReporteResumen
+import mx.sipinna.rieti.model.ResumenPersonal
 import mx.sipinna.rieti.repository.ReportesRepositorio
 import mx.sipinna.rieti.repository.Resultado
 import mx.sipinna.rieti.repository.SesionRepositorio
@@ -23,7 +24,8 @@ val ESTATUS_CANONICOS = listOf("Recibido", "En revisión", "En atención", "Cana
  * @param repositorio acceso al API (sustituible en pruebas)
  * @param sesion repositorio de sesión, para cerrar sesión
  */
-class BandejaViewModel(
+class BandejaViewModel @JvmOverloads constructor(
+    estado: SavedStateHandle = SavedStateHandle(),
     private val repositorio: ReportesRepositorio = ReportesRepositorio(),
     private val sesion: SesionRepositorio = SesionRepositorio()
 ) : ViewModel() {
@@ -33,14 +35,20 @@ class BandejaViewModel(
     /** Estado de la lista de reportes. */
     val reportes: StateFlow<UiState<Pagina<ReporteResumen>>> = _reportes.asStateFlow()
 
-    private val _filtro = MutableStateFlow<String?>(null)
+    private val _filtro = MutableStateFlow(estado.get<String>("estatus")?.takeIf { it in ESTATUS_CANONICOS })
 
     /** Estatus por el que se filtra, o null para ver todos. */
     val filtro: StateFlow<String?> = _filtro.asStateFlow()
 
-    /** Cambia el filtro y recarga. */
+    private val _sinAtenderDias = MutableStateFlow(estado.get<Int>("sinAtender")?.takeIf { it > 0 })
+
+    /** Si no es null, solo se muestran pendientes sin cambios en más de esos días (enlace del inicio). */
+    val sinAtenderDias: StateFlow<Int?> = _sinAtenderDias.asStateFlow()
+
+    /** Cambia el filtro de estatus (quita el de "sin atender") y recarga. */
     fun filtrar(estatus: String?) {
         _filtro.value = estatus
+        _sinAtenderDias.value = null
         cargar()
     }
 
@@ -48,7 +56,10 @@ class BandejaViewModel(
     fun cargar() {
         _reportes.value = UiState.Cargando
         val estatus = _filtro.value
-        viewModelScope.launch { _reportes.value = repositorio.listar(estatus).aUiState() }
+        val dias = _sinAtenderDias.value
+        viewModelScope.launch {
+            _reportes.value = (if (dias != null) repositorio.listarSinAtender(dias) else repositorio.listar(estatus)).aUiState()
+        }
     }
 
     /** Descarta el token en memoria. */
@@ -133,4 +144,61 @@ class DetalleReporteViewModel @JvmOverloads constructor(
             }
         }
     }
+}
+
+/** Datos del inicio del personal: resumen agregado y casos sin atender. */
+data class InicioPersonal(val resumen: ResumenPersonal, val sinAtender: Int, val diasSinAtender: Int)
+
+/**
+ * ViewModel del inicio del personal (Fase 3): conteos por estatus, pendientes y
+ * casos sin atender, con recarga manual (deslizar hacia abajo).
+ *
+ * @param repositorio acceso al API (sustituible en pruebas)
+ * @param sesion repositorio de sesión, para cerrar sesión
+ */
+class InicioPersonalViewModel(
+    private val repositorio: ReportesRepositorio = ReportesRepositorio(),
+    private val sesion: SesionRepositorio = SesionRepositorio()
+) : ViewModel() {
+
+    /** Antigüedad (días) a partir de la cual un caso pendiente se considera sin atender. */
+    val diasSinAtender = 7
+
+    private val _datos = MutableStateFlow<UiState<InicioPersonal>>(UiState.Inactivo)
+
+    /** Estado de los datos del inicio. */
+    val datos: StateFlow<UiState<InicioPersonal>> = _datos.asStateFlow()
+
+    private val _actualizando = MutableStateFlow(false)
+
+    /** true mientras se recarga con el gesto de deslizar (los datos anteriores siguen a la vista). */
+    val actualizando: StateFlow<Boolean> = _actualizando.asStateFlow()
+
+    /** Carga por primera vez (con indicador de carga a pantalla completa). */
+    fun cargar() {
+        if (_datos.value is UiState.Cargando) return
+        _datos.value = UiState.Cargando
+        viewModelScope.launch { _datos.value = consultar() }
+    }
+
+    /** Recarga sin ocultar los datos actuales. */
+    fun actualizar() {
+        if (_actualizando.value) return
+        _actualizando.value = true
+        viewModelScope.launch {
+            val r = consultar()
+            if (r is UiState.Exito || _datos.value !is UiState.Exito) _datos.value = r
+            _actualizando.value = false
+        }
+    }
+
+    private suspend fun consultar(): UiState<InicioPersonal> {
+        val resumen = repositorio.resumen()
+        if (resumen is Resultado.Error) return resumen.aUiState()
+        val sinAtender = (repositorio.sinAtender(diasSinAtender) as? Resultado.Exito)?.datos?.total ?: 0
+        return UiState.Exito(InicioPersonal((resumen as Resultado.Exito).datos, sinAtender, diasSinAtender))
+    }
+
+    /** Descarta el token en memoria. */
+    fun cerrarSesion() = sesion.cerrarSesion()
 }

@@ -96,6 +96,9 @@ Las pruebas e2e corrieron en una máquina de desarrollo con PostgreSQL local. **
 
 | Control | Dónde | Mitiga | Verificación |
 |---|---|---|---|
+| Estadísticas solo agregadas con umbral mínimo de celda (`ESTADISTICAS_UMBRAL`, 3): conteos menores se devuelven como `null`; el mapa de calor usa celdas de ≈ 550 m y nunca coordenadas | `estadisticas/agregados.ts`, `estadisticas.controller.ts` | A31 | Unitarias (`agregados.spec.ts`) + e2e |
+| Exportación CSV con permiso propio, límite de tasa y de filas, columnas mínimas y celdas neutralizadas contra fórmulas | `reportes.service.ts` (`exportarCsv`), `roles.ts` | A29, A30 | e2e (permiso, columnas, `=HYPERLINK` neutralizado) |
+| Mapa de calor web sin cambiar la CSP: Leaflet empaquetado localmente y cargado bajo demanda; teselas desde nuestro proxy (`img-src 'self'`) | `web/src/MapaCalor.tsx` | A26 | Chrome real (headless) con la CSP de producción: 0 violaciones, 0 peticiones a otros orígenes, 14 teselas y capa de calor dibujadas |
 | Mapa y geocodificación mediados por el backend: la app nunca contacta al proveedor; coordenadas redondeadas a ≈ 11 m antes de salir; coordenadas guardadas a 5 decimales y visibles solo para el personal | `geo/`, `MapaUbicacion.kt`, `formulario.ts` | A26 | e2e (doble de la fuente) + revisión de código |
 | Proxy de mapas acotado: Estado de México, zoom 8–18, límites por IP, caché, concurrencia y 1 req/s a Nominatim | `geo-utilidades.ts`, `geo.service.ts`, `geo.controller.ts` | A27 | Unitarias (`geo-utilidades.spec.ts`) + e2e |
 | Punto dentro del municipio (±300 m) y CP del Estado de México; cruce CP–municipio opcional con el catálogo de SEPOMEX (no versionado por su licencia) | `reportes.service.ts`, `scripts/cargar-codigos-postales.ts` | A28 | e2e (Toluca y CDMX rechazados; CP de otro estado y de otro municipio rechazados) |

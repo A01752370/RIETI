@@ -207,8 +207,8 @@ export interface ConsultaPublicaDto {
   historial: EventoPublicoDto[];
 }
 
-/** Filtros y paginación de la bandeja (`GET /api/v1/reportes`). */
-export class ListarReportesDto {
+/** Filtros de la bandeja y de la exportación (Fase 3). */
+export class FiltrosBandejaDto {
   /** Filtra por estatus vigente. */
   @IsOptional()
   @IsIn(ESTATUS_ORDENADOS)
@@ -221,6 +221,44 @@ export class ListarReportesDto {
   @Min(1)
   municipioId?: number;
 
+  /** Filtra por actividad (nombre del catálogo). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  actividad?: string;
+
+  /** Fecha inicial `AAAA-MM-DD` (hora de la Ciudad de México). */
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'desde debe tener el formato AAAA-MM-DD' })
+  desde?: string;
+
+  /** Fecha final `AAAA-MM-DD`, incluida. */
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'hasta debe tener el formato AAAA-MM-DD' })
+  hasta?: string;
+
+  /** Búsqueda por folio: completo o una parte (p. ej. "000123"); solo letras, dígitos y guiones. */
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
+  @Matches(/^[A-Z0-9-]{1,20}$/, { message: 'El folio solo puede tener letras, números y guiones' })
+  folio?: string;
+
+  /** Solo casos pendientes (Recibido o En revisión) sin cambios en más de N días. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  sinAtenderDias?: number;
+
+  /** Orden por fecha de creación. */
+  @IsOptional()
+  @IsIn(['recientes', 'antiguos'])
+  orden: 'recientes' | 'antiguos' = 'recientes';
+}
+
+/** Filtros y paginación de la bandeja (`GET /api/v1/reportes`). */
+export class ListarReportesDto extends FiltrosBandejaDto {
   /** Página (desde 1). */
   @IsOptional()
   @Type(() => Number)

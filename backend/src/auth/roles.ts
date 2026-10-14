@@ -23,6 +23,7 @@ export const GRUPO_A_PERFIL: Record<string, string> = {
 export type Permiso =
   | 'reportes.ver'
   | 'reportes.gestionar'
+  | 'reportes.exportar'
   | 'estadisticas.ver'
   | 'red.editar'
   | 'perfil.ver';
@@ -35,6 +36,7 @@ export type Permiso =
 export const MATRIZ_PERMISOS: Readonly<Record<Permiso, readonly string[]>> = {
   'reportes.ver': ['Administrador', 'PersonalSIPINNA'],
   'reportes.gestionar': ['Administrador', 'PersonalSIPINNA'],
+  'reportes.exportar': ['Administrador', 'PersonalSIPINNA'],
   'estadisticas.ver': ['Administrador', 'PersonalSIPINNA'],
   'red.editar': ['Administrador'],
   'perfil.ver': ['Administrador', 'PersonalSIPINNA'],
@@ -44,6 +46,7 @@ export const MATRIZ_PERMISOS: Readonly<Record<Permiso, readonly string[]>> = {
 export const DESCRIPCION_PERMISO: Readonly<Record<Permiso, string>> = {
   'reportes.ver': 'Ver la bandeja y el detalle de los reportes',
   'reportes.gestionar': 'Cambiar el estatus de un reporte y agregar notas de seguimiento',
+  'reportes.exportar': 'Descargar la bandeja filtrada en CSV (sin descripciones ni coordenadas)',
   'estadisticas.ver': 'Ver el panel de estadísticas (solo datos agregados)',
   'red.editar': 'Editar los contactos del directorio de la red de municipios',
   'perfil.ver': 'Ver su propio perfil y permisos',

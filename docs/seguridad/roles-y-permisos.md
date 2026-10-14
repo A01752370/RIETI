@@ -36,7 +36,8 @@
 | Ver su perfil y permisos (`perfil.ver`) | `GET /auth/perfil` | — | ✅ | ✅ |
 | Ver la bandeja y el detalle (`reportes.ver`) | `GET /reportes`, `GET /reportes/:id` | — | ✅ | ✅ |
 | Cambiar estatus y agregar notas (`reportes.gestionar`) | `PATCH /reportes/:id/estatus`, `POST /reportes/:id/seguimientos` | — | ✅ | ✅ |
-| Ver el panel de estadísticas, solo agregados (`estadisticas.ver`) | `GET /estadisticas/resumen` | — | ✅ | ✅ |
+| Ver el panel de estadísticas, solo agregados (`estadisticas.ver`) | `GET /estadisticas/resumen`, `/distribuciones`, `/tiempos`, `/sin-atender`, `/mapa-calor` | — | ✅ | ✅ |
+| Exportar la bandeja filtrada a CSV, sin descripciones ni coordenadas (`reportes.exportar`) | `GET /reportes/exportar.csv` | — | ✅ | ✅ |
 | Editar los contactos de la red (`red.editar`) | `PUT /red-municipios/:municipioId` | — | — | ✅ |
 
 Reglas que aplican a todos los perfiles:

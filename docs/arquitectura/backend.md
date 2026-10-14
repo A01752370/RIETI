@@ -45,6 +45,8 @@ src/
 | GET | `/api/v1/avisos-privacidad/vigente` | Público | CU-02 |
 | GET | `/api/v1/catalogos` | Público | Catálogos del formulario |
 | GET | `/api/v1/catalogos/actividades` | Público | Selector de actividad ("Otro" al final) |
+| GET | `/api/v1/estadisticas/distribuciones`, `/tiempos`, `/sin-atender`, `/mapa-calor` | Personal (`estadisticas.ver`) | Panel (solo agregados, con umbral) |
+| GET | `/api/v1/reportes/exportar.csv` | Personal (`reportes.exportar`), 10/min | Exportación de la bandeja filtrada |
 | GET | `/api/v1/geo/reversa?lat=&lng=` | Público, 30/min por IP | Dirección sugerida (OSM, mediada) y municipio del punto (INEGI) |
 | GET | `/api/v1/geo/teselas/:z/:x/:y.png` | Público, 600/min por IP | Mapa del Estado de México (proxy con caché) |
 | POST | `/api/v1/reportes` | Público, 5/min por IP | CU-04 |
