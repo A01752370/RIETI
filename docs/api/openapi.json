@@ -1272,7 +1272,8 @@
         "type": "object",
         "required": [
           "version",
-          "parrafos"
+          "parrafos",
+          "secciones"
         ],
         "properties": {
           "version": {
@@ -1283,6 +1284,30 @@
             "type": "array",
             "items": {
               "type": "string"
+            },
+            "description": "Párrafos en orden (formato anterior; se conserva por compatibilidad)."
+          },
+          "secciones": {
+            "type": "array",
+            "description": "El mismo texto agrupado en secciones con título.",
+            "items": {
+              "type": "object",
+              "required": [
+                "titulo",
+                "parrafos"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "titulo": {
+                  "type": "string"
+                },
+                "parrafos": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
             }
           }
         },

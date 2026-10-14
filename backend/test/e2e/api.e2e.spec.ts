@@ -150,6 +150,8 @@ describeBd('API RIETI (e2e)', () => {
       const r = await http().get('/api/v1/avisos-privacidad/vigente').expect(200);
       expect(r.body.version).toBe('2026-10-v1');
       expect(r.body.parrafos.length).toBeGreaterThan(0);
+      // Secciones con título: mismo texto, mismo orden (las APK instaladas siguen leyendo `parrafos`).
+      expect(r.body.secciones.flatMap((s: { parrafos: string[] }) => s.parrafos)).toEqual(r.body.parrafos);
     });
 
     it('las rutas viejas sin prefijo ya no existen', async () => {

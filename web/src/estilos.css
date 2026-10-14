@@ -186,3 +186,8 @@ details summary { cursor: pointer; min-height: var(--objetivo-tactil); display: 
   .pie .contenedor { grid-template-columns: auto 1fr; align-items: center; }
 }
 @media print { .barra-emergencia, .navegacion, .pie ul { display: none; } }
+
+/* Aviso de privacidad por secciones (mismo texto legal, con títulos). */
+.seccion-aviso { margin-top: 1rem; }
+.seccion-aviso h2, .seccion-aviso h3 { color: var(--color-primario); margin-bottom: 0.25rem; }
+.seccion-aviso p { margin-top: 0.25rem; }

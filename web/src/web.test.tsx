@@ -149,6 +149,19 @@ describe('páginas públicas', () => {
     expect(await screen.findByText('Datos de ejemplo: los contactos oficiales serán proporcionados por la institución.')).toBeTruthy();
   });
 
+  it('el aviso de privacidad se muestra por secciones con título cuando el servidor las envía', async () => {
+    const previo = respuestas['/api/v1/avisos-privacidad/vigente'];
+    respuestas['/api/v1/avisos-privacidad/vigente'] = {
+      version: '2026-10-v1', parrafos: ['Uno.', 'Dos.'],
+      secciones: [{ titulo: 'Quién es responsable', parrafos: ['Uno.'] }, { titulo: 'Tu folio y tu clave', parrafos: ['Dos.'] }],
+    };
+    await irA('/aviso-de-privacidad');
+    respuestas['/api/v1/avisos-privacidad/vigente'] = previo;
+    expect(await screen.findByRole('heading', { level: 2, name: 'Quién es responsable' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Tu folio y tu clave' })).toBeTruthy();
+    expect(screen.getByText('Dos.')).toBeTruthy();
+  });
+
   it('Reportar empieza por el aviso de privacidad con su versión, y Continuar está desactivado', async () => {
     await irA('/reportar');
     expect(await screen.findByText('Versión 2026-10-v1')).toBeTruthy();

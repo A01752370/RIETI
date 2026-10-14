@@ -64,6 +64,7 @@ Estado: **Mitigado (probado)** = hay control y prueba automatizada · **Mitigado
 | A21 | Alterar la bitácora | `UPDATE/DELETE` sobre `seguimiento` | Borrar evidencia | Mitigado (probado) |
 | A22 | Denegación de servicio | Cuerpos enormes, ráfagas, listados gigantes | Caída del servicio | Parcial (probado a nivel app; sin prueba de carga) |
 | A23 | Rastreo del denunciante por ubicación | Guardar la ubicación del teléfono como dato de quien reporta | Ubicar a quien reporta | Mitigado (configuración) |
+| A25 | Lectura del portapapeles | Otra app o la vista previa del sistema muestran la clave copiada | Consultar el estatus de un reporte ajeno | Mitigado (configuración): se copia solo el valor y marcado como sensible (sin vista previa en Android 13+). Riesgo residual: apps con acceso al portapapeles en versiones anteriores; la consulta solo revela estatus y fechas |
 | A24 | Reconocimiento con la documentación pública | Leer en el repo público el ID de la cuenta de AWS, alias de llaves o la postura de IAM para preparar ataques dirigidos (phishing, *bucket squatting*, abuso de llaves filtradas) | Facilitar otros ataques | Mitigado (revisión del árbol): el ID de cuenta salió de `versions.tf` (va en `backend.hcl`, ignorado por git) y la auditoría de cuenta ya no publica alias de llaves ni detalles de IAM. El historial anterior conserva el nombre del bucket de estado |
 
 ## 4. Detalle de los ataques principales

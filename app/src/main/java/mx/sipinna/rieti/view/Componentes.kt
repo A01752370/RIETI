@@ -3,6 +3,11 @@ package mx.sipinna.rieti.view
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.text.style.TextAlign
+import mx.sipinna.rieti.ui.theme.TextoSecundario
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -62,6 +67,7 @@ import java.util.Locale
  * @param alRegresar si no es null, muestra la flecha de regresar
  * @param acciones botones a la derecha de la barra (p. ej. "Cerrar sesión")
  * @param desplazable false para pantallas con listas propias (LazyColumn)
+ * @param barraInferior contenido fijo abajo (p. ej. el botón de aceptar), fuera del desplazamiento
  * @param contenido contenido de la pantalla
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,14 +77,24 @@ fun PantallaRieti(
     alRegresar: (() -> Unit)? = null,
     acciones: @Composable () -> Unit = {},
     desplazable: Boolean = true,
+    barraInferior: (@Composable () -> Unit)? = null,
     contenido: @Composable ColumnScope.() -> Unit
 ) {
     Scaffold(
+        bottomBar = {
+            if (barraInferior != null) {
+                Surface(shadowElevation = 8.dp, color = MaterialTheme.colorScheme.surface) {
+                    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp)) {
+                        barraInferior()
+                    }
+                }
+            }
+        },
         topBar = {
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        LogoRieti(alto = 40.dp)
+                        LogoRieti(alto = 32.dp)
                         Text(titulo, modifier = Modifier.semantics { heading() })
                     }
                 },
@@ -121,10 +137,14 @@ fun AccionBarra(texto: String, alPresionar: () -> Unit) {
 }
 
 /**
- * Logo de RIETI (identidad de la app). Se muestra completo, sin recortar ni
- * deformar (`ContentScale.Fit`), con margen de seguridad alrededor.
+ * Marca de RIETI (figuras + palabra "RIETI"), sin deformar (`ContentScale.Fit`).
  *
- * @param alto alto en dp; el ancho sale de la proporción original (508×492)
+ * El subtítulo del logo original ("Ruta Intermunicipal para la Erradicación del
+ * Trabajo Infantil") es ilegible a tamaño de pantalla, así que el recurso solo
+ * trae la marca y el nombre completo se muestra como texto ([EncabezadoMarcas]).
+ * Hay un PNG por densidad (mdpi a xxxhdpi) remuestreado con Lanczos.
+ *
+ * @param alto alto en dp; el ancho sale de la proporción (≈1.44:1)
  */
 @Composable
 fun LogoRieti(alto: Dp, modifier: Modifier = Modifier) {
@@ -132,34 +152,115 @@ fun LogoRieti(alto: Dp, modifier: Modifier = Modifier) {
         painter = painterResource(R.drawable.logo_rieti),
         contentDescription = "RIETI, Ruta Intermunicipal para la Erradicación del Trabajo Infantil",
         contentScale = ContentScale.Fit,
-        modifier = modifier.height(alto).padding(4.dp)
+        modifier = modifier.height(alto)
     )
 }
 
 /**
- * Logo institucional del SIPINNA de Atizapán de Zaragoza (marca institucional).
+ * Marca del SIPINNA (palabra "SIPINNA" con su ícono). El nombre completo de la
+ * institución se muestra aparte como texto, por legibilidad ([PieInstitucional]).
  *
- * @param alto alto en dp; el ancho sale de la proporción original (1920×571)
+ * @param alto alto en dp; el ancho sale de la proporción (≈4.5:1)
  */
 @Composable
 fun LogoSipinna(alto: Dp, modifier: Modifier = Modifier) {
     Image(
         painter = painterResource(R.drawable.logo_sipinna),
-        contentDescription = "Sistema Municipal de Protección Integral de Niñas, Niños y Adolescentes (SIPINNA) de Atizapán de Zaragoza",
+        contentDescription = "SIPINNA",
         contentScale = ContentScale.Fit,
-        modifier = modifier.height(alto).padding(4.dp)
+        modifier = modifier.height(alto)
     )
 }
 
-/** Encabezado de marca: RIETI (app) y SIPINNA (institución), sobre fondo claro. */
+/** Encabezado de marca centrado: logo de RIETI y su nombre completo como texto legible. */
 @Composable
 fun EncabezadoMarcas() {
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            LogoRieti(alto = 72.dp)
-            LogoSipinna(alto = 56.dp)
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        LogoRieti(alto = 96.dp)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Ruta Intermunicipal para la Erradicación del Trabajo Infantil",
+            style = MaterialTheme.typography.labelLarge,
+            color = TextoSecundario,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/**
+ * Pie institucional: marca del SIPINNA y su nombre completo en texto
+ * (el texto del logo original no se lee a este tamaño).
+ */
+@Composable
+fun PieInstitucional() {
+    Column(
+        Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        HorizontalDivider()
+        Spacer(Modifier.height(8.dp))
+        Text("Un servicio de", style = MaterialTheme.typography.labelMedium, color = TextoSecundario)
+        LogoSipinna(alto = 40.dp)
+        Text(
+            "Sistema Municipal de Protección Integral de Niñas, Niños y Adolescentes de Atizapán de Zaragoza",
+            style = MaterialTheme.typography.bodySmall,
+            color = TextoSecundario,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/**
+ * Bloque informativo con ícono, título y contenido, en una tarjeta ligera.
+ *
+ * @param icono ícono decorativo (no se anuncia: el título ya lo describe)
+ * @param titulo encabezado del bloque (se marca como encabezado para lectores de pantalla)
+ * @param contenido cuerpo del bloque
+ */
+@Composable
+fun BloqueInfo(icono: ImageVector, titulo: String, contenido: @Composable ColumnScope.() -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(icono, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Text(titulo, style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+            }
+            contenido()
         }
-        HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+/**
+ * Paso numerado de un proceso (círculo con número, ícono y texto).
+ *
+ * @param numero posición del paso
+ * @param icono ícono del paso
+ * @param titulo acción del paso
+ * @param detalle explicación corta
+ */
+@Composable
+fun PasoNumerado(numero: Int, icono: ImageVector, titulo: String, detalle: String) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}
+    ) {
+        Surface(color = MaterialTheme.colorScheme.primary, shape = CircleShape, modifier = Modifier.size(32.dp)) {
+            Box(contentAlignment = Alignment.Center) {
+                Text("$numero", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleSmall)
+            }
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(icono, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                Text(titulo, style = MaterialTheme.typography.titleSmall)
+            }
+            Text(detalle, style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }
 

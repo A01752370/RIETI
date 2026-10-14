@@ -64,8 +64,25 @@ data class ReporteCreado(
  *
  * @property version versión que se envía en [CrearReporteRequest.avisoPrivacidadVersion]
  * @property parrafos texto del aviso, un párrafo por elemento
+ * @property secciones el mismo texto agrupado con títulos; null si el servidor es anterior a este campo
  */
 data class AvisoPrivacidad(
     val version: String,
+    val parrafos: List<String>,
+    val secciones: List<SeccionAviso>? = null
+) {
+    /** Secciones a mostrar: las del servidor o, si no vienen, una sola sección sin título. */
+    fun seccionesParaMostrar(): List<SeccionAviso> =
+        secciones?.takeIf { it.isNotEmpty() } ?: listOf(SeccionAviso(titulo = "", parrafos = parrafos))
+}
+
+/**
+ * Sección del aviso de privacidad.
+ *
+ * @property titulo título corto (vacío si no hay)
+ * @property parrafos párrafos de la sección
+ */
+data class SeccionAviso(
+    val titulo: String,
     val parrafos: List<String>
 )

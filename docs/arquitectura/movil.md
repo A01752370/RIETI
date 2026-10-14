@@ -52,11 +52,11 @@ flowchart TD
 
 | Pantalla | Archivo | Qué hace |
 |---|---|---|
-| Inicio | `InicioScreen.kt` | Reportar (anónimo), consultar o entrar como personal. Recordatorio del 911. Sin "Crear cuenta" (D-12). |
-| Aviso de privacidad | `AvisoPrivacidadScreen.kt` | Descarga el aviso vigente del API; exige aceptarlo para continuar. |
+| Inicio | `InicioScreen.kt` | Logo centrado, una pregunta y las dos acciones principales (Reportar / Consultar) grandes; recordatorio del 911; bloques "Qué es SIPINNA", "Cómo funciona un reporte" (4 pasos) y "Tu privacidad"; acceso discreto del personal y pie institucional. Sin "Crear cuenta" (D-12). |
+| Aviso de privacidad | `AvisoPrivacidadScreen.kt` | Descarga el aviso vigente del API y lo muestra por secciones con título; la casilla y "Continuar" quedan fijos abajo. Si el servidor no envía secciones, muestra los párrafos. |
 | Formulario | `FormularioReporteScreen.kt` | Lugar de los hechos (texto + GPS opcional con aviso de precisión), cantidad, edad, actividad, riesgo y descripción. |
-| Confirmación | `ConfirmacionScreen.kt` | Folio y clave, con advertencia de que la clave no se puede recuperar y botón para copiarlos. |
-| Consulta | `ConsultaScreen.kt` | Folio + clave → estatus e historial público. |
+| Confirmación | `ConfirmacionScreen.kt` | Tarjeta de éxito, aviso "guarda esto", folio y clave en tarjetas separadas (monoespaciada), botones Copiar folio / Copiar clave / Copiar ambos / Compartir. El portapapeles recibe solo el valor limpio, marcado como sensible. |
+| Consulta | `ConsultaScreen.kt` | Folio + clave → estatus e historial público. Interpreta lo pegado con `ExtractorFolioClave` (bloque completo en cualquier campo, minúsculas, espacios, sin guiones) y tiene botón "Pegar". |
 | Login | `LoginScreen.kt` | Correo y contraseña (oculta) del personal. |
 | Bandeja | `BandejaScreen.kt` | Reportes del más reciente al más antiguo, filtro por estatus, cerrar sesión. |
 | Detalle | `DetalleReporteScreen.kt` | Datos del reporte, cambio de estatus (solo opciones válidas que manda el servidor), notas y bitácora. |
@@ -71,6 +71,13 @@ El grafo vive en `view/MainActivity.kt` y las rutas en `view/Rutas.kt`. Si el se
 - **`FLAG_SECURE` en release.** Impide capturas de pantalla y la vista previa en "recientes". En debug está desactivado para poder documentar con capturas.
 - **Minimización.** La app no envía identificadores del dispositivo. La ubicación del teléfono solo se usa si la persona toca "Estoy en el lugar", y se envía como ubicación del lugar de los hechos.
 - **Sin terceros.** Se eliminó la miniatura de mapa de un servicio público, que enviaba las coordenadas del reporte fuera del sistema.
+- **Portapapeles sensible.** El folio y la clave se copian con `EXTRA_IS_SENSITIVE`: en Android 13+ el sistema no muestra su vista previa.
+
+## Identidad visual
+
+- Los logos se recortan a su marca legible (figuras + "RIETI"; palabra "SIPINNA" con su ícono). El texto pequeño de los originales ("Ruta Intermunicipal…", "Sistema Municipal de Protección Integral…") no se lee a tamaño de pantalla, así que se muestra como texto real: nítido, accesible y escalable con la fuente del sistema.
+- Hay un PNG por densidad (`drawable-mdpi` a `drawable-xxxhdpi`) remuestreado con Lanczos desde `assets/logos/`. En xxxhdpi el logo de RIETI queda limitado por la resolución del original (494 px); con un original vectorial se podría generar un VectorDrawable.
+- Botones principales de 56 dp, objetivos táctiles de al menos 48 dp, encabezados marcados para lectores de pantalla y colores con contraste AA. El tema es solo claro (los logos se diseñaron para fondo claro).
 
 ## Configuración
 
@@ -87,6 +94,7 @@ El grafo vive en `view/MainActivity.kt` y las rutas en `view/Rutas.kt`. Si el se
 ```
 
 - `ValidadorReporteTest`: reglas del formulario, catálogos y normalización del folio.
+- `ExtractorFolioClaveTest`: 19 casos de texto pegado (bloque combinado, etiquetas, minúsculas, espacios, sin guiones, saltos de línea, guiones largos, basura, palabras que parecen clave).
 - `ErroresApiTest`: traducción de `{codigo, mensaje}`, incluida la diferencia entre "credenciales incorrectas" y "sesión expirada".
 - Lint: 0 errores (las 15 advertencias son de versiones de dependencias; no se actualizan sin decisión del equipo).
 - CI: `.github/workflows/android.yml`.

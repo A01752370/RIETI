@@ -200,5 +200,14 @@ Fuente de cada dato: **[Dev]** = comprobado por el equipo de desarrollo con coma
 - **Sin prueba de carga ni escaneo OWASP ZAP**; sin Dependabot.
 - **TLS mínimo no endurecible** con el dominio `*.cloudfront.net`.
 - Al fusionar `municipio-obligatorio`, las APK anteriores al PR #6 ya no podrán enviar reportes.
-- Reportes de prueba en producción: `RIETI-2026-000001`, `000002` y `000004` (ficticios, marcados "PRUEBA AUTOMATIZADA" los dos últimos) y `000003` (origen no verificado). Se pueden retirar con el paso 3 del runbook.
+- Reportes de prueba en producción: `RIETI-2026-000001`, `000002`, `000004` y `000010` (ficticios, marcados "PRUEBA AUTOMATIZADA" los tres últimos) y `000003` (origen no verificado). Se pueden retirar con el paso 3 del runbook.
 
+
+## 11. Retroalimentación del profesor (desde el 14-oct-2026)
+
+Trabajo por fases, cada una en su rama y con CI en verde antes de fusionar. Fuente de cada dato: **[Dev]** = comprobado por el equipo de desarrollo; **[CI]** = GitHub Actions; **[Prod]** = comprobado contra producción.
+
+| Fase | Qué cambió | Evidencia |
+|---|---|---|
+| 0 — Limpieza | Guía de desarrollo en `docs/`; plan sin guion de trabajo; auditoría de cuenta sin alias de llaves ni detalles de IAM; ID de cuenta fuera de `versions.tf` (`backend.hcl`); prueba de contrato OpenAPI ↔ rutas | [Dev] 54 unitarias; `terraform plan` sin cambios. [CI] test, e2e (maestro y `rieti_app`), imagen, gitleaks. [Prod] `/health` ok, catálogos 200, bandeja sin token 401 |
+| 1 — Pulido visual | Inicio rediseñado (logo centrado, dos acciones grandes, bloques "Qué es SIPINNA", "Cómo funciona", "Tu privacidad"); logos recortados a su marca legible y por densidad; aviso de privacidad por secciones con aceptación fija abajo (API: campo `secciones` aditivo, misma versión `2026-10-v1`); confirmación con tarjetas y copiar folio / clave / ambos / compartir; consulta que separa folio y clave al pegar y botón "Pegar" | [Dev] 31 pruebas JVM (19 del extractor), lint sin errores, 58 unitarias del backend, 24 de la web; emulador Pixel 7 (API 37) contra producción: reporte `RIETI-2026-000010` (prueba), "Copiar ambos" → "Pegar" y pegado del bloque en el campo Folio rellenan ambos campos y la consulta responde "Recibido" |

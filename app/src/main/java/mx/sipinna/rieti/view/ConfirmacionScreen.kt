@@ -1,29 +1,53 @@
 package mx.sipinna.rieti.view
 
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.os.PersistableBundle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import android.content.Intent
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import mx.sipinna.rieti.ui.theme.TextoSecundario
+
+/** Qué se copió por última vez, para confirmarlo en pantalla. */
+private enum class Copiado { NADA, FOLIO, CLAVE, AMBOS }
 
 /**
  * Confirmación del reporte: muestra folio y clave de consulta una sola vez.
@@ -31,31 +55,35 @@ import androidx.compose.ui.unit.dp
  * El servidor solo guarda el hash de la clave, así que si se pierde no se puede
  * recuperar; por eso se insiste en guardarla. No se guarda en el teléfono.
  *
+ * Cada botón de copiar deja en el portapapeles **solo el valor limpio**
+ * (`RIETI-2026-000123` o `ABCD-EFGH-2345`), para pegarlo tal cual en la consulta.
+ * "Copiar ambos" y "Compartir" usan un bloque con etiquetas que la consulta
+ * también sabe separar ([mx.sipinna.rieti.viewmodel.ExtractorFolioClave]).
+ *
  * @param folio folio asignado
  * @param clave clave de consulta
  * @param alTerminar vuelve al inicio
  */
 @Composable
 fun ConfirmacionScreen(folio: String, clave: String, alTerminar: () -> Unit) {
-    val portapapeles = LocalClipboardManager.current
     val contexto = LocalContext.current
-    var copiado by rememberSaveable { mutableStateOf(false) }
+    var copiado by rememberSaveable { mutableStateOf(Copiado.NADA) }
+    val ambos = "Folio: $folio\nClave de consulta: $clave"
 
     PantallaRieti(titulo = "Reporte enviado") {
-        LogoRieti(alto = 96.dp)
-        Text("Gracias. Recibimos tu reporte.", style = MaterialTheme.typography.headlineSmall)
-        Text(
-            "El personal del SIPINNA lo revisará. Con estos datos puedes consultar su avance:",
-            style = MaterialTheme.typography.bodyLarge
-        )
-
-        Card(Modifier.fillMaxWidth()) {
-            SelectionContainer {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Folio", style = MaterialTheme.typography.labelLarge)
-                    Text(folio, style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Monospace)
-                    Text("Clave de consulta", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
-                    Text(clave, style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Monospace)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("¡Gracias! Recibimos tu reporte", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
+                    Text("El personal del SIPINNA lo revisará.", style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
@@ -64,40 +92,106 @@ fun ConfirmacionScreen(folio: String, clave: String, alTerminar: () -> Unit) {
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                "Anota o guarda el folio y la clave ahora. Por tu privacidad no los guardamos en el teléfono " +
-                    "y la clave no se puede recuperar.",
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.padding(12.dp)
-            )
+            Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Guarda estos datos ahora", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                    Text(
+                        "No se vuelven a mostrar. Por tu privacidad no los guardamos en el teléfono y la clave no se puede recuperar.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
         }
+
+        TarjetaDato(
+            etiqueta = "Folio",
+            valor = folio,
+            textoBoton = if (copiado == Copiado.FOLIO) "Folio copiado" else "Copiar folio",
+            alCopiar = { copiarSensible(contexto, "Folio RIETI", folio); copiado = Copiado.FOLIO }
+        )
+        TarjetaDato(
+            etiqueta = "Clave de consulta",
+            valor = clave,
+            textoBoton = if (copiado == Copiado.CLAVE) "Clave copiada" else "Copiar clave",
+            alCopiar = { copiarSensible(contexto, "Clave RIETI", clave); copiado = Copiado.CLAVE }
+        )
 
         OutlinedButton(
-            onClick = {
-                portapapeles.setText(AnnotatedString("Folio: $folio\nClave: $clave"))
-                copiado = true
-            },
+            onClick = { copiarSensible(contexto, "Folio y clave RIETI", ambos); copiado = Copiado.AMBOS },
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) {
-            Text(if (copiado) "Copiados al portapapeles" else "Copiar folio y clave")
+            Text(if (copiado == Copiado.AMBOS) "Folio y clave copiados" else "Copiar ambos")
         }
-
         OutlinedButton(
             onClick = {
                 // La persona elige con qué app compartir (p. ej. enviárselo a sí misma); RIETI no guarda nada.
                 val envio = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, "RIETI\nFolio: $folio\nClave de consulta: $clave")
+                    putExtra(Intent.EXTRA_TEXT, "RIETI\n$ambos")
                 }
                 contexto.startActivity(Intent.createChooser(envio, "Compartir folio y clave"))
             },
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) {
-            Text("Compartir")
+            Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+            Text("Compartir", modifier = Modifier.padding(start = 8.dp))
         }
 
-        Button(onClick = alTerminar, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        if (copiado != Copiado.NADA) {
+            Text(
+                "Pégalo en tus notas o en un mensaje para ti.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextoSecundario,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+            )
+        }
+
+        Button(onClick = alTerminar, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(top = 8.dp)) {
             Text("Ya los guardé, volver al inicio")
         }
     }
+}
+
+/**
+ * Tarjeta con un dato (folio o clave) en tipografía monoespaciada, seleccionable,
+ * y su propio botón de copiar.
+ */
+@Composable
+private fun TarjetaDato(etiqueta: String, valor: String, textoBoton: String, alCopiar: () -> Unit) {
+    OutlinedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(etiqueta, style = MaterialTheme.typography.labelLarge, color = TextoSecundario)
+            SelectionContainer {
+                Text(
+                    valor,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.SemiBold,
+                    // Se lee carácter por carácter para dictarlo sin errores.
+                    modifier = Modifier.semantics { contentDescription = "$etiqueta: ${valor.toList().joinToString(" ")}" }
+                )
+            }
+            OutlinedButton(onClick = alCopiar, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text(textoBoton)
+            }
+        }
+    }
+}
+
+/**
+ * Copia al portapapeles marcando el contenido como **sensible**: en Android 13+
+ * el sistema no muestra su vista previa (útil porque la clave da acceso al
+ * estatus del reporte). En versiones anteriores la marca se ignora sin error.
+ */
+private fun copiarSensible(contexto: Context, etiqueta: String, texto: String) {
+    val clip = ClipData.newPlainText(etiqueta, texto).apply {
+        description.extras = PersistableBundle().apply {
+            val clave = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) ClipDescription.EXTRA_IS_SENSITIVE
+            else "android.content.extra.IS_SENSITIVE"
+            putBoolean(clave, true)
+        }
+    }
+    (contexto.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
 }
