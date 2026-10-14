@@ -25,10 +25,14 @@ object ServicioRemoto {
     @Volatile
     var accessToken: String? = null
 
-    /** Agrega `Authorization: Bearer` cuando hay sesión. */
+    /**
+     * Agrega `Authorization: Bearer` con el token del **personal** cuando hay sesión,
+     * salvo que la petición ya traiga uno (las rutas de cuenta de ciudadano mandan
+     * el suyo explícitamente; los dos tokens nunca se mezclan).
+     */
     private val authInterceptor = Interceptor { chain ->
         val token = accessToken
-        val peticion = if (token != null) {
+        val peticion = if (token != null && chain.request().header("Authorization") == null) {
             chain.request().newBuilder().header("Authorization", "Bearer $token").build()
         } else {
             chain.request()

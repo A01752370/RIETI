@@ -14,6 +14,7 @@ import mx.sipinna.rieti.model.Municipio
 import mx.sipinna.rieti.model.ReporteCreado
 import mx.sipinna.rieti.repository.ReportesRepositorio
 import mx.sipinna.rieti.repository.Resultado
+import mx.sipinna.rieti.repository.SesionCiudadanoRepositorio
 
 /**
  * Punto del lugar de los hechos (marcador del mapa o lectura del GPS).
@@ -142,6 +143,7 @@ class FormularioReporteViewModel(
      * @param direccion campos de la dirección
      * @param conteos menores por rango de edad
      * @param avisoVersion versión del aviso de privacidad que la persona aceptó
+     * @param vincularCuenta true solo si la persona activó el interruptor (Fase 4; desactivado por defecto)
      */
     fun enviar(
         municipio: Municipio?,
@@ -151,7 +153,8 @@ class FormularioReporteViewModel(
         actividadOtro: String,
         riesgo: String,
         descripcion: String,
-        avisoVersion: String
+        avisoVersion: String,
+        vincularCuenta: Boolean = false
     ) {
         if (_envio.value is UiState.Cargando) return
         val problemas = ValidadorReporte.validar(
@@ -164,6 +167,11 @@ class FormularioReporteViewModel(
         _envio.value = UiState.Cargando
         val punto = _ubicacion.value
         viewModelScope.launch {
+            val token = if (vincularCuenta) SesionCiudadanoRepositorio.tokenVigente() else null
+            if (vincularCuenta && token == null) {
+                _envio.value = UiState.Error("Tu sesión venció. Vuelve a iniciar sesión o envía el reporte sin vincular.")
+                return@launch
+            }
             _envio.value = repositorio.crear(
                 CrearReporteRequest(
                     municipioId = municipio?.id,
@@ -181,8 +189,10 @@ class FormularioReporteViewModel(
                     actividadOtro = actividadOtro.trim().takeIf { actividad == ValidadorReporte.ACTIVIDAD_OTRO && it.isNotEmpty() },
                     situacionRiesgo = riesgo,
                     descripcion = descripcion.trim(),
-                    avisoPrivacidadVersion = avisoVersion
-                )
+                    avisoPrivacidadVersion = avisoVersion,
+                    vincularCuenta = if (vincularCuenta) true else null
+                ),
+                token
             ).aUiState()
         }
     }

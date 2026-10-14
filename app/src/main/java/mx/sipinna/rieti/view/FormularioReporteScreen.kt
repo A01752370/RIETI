@@ -26,7 +26,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
+import mx.sipinna.rieti.repository.SesionCiudadanoRepositorio
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -96,6 +100,9 @@ fun FormularioReporteScreen(
     var riesgo by rememberSaveable { mutableStateOf("") }
     var descripcion by rememberSaveable { mutableStateOf("") }
     var permisoNegado by rememberSaveable { mutableStateOf(false) }
+    // Fase 4: vincular a la cuenta solo si la persona lo activa (anónimo por defecto).
+    var vincular by rememberSaveable { mutableStateOf(false) }
+    val haySesionCiudadano by SesionCiudadanoRepositorio.haySesion.collectAsState()
 
     var municipio by remember { mutableStateOf<Municipio?>(null) }
     var municipioPropuesto by remember { mutableStateOf<MunicipioSugerido?>(null) }
@@ -258,13 +265,31 @@ fun FormularioReporteScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        if (haySesionCiudadano) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+                    .toggleable(value = vincular, role = Role.Switch, onValueChange = { vincular = it })
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Vincular este reporte a mi cuenta", style = MaterialTheme.typography.bodyLarge)
+                    NotaCampo("Así lo verás en \"Mi panel\". Si lo dejas apagado, el reporte es anónimo.")
+                }
+                Switch(checked = vincular, onCheckedChange = null)
+            }
+        }
+
         (envio as? UiState.Error)?.let { MensajeError(it.mensaje) }
 
         Button(
             onClick = {
                 viewModel.enviar(
                     municipio, DatosDireccion(calle, numero, colonia, codigoPostal, referencias),
-                    conteos, actividad, actividadOtro, riesgo, descripcion, avisoVersion
+                    conteos, actividad, actividadOtro, riesgo, descripcion, avisoVersion,
+                    vincularCuenta = haySesionCiudadano && vincular
                 )
             },
             enabled = envio !is UiState.Cargando,

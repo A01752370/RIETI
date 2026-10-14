@@ -13,7 +13,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import mx.sipinna.rieti.BuildConfig
+import mx.sipinna.rieti.repository.SesionCiudadanoRepositorio
 import mx.sipinna.rieti.repository.SesionRepositorio
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import mx.sipinna.rieti.ui.theme.RIETITheme
 
 /**
@@ -28,6 +31,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Recupera la sesión de la cuenta opcional de ciudadano (refresh token cifrado con el Keystore).
+        SesionCiudadanoRepositorio.iniciar(applicationContext)
         if (!BuildConfig.DEBUG) {
             window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         }
@@ -44,6 +49,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppRieti() {
     val nav = rememberNavController()
+    val haySesionCiudadano by SesionCiudadanoRepositorio.haySesion.collectAsState()
 
     NavHost(navController = nav, startDestination = Rutas.INICIO) {
 
@@ -52,7 +58,9 @@ private fun AppRieti() {
             InicioScreen(
                 alReportar = { nav.navigate(Rutas.AVISO) },
                 alConsultar = { nav.navigate(Rutas.CONSULTA) },
-                alEntrarPersonal = { nav.navigate(Rutas.LOGIN) }
+                alEntrarPersonal = { nav.navigate(Rutas.LOGIN) },
+                haySesionCiudadano = haySesionCiudadano,
+                alCuenta = { nav.navigate(if (haySesionCiudadano) Rutas.MI_PANEL else Rutas.CUENTA) }
             )
         }
         composable(Rutas.AVISO) {
@@ -91,6 +99,27 @@ private fun AppRieti() {
         }
         composable(Rutas.CONSULTA) {
             ConsultaScreen(alRegresar = { nav.popBackStack() })
+        }
+
+        // --- Cuenta opcional de ciudadano (Fase 4) ---
+        composable(Rutas.CUENTA) {
+            AccesoCuentaScreen(
+                alEntrar = { nav.navigate(Rutas.MI_PANEL) { popUpTo(Rutas.INICIO) } },
+                alRegresar = { nav.popBackStack() }
+            )
+        }
+        composable(Rutas.MI_PANEL) {
+            MiPanelScreen(
+                alConfiguracion = { nav.navigate(Rutas.CUENTA_CONFIGURACION) },
+                alRegresar = { nav.popBackStack() },
+                alSesionExpirada = { nav.navigate(Rutas.CUENTA) { popUpTo(Rutas.INICIO) } }
+            )
+        }
+        composable(Rutas.CUENTA_CONFIGURACION) {
+            ConfiguracionCuentaScreen(
+                alRegresar = { nav.popBackStack() },
+                alSalir = { volverAlInicio(nav) }
+            )
         }
 
         // --- Personal SIPINNA ---
