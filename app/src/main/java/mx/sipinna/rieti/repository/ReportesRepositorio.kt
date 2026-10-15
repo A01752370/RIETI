@@ -34,7 +34,8 @@ class ReportesRepositorio(private val api: ApiService = ServicioRemoto.api) {
     suspend fun municipios(): Resultado<List<Municipio>> = ejecutar { api.municipios() }
 
     /** Envía un reporte anónimo; el resultado trae folio y clave de consulta. */
-    suspend fun crear(request: CrearReporteRequest): Resultado<ReporteCreado> = ejecutar { api.crearReporte(request) }
+    suspend fun crear(request: CrearReporteRequest, tokenCiudadano: String? = null): Resultado<ReporteCreado> =
+        ejecutar { api.crearReporte(request, tokenCiudadano?.let { "Bearer $it" }) }
 
     /** Catálogo de actividades del servidor. */
     suspend fun actividades(): Resultado<List<Actividad>> = ejecutar { api.actividades() }

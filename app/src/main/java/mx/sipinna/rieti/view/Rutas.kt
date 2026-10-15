@@ -22,6 +22,15 @@ object Rutas {
     /** Consulta ciudadana con folio + clave. */
     const val CONSULTA = "consulta"
 
+    /** Acceso a la cuenta opcional de ciudadano (Fase 4). */
+    const val CUENTA = "cuenta"
+
+    /** "Mi panel": reportes vinculados a la cuenta de ciudadano. */
+    const val MI_PANEL = "mi-panel"
+
+    /** Configuración de la cuenta de ciudadano. */
+    const val CUENTA_CONFIGURACION = "cuenta-configuracion"
+
     /** Inicio de sesión del personal. */
     const val LOGIN = "login"
 

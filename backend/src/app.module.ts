@@ -4,7 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { opcionesTypeOrm } from './config/typeorm.config';
 import { AuthModule } from './auth/auth.module';
-import { crearVerificadorCognito, JwtGuard, VERIFICADOR_JWT } from './auth/jwt.guard';
+import { crearVerificadorCiudadanos, crearVerificadorCognito, JwtGuard, VERIFICADOR_JWT, VERIFICADOR_JWT_CIUDADANO } from './auth/jwt.guard';
 import { HealthController } from './health/health.controller';
 import { AvisosController } from './avisos/aviso-privacidad';
 import { CatalogosController } from './catalogos/catalogos.controller';
@@ -12,6 +12,7 @@ import { EstadisticasController } from './estadisticas/estadisticas.controller';
 import { RedController } from './red/red.controller';
 import { ReportesModule } from './reportes/reportes.module';
 import { GeoModule } from './geo/geo.module';
+import { CiudadanosModule } from './ciudadanos/ciudadanos.module';
 
 /**
  * Módulo raíz. El orden de los guards globales importa: primero el límite de
@@ -25,11 +26,13 @@ import { GeoModule } from './geo/geo.module';
     AuthModule,
     ReportesModule,
     GeoModule,
+    CiudadanosModule,
   ],
   controllers: [HealthController, AvisosController, CatalogosController, RedController, EstadisticasController],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: VERIFICADOR_JWT, useFactory: crearVerificadorCognito },
+    { provide: VERIFICADOR_JWT_CIUDADANO, useFactory: crearVerificadorCiudadanos },
     { provide: APP_GUARD, useClass: JwtGuard },
   ],
 })

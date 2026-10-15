@@ -12,6 +12,8 @@ const PUBLICAS_PERMITIDAS = new Set([
   'GET avisos-privacidad/vigente',
   'GET catalogos', 'GET catalogos/municipios', 'GET catalogos/actividades',
   'GET geo/reversa', 'GET geo/teselas/:z/:x/:y.png',
+  'POST ciudadanos/registro', 'POST ciudadanos/confirmar', 'POST ciudadanos/reenviar-codigo', 'POST ciudadanos/login',
+  'POST ciudadanos/refresh', 'POST ciudadanos/olvide-contrasena', 'POST ciudadanos/restablecer-contrasena',
   'GET red-municipios',
 ]);
 
@@ -19,6 +21,12 @@ const PUBLICAS_PERMITIDAS = new Set([
  * Matriz esperada ruta → permiso (docs/seguridad/roles-y-permisos.md). Si una
  * ruta del personal cambia de permiso o aparece una nueva, esta prueba falla.
  */
+/** Rutas de la cuenta de ciudadano (Fase 4): solo tokens del pool de ciudadanos. */
+const CIUDADANO_ESPERADAS = [
+  'GET ciudadano/cuenta', 'POST ciudadano/cuenta/contrasena', 'POST ciudadano/cuenta/cerrar-sesion',
+  'DELETE ciudadano/cuenta', 'GET ciudadano/reportes',
+];
+
 const PERMISO_ESPERADO: Record<string, Permiso> = {
   'GET reportes': 'reportes.ver',
   'GET reportes/:id': 'reportes.ver',
@@ -42,13 +50,21 @@ describe('inventario de rutas y matriz de permisos (D-18)', () => {
     expect(publicas).toEqual([...PUBLICAS_PERMITIDAS].sort());
   });
 
-  it('cada ruta no pública declara exactamente el permiso de la matriz esperada', () => {
-    const privadas = Object.fromEntries(todas.filter((r) => !r.publica).map((r) => [r.id, r.permiso]));
+  it('las rutas de cuenta de ciudadano exigen el token del pool de ciudadanos y no tienen permisos del personal (Fase 4)', () => {
+    const deCiudadano = todas.filter((r) => r.ciudadano === 'requerido');
+    expect(deCiudadano.map((r) => r.id).sort()).toEqual(CIUDADANO_ESPERADAS.sort());
+    for (const r of deCiudadano) expect({ ruta: r.id, roles: r.roles, permiso: r.permiso }).toEqual({ ruta: r.id, roles: undefined, permiso: undefined });
+    // Solo POST /reportes acepta un token de ciudadano opcional, y sigue siendo pública.
+    expect(todas.filter((r) => r.ciudadano === 'opcional').map((r) => [r.id, r.publica])).toEqual([['POST reportes', true]]);
+  });
+
+  it('cada ruta del personal declara exactamente el permiso de la matriz esperada', () => {
+    const privadas = Object.fromEntries(todas.filter((r) => !r.publica && !r.ciudadano).map((r) => [r.id, r.permiso]));
     expect(privadas).toEqual(PERMISO_ESPERADO);
   });
 
   it('los grupos de cada ruta son los de su permiso en MATRIZ_PERMISOS', () => {
-    for (const r of todas.filter((x) => !x.publica)) {
+    for (const r of todas.filter((x) => !x.publica && !x.ciudadano)) {
       expect({ ruta: r.id, roles: r.roles }).toEqual({ ruta: r.id, roles: [...MATRIZ_PERMISOS[r.permiso!]] });
     }
   });

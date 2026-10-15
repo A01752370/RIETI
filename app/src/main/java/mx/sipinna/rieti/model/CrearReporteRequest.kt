@@ -19,6 +19,7 @@ package mx.sipinna.rieti.model
  * @property situacionRiesgo "Sí", "No" o "No sé"
  * @property descripcion descripción libre de lo observado
  * @property avisoPrivacidadVersion versión del aviso que la persona aceptó (RF-44)
+ * @property vincularCuenta true solo si la persona activó "Vincular este reporte a mi cuenta" (Fase 4); null = anónimo
  */
 data class CrearReporteRequest(
     val municipioId: Int?,
@@ -30,7 +31,8 @@ data class CrearReporteRequest(
     val actividadOtro: String?,
     val situacionRiesgo: String,
     val descripcion: String,
-    val avisoPrivacidadVersion: String
+    val avisoPrivacidadVersion: String,
+    val vincularCuenta: Boolean? = null
 )
 
 /**

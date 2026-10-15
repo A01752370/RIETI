@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Header, HttpCode, Param, ParseIntPipe, Patch, Post, Query, Req } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, HttpCode, Param, ParseIntPipe, Patch, Post, Query, Req } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { Publico, Requiere } from '../auth/roles';
+import { CiudadanoOpcional, Publico, Requiere } from '../auth/roles';
 import { RequestAutenticado } from '../auth/jwt.guard';
 import {
   AgregarSeguimientoDto, CambiarEstatusDto, ConsultaPublicaDto, ConsultarReporteDto, CrearReporteDto,
@@ -18,12 +18,19 @@ import { ReportesService } from './reportes.service';
 export class ReportesController {
   constructor(private readonly reportes: ReportesService) {}
 
-  /** CU-04: registra un reporte anónimo. 5 por minuto por IP (spam, ataque A9). */
+  /**
+   * CU-04: registra un reporte (anónimo por defecto). 5 por minuto por IP (spam, ataque A9).
+   * Con un token de ciudadano y `vincularCuenta: true`, el reporte queda ligado a la cuenta (Fase 4).
+   */
   @Publico()
+  @CiudadanoOpcional()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post()
-  crear(@Body() dto: CrearReporteDto): Promise<ReporteCreadoDto> {
-    return this.reportes.crear(dto);
+  crear(@Body() dto: CrearReporteDto, @Req() req: RequestAutenticado): Promise<ReporteCreadoDto> {
+    if (dto.vincularCuenta && !req.ciudadano) {
+      throw new BadRequestException({ codigo: 'SESION_REQUERIDA', mensaje: 'Inicia sesión para vincular el reporte a tu cuenta' });
+    }
+    return this.reportes.crear(dto, dto.vincularCuenta ? req.ciudadano!.idCuenta : null);
   }
 
   /**

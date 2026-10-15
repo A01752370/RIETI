@@ -6,7 +6,7 @@ import { Publico } from '../auth/roles';
  * cliente envíe exactamente esta versión, como constancia de que la persona
  * la vio y aceptó (RF-44, RNF-26).
  */
-export const AVISO_PRIVACIDAD_VERSION = '2026-10-v2';
+export const AVISO_PRIVACIDAD_VERSION = '2026-10-v3';
 
 /** Sección del aviso: título y sus párrafos. */
 export interface SeccionAviso {
@@ -22,7 +22,8 @@ export interface SeccionAviso {
  * BORRADOR para la demo: el texto definitivo lo debe validar el área jurídica
  * del SIPINNA municipal antes de publicar la app (ver docs/ESTADO-ENTREGA.md).
  * `2026-10-v2` (Fase 2) agrega la sección "Mapa y dirección" y ajusta "Tu reporte
- * es anónimo". Cambiar el contenido exige una versión nueva.
+ * es anónimo"; `2026-10-v3` (Fase 4) agrega "Cuenta opcional". Cambiar el
+ * contenido exige una versión nueva.
  */
 export const AVISO_PRIVACIDAD_SECCIONES: readonly SeccionAviso[] = [
   {
@@ -46,6 +47,14 @@ export const AVISO_PRIVACIDAD_SECCIONES: readonly SeccionAviso[] = [
     parrafos: [
       'Si marcas el lugar en el mapa o usas tu ubicación actual, ese punto se guarda como lugar de los hechos (no como tu ubicación) y solo lo ve el personal autorizado del SIPINNA.',
       'Para sugerirte la dirección y mostrarte el mapa, nuestro servidor consulta el servicio de mapas OpenStreetMap con el punto aproximado. Tu teléfono no se comunica directamente con ese servicio, así que no recibe tu dirección IP ni datos de tu dispositivo.',
+    ],
+  },
+  {
+    titulo: 'Cuenta opcional',
+    parrafos: [
+      'No necesitas una cuenta para reportar ni para consultar. Si decides crear una, solo usamos tu correo para iniciar sesión, enviarte códigos de verificación y recuperar tu contraseña; tu correo y tu contraseña los resguarda el servicio de identidad del sistema y RIETI no los guarda en su base de datos.',
+      'Un reporte solo se vincula a tu cuenta si lo activas al enviarlo (está desactivado de forma predeterminada). Así puedes ver "Mis reportes". El personal del SIPINNA no ve tu correo ni qué cuenta envió un reporte.',
+      'Puedes eliminar tu cuenta cuando quieras desde la app. Al hacerlo se borra tu cuenta y tus reportes se conservan para su atención, ya sin ningún vínculo contigo.',
     ],
   },
   {

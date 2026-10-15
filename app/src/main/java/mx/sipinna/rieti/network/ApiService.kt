@@ -17,7 +17,19 @@ import mx.sipinna.rieti.model.ReporteDetalle
 import mx.sipinna.rieti.model.ReporteResumen
 import mx.sipinna.rieti.model.ResumenPersonal
 import mx.sipinna.rieti.model.SinAtender
+import mx.sipinna.rieti.model.CambiarContrasena
+import mx.sipinna.rieti.model.ConfirmarCuenta
+import mx.sipinna.rieti.model.CorreoCiudadano
+import mx.sipinna.rieti.model.CredencialesCiudadano
+import mx.sipinna.rieti.model.CuentaCiudadano
+import mx.sipinna.rieti.model.Mensaje
+import mx.sipinna.rieti.model.MiReporte
+import mx.sipinna.rieti.model.RefrescarSesion
+import mx.sipinna.rieti.model.RestablecerContrasena
+import mx.sipinna.rieti.model.SesionCiudadano
 import retrofit2.http.Body
+import retrofit2.http.DELETE
+import retrofit2.http.Header
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
@@ -55,9 +67,62 @@ interface ApiService {
     @GET("api/v1/geo/reversa")
     suspend fun reversa(@Query("lat") lat: Double, @Query("lng") lng: Double): GeoReversa
 
-    /** CU-04: registra un reporte anónimo; devuelve folio y clave (público). */
+    /**
+     * CU-04: registra un reporte; devuelve folio y clave (público). Con el token de
+     * ciudadano y `vincularCuenta = true` queda ligado a la cuenta (Fase 4).
+     */
     @POST("api/v1/reportes")
-    suspend fun crearReporte(@Body request: CrearReporteRequest): ReporteCreado
+    suspend fun crearReporte(@Body request: CrearReporteRequest, @Header("Authorization") ciudadano: String? = null): ReporteCreado
+
+    // --- Cuentas opcionales de ciudadano (Fase 4) ---
+
+    /** Crea una cuenta (respuesta igual exista o no el correo). */
+    @POST("api/v1/ciudadanos/registro")
+    suspend fun registrarCiudadano(@Body r: CredencialesCiudadano): Mensaje
+
+    /** Activa la cuenta con el código del correo. */
+    @POST("api/v1/ciudadanos/confirmar")
+    suspend fun confirmarCiudadano(@Body r: ConfirmarCuenta): Mensaje
+
+    /** Reenvía el código de activación. */
+    @POST("api/v1/ciudadanos/reenviar-codigo")
+    suspend fun reenviarCodigo(@Body r: CorreoCiudadano): Mensaje
+
+    /** Inicia sesión de ciudadano. */
+    @POST("api/v1/ciudadanos/login")
+    suspend fun loginCiudadano(@Body r: CredencialesCiudadano): SesionCiudadano
+
+    /** Renueva el access token. */
+    @POST("api/v1/ciudadanos/refresh")
+    suspend fun refrescarCiudadano(@Body r: RefrescarSesion): SesionCiudadano
+
+    /** Pide un código para restablecer la contraseña. */
+    @POST("api/v1/ciudadanos/olvide-contrasena")
+    suspend fun olvideContrasena(@Body r: CorreoCiudadano): Mensaje
+
+    /** Restablece la contraseña con el código. */
+    @POST("api/v1/ciudadanos/restablecer-contrasena")
+    suspend fun restablecerContrasena(@Body r: RestablecerContrasena): Mensaje
+
+    /** Perfil de la cuenta. */
+    @GET("api/v1/ciudadano/cuenta")
+    suspend fun cuentaCiudadano(@Header("Authorization") token: String): CuentaCiudadano
+
+    /** Cambia la contraseña. */
+    @POST("api/v1/ciudadano/cuenta/contrasena")
+    suspend fun cambiarContrasena(@Header("Authorization") token: String, @Body r: CambiarContrasena): Mensaje
+
+    /** Cierra la sesión en todos los dispositivos. */
+    @POST("api/v1/ciudadano/cuenta/cerrar-sesion")
+    suspend fun cerrarSesionCiudadano(@Header("Authorization") token: String): Mensaje
+
+    /** Elimina la cuenta (los reportes se conservan sin vínculo). */
+    @DELETE("api/v1/ciudadano/cuenta")
+    suspend fun eliminarCuenta(@Header("Authorization") token: String): Mensaje
+
+    /** Reportes vinculados a la cuenta. */
+    @GET("api/v1/ciudadano/reportes")
+    suspend fun misReportes(@Header("Authorization") token: String): List<MiReporte>
 
     /** CU-08: consulta ciudadana con folio + clave (público). */
     @POST("api/v1/reportes/consulta")

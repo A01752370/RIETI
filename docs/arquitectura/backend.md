@@ -28,6 +28,7 @@ src/
 │   ├── estatus.ts            Máquina de estados de la Etapa 1
 │   ├── clave-consulta.ts     Clave aleatoria + Argon2id
 │   └── limitador-intentos.ts Bloqueo por folio
+├── ciudadanos/              Cuentas opcionales de ciudadano (Fase 4): API mediado sobre Cognito
 ├── avisos/                 Aviso de privacidad vigente
 ├── catalogos/              Entidades y endpoint de catálogos
 ├── comun/filtro-errores.ts Formato único {codigo, mensaje, detalle?}
@@ -49,9 +50,13 @@ src/
 | GET | `/api/v1/reportes/exportar.csv` | Personal (`reportes.exportar`), 10/min | Exportación de la bandeja filtrada |
 | GET | `/api/v1/geo/reversa?lat=&lng=` | Público, 30/min por IP | Dirección sugerida (OSM, mediada) y municipio del punto (INEGI) |
 | GET | `/api/v1/geo/teselas/:z/:x/:y.png` | Público, 600/min por IP | Mapa del Estado de México (proxy con caché) |
-| POST | `/api/v1/reportes` | Público, 5/min por IP | CU-04 |
+| POST | `/api/v1/reportes` | Público, 5/min por IP; token de ciudadano opcional, solo con `vincularCuenta: true` | CU-04 |
 | POST | `/api/v1/reportes/consulta` | Público, 10/min por IP + bloqueo por folio | CU-08 |
 | POST | `/api/v1/auth/login` | Público, 5/min por IP | Login del personal |
+| POST | `/api/v1/ciudadanos/registro`, `/confirmar`, `/reenviar-codigo`, `/login`, `/refresh`, `/olvide-contrasena`, `/restablecer-contrasena` | Público, 3–20/min por IP según la ruta | Cuenta opcional de ciudadano (D-19) |
+| GET | `/api/v1/ciudadano/cuenta`, `/api/v1/ciudadano/reportes` | Ciudadano (token del pool de ciudadanos) | "Mi panel" |
+| POST | `/api/v1/ciudadano/cuenta/contrasena`, `/api/v1/ciudadano/cuenta/cerrar-sesion` | Ciudadano | Configuración de la cuenta |
+| DELETE | `/api/v1/ciudadano/cuenta` | Ciudadano, 3/min | Eliminar la cuenta (los reportes se conservan) |
 | GET | `/api/v1/reportes` | Personal | CU-09 bandeja |
 | GET | `/api/v1/reportes/:id` | Personal | CU-09 detalle |
 | PATCH | `/api/v1/reportes/:id/estatus` | Personal | CU-09/CU-10 |
@@ -131,7 +136,8 @@ Las migraciones corren al arrancar (`migrationsRun`). Con un usuario sin permiso
 | `DB_SECRET_ARN` / `DB_PASSWORD` | Contraseña desde Secrets Manager (AWS) o directa (local) |
 | `DB_SSL`, `DB_SSL_CA` | TLS a RDS (`false` solo en local) |
 | `DB_MIGRAR_AL_INICIAR` | `false` para no correr migraciones al arrancar |
-| `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID` | Validación de JWT y login |
+| `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID` | Validación de JWT y login del personal |
+| `COGNITO_CIUDADANOS_POOL_ID`, `COGNITO_CIUDADANOS_CLIENT_ID` | Pool y cliente de las cuentas de ciudadano (los inyecta el workflow desde variables del repositorio) |
 | `TRUST_PROXY_HOPS` | Saltos de proxy (CloudFront → ALB = 2) para obtener la IP del límite de tasa |
 | `CORS_ORIGINS` | Orígenes web permitidos (vacío: sin CORS) |
 

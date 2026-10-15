@@ -45,9 +45,17 @@ import mx.sipinna.rieti.ui.theme.TextoSecundario
  * @param alReportar abre el aviso de privacidad y luego el formulario
  * @param alConsultar abre la consulta con folio + clave
  * @param alEntrarPersonal abre el inicio de sesión del personal
+ * @param haySesionCiudadano true si hay una cuenta de ciudadano con sesión iniciada
+ * @param alCuenta abre "Mi panel" (con sesión) o el acceso a la cuenta opcional (sin sesión)
  */
 @Composable
-fun InicioScreen(alReportar: () -> Unit, alConsultar: () -> Unit, alEntrarPersonal: () -> Unit) {
+fun InicioScreen(
+    alReportar: () -> Unit,
+    alConsultar: () -> Unit,
+    alEntrarPersonal: () -> Unit,
+    haySesionCiudadano: Boolean = false,
+    alCuenta: () -> Unit = {}
+) {
     PantallaRieti(titulo = "Inicio") {
         Spacer(Modifier.height(8.dp))
         EncabezadoMarcas()
@@ -69,6 +77,11 @@ fun InicioScreen(alReportar: () -> Unit, alConsultar: () -> Unit, alEntrarPerson
 
         AccionPrincipal(texto = "Reportar", icono = Icons.AutoMirrored.Filled.Send, alPresionar = alReportar, destacada = true)
         AccionPrincipal(texto = "Consultar mi reporte", icono = Icons.Filled.Search, alPresionar = alConsultar, destacada = false)
+
+        // Cuenta opcional (Fase 4): discreta; el reporte anónimo sigue siendo el camino principal.
+        TextButton(onClick = alCuenta, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text(if (haySesionCiudadano) "Mi panel: ver mis reportes" else "Iniciar sesión o crear cuenta (opcional)")
+        }
 
         AvisoEmergencia()
 

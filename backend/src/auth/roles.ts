@@ -78,3 +78,19 @@ export const PUBLICO_KEY = 'publico';
  * exigen JWT: hacer pública una ruta es una decisión explícita (docs/GUIA-DESARROLLO.md, regla 6).
  */
 export const Publico = () => SetMetadata(PUBLICO_KEY, true);
+
+/** Clave de metadatos de {@link Ciudadano} y {@link CiudadanoOpcional}. */
+export const CIUDADANO_KEY = 'ciudadano';
+
+/**
+ * Ruta de cuenta de ciudadano (Fase 4): exige un access token del pool de
+ * **ciudadanos**. Un token del personal no sirve aquí, ni uno de ciudadano en
+ * rutas del personal (cada pool tiene su propio verificador).
+ */
+export const Ciudadano = () => SetMetadata(CIUDADANO_KEY, 'requerido');
+
+/**
+ * Ruta pública que acepta, opcionalmente, un token de ciudadano (p. ej. para
+ * vincular un reporte). Sin token sigue siendo anónima; con un token inválido responde 401.
+ */
+export const CiudadanoOpcional = () => SetMetadata(CIUDADANO_KEY, 'opcional');

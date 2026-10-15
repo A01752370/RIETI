@@ -80,6 +80,13 @@ export class Reporte {
   @Column({ name: 'cantidad_ninos', type: 'smallint' })
   cantidadNinos: number;
 
+  /**
+   * Cuenta de ciudadano vinculada (Fase 4), solo si la persona lo pidió al reportar.
+   * No se expone al personal. Se vuelve null si la persona elimina su cuenta.
+   */
+  @Column({ name: 'cuenta_ciudadano_id', type: 'integer', nullable: true, select: false })
+  cuentaCiudadanoId: number | null;
+
   /** Detalle libre cuando la actividad es "Otro". */
   @Column({ name: 'actividad_otro', type: 'varchar', length: 120, nullable: true })
   actividadOtro: string | null;
