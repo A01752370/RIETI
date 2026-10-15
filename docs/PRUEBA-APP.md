@@ -63,6 +63,21 @@ Abre en el navegador: `https://d3hexe1fo0mq6l.cloudfront.net/api/v1/catalogos`
 
 Con el personal: **En atención** → **Concluido**. Luego, en el caso concluido, la única opción es **En atención** y exige un comentario (reincidencia). Con otro reporte puedes probar **Descartado** con motivo: después ya no aparece ninguna opción de cambio.
 
+## 7. Cuenta opcional de ciudadano (Fase 4)
+
+Usa un correo al que tengas acceso: el código llega por correo (remitente `no-reply@verificationemail.com`; revisa spam).
+
+| # | Pasos | Resultado esperado |
+|---|---|---|
+| 7.1 | En el inicio toca **Iniciar sesión o crear cuenta (opcional)** → pestaña **Crear cuenta**. Escribe correo y una contraseña de 12+ caracteres con mayúscula, minúscula y número (dos veces) → **Crear cuenta**. | Mensaje "Si el correo es válido, te enviamos un código…" y el paso **Activa tu cuenta**. |
+| 7.2 | Escribe el código del correo → **Activar cuenta**. | "Tu cuenta está activa. Ya puedes iniciar sesión." con el correo ya escrito. |
+| 7.3 | Escribe la contraseña → **Iniciar sesión**. | **Mi panel** (vacío al principio). En el inicio el botón cambia a **Mi panel: ver mis reportes**. |
+| 7.4 | **Reportar** y llena el formulario. Al final revisa **Vincular este reporte a mi cuenta**. | El interruptor aparece **apagado**. Si envías así, el reporte es anónimo y no aparece en Mi panel. |
+| 7.5 | Haz otro reporte con el interruptor **encendido**. | El reporte aparece en **Mi panel** con su estatus e historial. |
+| 7.6 | En Mi panel → **Cuenta** → cambia la contraseña. | "Tu contraseña se cambió." |
+| 7.7 | **Eliminar mi cuenta** → **Eliminar**. | Regresa al inicio sin sesión. El reporte vinculado sigue en la bandeja del personal. |
+| 7.8 | Sin sesión abre el formulario. | No aparece el interruptor. |
+
 ## Si algo falla
 
 | Lo que ves | Causa probable | Qué hacer |

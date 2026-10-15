@@ -11,7 +11,7 @@
 | URL base | `https://d3hexe1fo0mq6l.cloudfront.net/` (CloudFront → ALB interno → ECS) |
 | Versionado | Prefijo `/api/v1` (RNF-06). `/health` queda fuera del prefijo porque lo usan el ALB, ECS y el CI. |
 | Autenticación del personal | `POST /api/v1/auth/login` → access token de Cognito → `Authorization: Bearer <token>` |
-| Ciudadano | Sin cuenta: folio + clave de consulta |
+| Ciudadano | Por defecto sin cuenta: folio + clave de consulta. Cuenta **opcional** (Fase 4, D-19) con un pool de Cognito propio: `POST /api/v1/ciudadanos/login` → `Authorization: Bearer <token>` solo en `/ciudadano/*` y en un reporte que la persona decide vincular |
 | Errores | Siempre `{ "codigo": "...", "mensaje": "...", "detalle"?: [...] }` |
 | Cliente Android | Retrofit + Gson (`network/ApiService.kt`), timeouts de 15 s (conexión) y 20 s (lectura) |
 | CORS | No aplica a la app. El API solo habilita CORS si se define `CORS_ORIGINS` (para la web futura). |
@@ -97,6 +97,31 @@ sequenceDiagram
 
 La consulta va por POST para que la clave no quede en la URL ni en logs. La respuesta nunca incluye la descripción, la ubicación ni las notas del personal.
 
+## Flujo 4 — Cuenta opcional de ciudadano (Fase 4, D-19)
+
+```mermaid
+sequenceDiagram
+    participant C as App (ciudadano)
+    participant API as API
+    participant CG as Cognito (pool de ciudadanos)
+    participant DB as PostgreSQL
+    C->>API: POST /ciudadanos/registro {correo, password}
+    API->>CG: SignUp
+    CG-->>C: correo con código de 6 dígitos
+    API-->>C: 202 (misma respuesta exista o no la cuenta)
+    C->>API: POST /ciudadanos/confirmar {correo, codigo}
+    C->>API: POST /ciudadanos/login {correo, password}
+    API->>CG: InitiateAuth
+    API-->>C: accessToken (memoria) + refreshToken (Keystore)
+    C->>API: POST /reportes {..., vincularCuenta: true} (Bearer)
+    API->>DB: reporte.cuenta_ciudadano_id = cuenta
+    C->>API: GET /ciudadano/reportes (Bearer)
+    API-->>C: folio, estatus e historial público de sus reportes
+```
+
+- Sin `vincularCuenta: true` el API **ignora** cualquier token en `POST /reportes`: el reporte queda anónimo aunque haya sesión. La app solo manda el token cuando la persona activa el interruptor.
+- `DELETE /ciudadano/cuenta` borra el usuario de Cognito y la fila local; los reportes quedan sin vínculo.
+
 ## Flujo 3 — Personal: login, bandeja y seguimiento (CU-09, CU-10)
 
 ```mermaid
@@ -139,6 +164,8 @@ sequenceDiagram
 | Transición no válida | `TRANSICION_INVALIDA`, `MOTIVO_REQUERIDO`, `COMENTARIO_REQUERIDO` | Muestra el mensaje |
 
 ## Compatibilidad
+
+Fase 4: las APK anteriores mandaban el token del personal en `POST /reportes` si había sesión. Ese token se ignora salvo que el cuerpo traiga `vincularCuenta: true` (que esas APK no conocen), así que sus reportes siguen entrando como anónimos.
 
 Fase 2: `POST /reportes` sigue aceptando el formato anterior (texto de ubicación, cantidad y edad), así que las APK instaladas siguen funcionando. La validación nueva (punto dentro del municipio) también les aplica si envían coordenadas.
 

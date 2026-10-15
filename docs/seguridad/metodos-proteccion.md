@@ -30,6 +30,20 @@ Las pruebas e2e corrieron en una máquina de desarrollo con PostgreSQL local. **
 | Contraseñas solo en Cognito (política ≥12 caracteres con mayúscula, número y símbolo; alta solo por administrador) | `infra/terraform/cognito.tf` | A10 | Configuración (Terraform, sin diferencias) |
 | Login con límite de 5 intentos por minuto por IP y códigos de error que no revelan si la cuenta existe | `auth.controller.ts`, `auth.service.ts` | A10 | `auth.service.spec.ts` |
 
+### Cuentas de ciudadano (Fase 4, D-19)
+
+| Control | Dónde | Mitiga | Verificación |
+|---|---|---|---|
+| Pool de Cognito **separado** del personal; dos verificadores de JWT (emisor y `client_id` distintos); cada ruta acepta un solo tipo de token | `infra/terraform/cognito_ciudadanos.tf`, `jwt.guard.ts` (`VERIFICADOR_JWT_CIUDADANO`), `@Ciudadano()` | A37 | `rutas-protegidas.spec.ts`; e2e "separación estricta" |
+| Respuestas idénticas en registro, reenvío y "olvidé mi contraseña" exista o no la cuenta; `prevent_user_existence_errors` en el cliente | `ciudadanos.service.ts`, Terraform | A32 | `ciudadanos.service.spec.ts`; e2e A32 |
+| Límites por IP: registro 5/min, confirmar 10, reenviar 3, login 5, refresh 20, olvidé 3, restablecer 5, cambiar contraseña 5, eliminar 3; más el bloqueo de Cognito (→ 429) y el WAF | `ciudadanos.controller.ts` | A33, A36 | `ciudadanos.service.spec.ts` (429); configuración |
+| Contraseña ≥ 12 con mayúscula, minúscula y número; código de 6 dígitos por correo para activar | `cognito_ciudadanos.tf`, `ciudadanos.dto.ts` | A33 | Configuración; validación del DTO |
+| Vincular solo con `vincularCuenta: true` explícito; sin él el token se ignora y el reporte es anónimo; el personal no ve el vínculo | `jwt.guard.ts` (`@CiudadanoOpcional()`), `reportes.service.ts` | A35 | e2e "con token pero sin vincularCuenta sigue anónimo"; emulador (servidor de prueba registra la petición) |
+| Minimización: RIETI guarda solo el `sub` y fechas; el correo vive en Cognito | `cuentas_ciudadano` (migración `1760400000000`) | A35 | e2e "perfil: correo desde Cognito (RIETI no lo guarda)" |
+| Eliminar la cuenta: desvincula, borra la fila y luego el usuario de Cognito; los reportes se conservan (`ON DELETE SET NULL`) | `ciudadanos.service.ts` | Derecho de cancelación | `ciudadanos.service.spec.ts`; e2e "eliminar conserva el reporte" |
+| App: refresh token cifrado con AES-GCM y llave del Android Keystore; access token solo en memoria; "Cerrar sesión en todos mis dispositivos" (`GlobalSignOut`) | `AlmacenSeguro.kt`, `SesionCiudadanoRepositorio.kt` | A34 | Revisión de código; emulador |
+| La app nunca habla con Cognito: todo pasa por el API | `ApiService.kt` | A34, A18 | Revisión de código |
+
 ### Protección de la consulta ciudadana
 
 | Control | Dónde | Mitiga | Verificación |
@@ -133,5 +147,7 @@ Estos controles **no están implementados**. Están ordenados por prioridad.
 | Logs de WAF con IP enmascarada o retención mínima | A16 | Hoy no hay logs de WAF; solo las muestras de AWS (3 h). |
 | Dependabot y escaneo de la imagen (Trivy) | A20 | Hoy: `npm audit --omit=dev --audit-level=high` en CI y escaneo de ECR al subir la imagen. |
 | Prueba de carga y escaneo OWASP ZAP contra producción | A22 | Requiere autorización del responsable de la cuenta AWS. |
+| CAPTCHA o prueba de trabajo en el registro de ciudadanos | A36 | Hoy solo límites por IP y WAF. |
+| Correo de Cognito por SES con dominio propio | A36 | El correo por defecto tiene cuota diaria baja; ver nota de SES en `docs/arquitectura/aws.md`. |
 | Dominio propio + ACM para fijar TLS 1.2+ mínimo | A12 | Con el certificado `*.cloudfront.net` no se puede endurecer la versión mínima de TLS. |
 | Evidencias fotográficas con URL prefirmada, EXIF eliminado y SHA-256 | A7, A8, A14 | No hay endpoint de subida. |

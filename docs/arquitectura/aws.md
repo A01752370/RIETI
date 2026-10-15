@@ -56,7 +56,8 @@ flowchart LR
 | Cómputo | ECS Fargate ARM64 (Graviton), 0.25 vCPU / 512 MB, autoescalado 1–3 tareas por CPU | Sistema de archivos de solo lectura, sin `exec`, circuit breaker con rollback. |
 | Imágenes | ECR con tags inmutables y escaneo al subir | Conserva las últimas 15. |
 | Datos | RDS PostgreSQL 16 `db.t4g.micro`, gp3 cifrado con CMK, `rds.force_ssl=1`, pgAudit (DDL, roles y escrituras, sin parámetros) | Protección contra borrado; snapshot final. Respaldos de 1 día. |
-| Identidad | Cognito: alta solo por administrador, contraseñas ≥12 con complejidad, MFA TOTP **opcional**, grupos `Administrador` y `PersonalSIPINNA`, cliente público sin secreto | Sin dominio de Hosted UI configurado (verificado). |
+| Identidad | Cognito **personal**: alta solo por administrador, contraseñas ≥12 con complejidad, MFA TOTP **opcional**, grupos `Administrador` y `PersonalSIPINNA`, cliente público sin secreto | Sin dominio de Hosted UI configurado (verificado). |
+| Identidad (ciudadanos) | Cognito **ciudadanos** (`rieti-prod-ciudadanos`, Fase 4): autorregistro con código por correo, contraseña ≥ 12, sin atributos extra, protección contra borrado, cliente público sin secreto con `prevent_user_existence_errors` y revocación de tokens | Correo con el remitente por defecto de Cognito (ver [Correo de Cognito y SES](#correo-de-cognito-y-ses)). |
 | Secretos | Secrets Manager: contraseña maestra de RDS generada y rotada por AWS, cifrada con la CMK | La API la relee cada 5 min. |
 | Almacenamiento | S3 de evidencias: privado, *Block Public Access*, KMS, versionado | Sin endpoint de subida todavía. |
 | Operación | CloudWatch Logs (30 días, KMS), 5 alarmas (5xx del ALB, destinos sanos, CPU de ECS y RDS, almacenamiento de RDS), presupuesto mensual (150 USD) → SNS | Sin suscriptores hasta configurar `alerta_emails` (ver runbook). |
@@ -76,7 +77,7 @@ flowchart LR
 | Bitácora inmutable (RNF-21) | Trigger append-only en `seguimiento` + pgAudit | Implementado. |
 | URLs prefirmadas ≤15 min (RNF-22) | Bucket y permisos listos, sin endpoint | Fuera del alcance de esta entrega. |
 | Anónimo sin IP (RNF-29) | La BD no guarda IP. El WAF guarda muestras con IP por 3 h; los logs del ALB registran a CloudFront como cliente | Documentado como control parcial. |
-| Redshift, QuickSight, OpenSearch, SES, Lambda | No desplegados | Las estadísticas, cuando se hagan, saldrán de PostgreSQL/PostGIS. |
+| Redshift, QuickSight, OpenSearch, SES, Lambda | No desplegados (SES: ver la nota de correo) | Las estadísticas, cuando se hagan, saldrán de PostgreSQL/PostGIS. |
 | Docker/Kubernetes | ECS Fargate | Contenedores gestionados equivalentes, sin administrar nodos. |
 | Etiquetado del proyecto (D-09) | Etiquetas `Project=RIETI`, `Environment`, `ManagedBy=Terraform` | D-09 se corrigió el 9-oct-2026 para usar `Project=RIETI`, la etiqueta realmente desplegada. |
 
@@ -89,6 +90,22 @@ flowchart LR
 | Proveedor comercial con plan gratuito y llave (p. ej. MapTiler, Stadia, Geoapify) | Recomendado para producción | El backend ya está preparado: basta otra implementación de `FuenteGeo` y la llave en Secrets Manager. La app no cambia porque siempre habla con nuestro API. |
 
 Las teselas pasan por CloudFront sin caché (política `CachingDisabled` del API) y el backend las guarda en memoria. Si el uso crece, conviene un comportamiento de CloudFront con caché para `/api/v1/geo/teselas/*` (cambio de infraestructura que requiere aprobación). El WAF limita a 300 peticiones por IP cada 5 minutos; osmdroid guarda teselas en la caché del teléfono, así que una sesión normal queda por debajo.
+
+## Correo de Cognito y SES
+
+El pool de ciudadanos envía los códigos de verificación y de recuperación con el **remitente por defecto de Cognito** (`COGNITO_DEFAULT`). Sirve para la demostración, pero:
+
+- Tiene una **cuota diaria baja** (del orden de 50 correos al día por cuenta, según la documentación de AWS) y el remitente es `no-reply@verificationemail.com`, que algunos buzones filtran como spam.
+- Si se agota la cuota, nadie puede activar su cuenta ni recuperar su contraseña ese día. El reporte anónimo **no se ve afectado**.
+
+**Para producción** hace falta Amazon SES:
+
+1. **SES no existe en `mx-central-1`** (verificado el 15-oct-2026: `aws sesv2 get-account --region mx-central-1` no encuentra el endpoint). Cognito permite usar una identidad de SES de otra región compatible; hay que confirmar en la documentación de Cognito qué regiones admite para un pool en `mx-central-1` antes de decidir.
+2. Verificar una identidad (idealmente el dominio institucional con DKIM; un correo suelto solo para pruebas).
+3. Pedir la **salida del sandbox** de SES (en `us-east-1` la cuenta está en sandbox: 200 correos/día y solo a destinatarios verificados; consultado el 15-oct-2026).
+4. Cambiar `email_configuration` del pool a `DEVELOPER` con `source_arn` de la identidad (cambio en `infra/terraform/cognito_ciudadanos.tf` que no reemplaza el pool, pero conviene revisar el `plan`).
+
+Los correos de Cognito salen de AWS hacia el buzón de la persona: su contenido solo es el código, sin datos del reporte.
 
 ## Costo
 

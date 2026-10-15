@@ -49,15 +49,22 @@ flowchart TD
     P -->|tarjeta o "Ver todos"| B[Bandeja]
     B --> D[Detalle y seguimiento]
     B -->|Salir| I
+    I -->|Iniciar sesión o crear cuenta - opcional| K[Mi cuenta<br/>entrar / crear / activar / recuperar]
+    K --> M[Mi panel]
+    I -->|Mi panel, con sesión| M
+    M -->|Cuenta| G[Configuración de cuenta]
 ```
 
 | Pantalla | Archivo | Qué hace |
 |---|---|---|
-| Inicio | `InicioScreen.kt` | Logo centrado, una pregunta y las dos acciones principales (Reportar / Consultar) grandes; recordatorio del 911; bloques "Qué es SIPINNA", "Cómo funciona un reporte" (4 pasos) y "Tu privacidad"; acceso discreto del personal y pie institucional. Sin "Crear cuenta" (D-12). |
+| Inicio | `InicioScreen.kt` | Logo centrado, una pregunta y las dos acciones principales (Reportar / Consultar) grandes; recordatorio del 911; bloques "Qué es SIPINNA", "Cómo funciona un reporte" (4 pasos) y "Tu privacidad"; acceso discreto del personal y pie institucional. Botón discreto "Iniciar sesión o crear cuenta (opcional)", que con sesión cambia a "Mi panel" (D-19). |
 | Aviso de privacidad | `AvisoPrivacidadScreen.kt` | Descarga el aviso vigente del API y lo muestra por secciones con título; la casilla y "Continuar" quedan fijos abajo. Si el servidor no envía secciones, muestra los párrafos. |
-| Formulario | `FormularioReporteScreen.kt` | **Dónde:** municipio con búsqueda, mapa OSM (`MapaUbicacion.kt`, osmdroid) con marcador que se toca o arrastra, "Usar mi ubicación" (permiso opcional) y dirección editable (calle, número, colonia, CP, referencias) que se autorrellena desde el mapa sin borrar lo escrito; si el punto cae en otro municipio, se ofrece cambiarlo. **Menores por grupo de edad** con contadores (`ContadorEdades`, total ≤ 50). **Actividad** desplegable (`SelectorActividad`, catálogo del servidor con respaldo local) y "Otro" con detalle. Riesgo y descripción. |
+| Formulario | `FormularioReporteScreen.kt` | **Dónde:** municipio con búsqueda, mapa OSM (`MapaUbicacion.kt`, osmdroid) con marcador que se toca o arrastra, "Usar mi ubicación" (permiso opcional) y dirección editable (calle, número, colonia, CP, referencias) que se autorrellena desde el mapa sin borrar lo escrito; si el punto cae en otro municipio, se ofrece cambiarlo. **Menores por grupo de edad** con contadores (`ContadorEdades`, total ≤ 50). **Actividad** desplegable (`SelectorActividad`, catálogo del servidor con respaldo local) y "Otro" con detalle. Riesgo y descripción. Con sesión de ciudadano aparece el interruptor **"Vincular este reporte a mi cuenta", apagado por defecto**; sin sesión no aparece. |
 | Confirmación | `ConfirmacionScreen.kt` | Tarjeta de éxito, aviso "guarda esto", folio y clave en tarjetas separadas (monoespaciada), botones Copiar folio / Copiar clave / Copiar ambos / Compartir. El portapapeles recibe solo el valor limpio, marcado como sensible. |
 | Consulta | `ConsultaScreen.kt` | Folio + clave → estatus e historial público. Interpreta lo pegado con `ExtractorFolioClave` (bloque completo en cualquier campo, minúsculas, espacios, sin guiones) y tiene botón "Pegar". |
+| Mi cuenta | `CuentaScreens.kt` (`AccesoCuentaScreen`) | Pestañas Iniciar sesión / Crear cuenta; activar con el código de 6 dígitos (y reenviarlo); "Olvidé mi contraseña" con código. Los mensajes son los del servidor, que no revelan si un correo tiene cuenta. |
+| Mi panel | `CuentaScreens.kt` (`MiPanelScreen`) | Reportes vinculados con estatus e historial público; deslizar para actualizar. |
+| Configuración de cuenta | `CuentaScreens.kt` (`ConfiguracionCuentaScreen`) | Datos de la cuenta, cambiar contraseña, cerrar sesión en todos los dispositivos y eliminar la cuenta (con diálogo de confirmación). |
 | Login | `LoginScreen.kt` | Correo y contraseña (oculta) del personal. |
 | Inicio del personal | `InicioPersonalScreen.kt` | Tarjetas grandes de pendientes y casos sin cambios en más de 7 días, cuadrícula por estatus (cada tarjeta abre la bandeja filtrada), deslizar para actualizar. Sin mapa ni gráficas complejas. |
 | Bandeja | `BandejaScreen.kt` | Reportes del más reciente al más antiguo, filtro por estatus o "sin atender" (desde el inicio), cerrar sesión. |
@@ -68,7 +75,8 @@ El grafo vive en `view/MainActivity.kt` y las rutas en `view/Rutas.kt`. Si el se
 ## Seguridad en el dispositivo
 
 - **Sin texto claro en release.** `usesCleartextTraffic="false"`; el build debug permite HTTP solo hacia `10.0.2.2` (`src/debug/res/xml/network_security_config.xml`).
-- **Token solo en memoria.** No se escribe en disco; al cerrar la app hay que volver a iniciar sesión.
+- **Token del personal solo en memoria.** No se escribe en disco; al cerrar la app hay que volver a iniciar sesión.
+- **Sesión de ciudadano (Fase 4).** El refresh token se guarda cifrado con AES-GCM y una llave del Android Keystore (`AlmacenSeguro.kt`), que no se puede extraer del equipo; el access token vive solo en memoria. El token de ciudadano se manda únicamente en las rutas `/ciudadano/*` y en un reporte cuando la persona activa "Vincular".
 - **Sin respaldos.** `allowBackup="false"` y `data_extraction_rules.xml` excluye todo de la nube y de la transferencia entre dispositivos.
 - **`FLAG_SECURE` en release.** Impide capturas de pantalla y la vista previa en "recientes". En debug está desactivado para poder documentar con capturas.
 - **Minimización.** La app no envía identificadores del dispositivo. La ubicación del teléfono solo se usa si la persona toca "Estoy en el lugar", y se envía como ubicación del lugar de los hechos.
