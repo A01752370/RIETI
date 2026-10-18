@@ -11,8 +11,8 @@ describe('lineaDeTiempoPublica', () => {
 
   it('solo expone estatus y fecha (sin comentarios ni autor)', () => {
     const r = lineaDeTiempoPublica([{ estatus: 'Recibido', fecha: f('2026-10-01T10:00:00Z') }]);
-    expect(r).toEqual([{ estatus: 'Recibido', fecha: '2026-10-01T10:00:00.000Z' }]);
-    expect(Object.keys(r[0]).sort()).toEqual(['estatus', 'fecha']);
+    expect(r).toEqual([{ estatus: 'Recibido', etiqueta: 'Registrado', fecha: '2026-10-01T10:00:00.000Z' }]);
+    expect(Object.keys(r[0]).sort()).toEqual(['estatus', 'etiqueta', 'fecha']);
   });
 
   it('omite las notas que no cambiaron el estatus', () => {

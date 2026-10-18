@@ -185,14 +185,14 @@ describeBd('API RIETI (e2e)', () => {
 
     it('catálogos con los estatus canónicos de la Etapa 1', async () => {
       const r = await http().get('/api/v1/catalogos').expect(200);
-      expect(r.body.estatus).toEqual(['Recibido', 'En revisión', 'En atención', 'Canalizado', 'Concluido', 'Descartado']);
+      expect(r.body.estatus).toEqual(['Recibido', 'En revisión', 'En atención', 'Canalizado', 'Concluido', 'Descartado', 'Archivado', 'Reincidente']);
       expect(r.body.actividades).toContain('Venta ambulante');
     });
 
     it('la migración dejó el catálogo de estatus en la BD igual que el código', async () => {
       const filas = await ds.query('SELECT nombre FROM estatus_reporte ORDER BY orden');
       expect(filas.map((f: { nombre: string }) => f.nombre))
-        .toEqual(['Recibido', 'En revisión', 'En atención', 'Canalizado', 'Concluido', 'Descartado']);
+        .toEqual(['Recibido', 'En revisión', 'En atención', 'Canalizado', 'Concluido', 'Descartado', 'Archivado', 'Reincidente']);
     });
 
     it('aviso de privacidad vigente', async () => {
@@ -597,10 +597,14 @@ describeBd('API RIETI (e2e)', () => {
       }
     });
 
-    it('catálogo de actividades: amplio, ordenado y con "Otro" al final', async () => {
+    it('catálogo de actividades: el del socio, ordenado, con "Otro" y "No sé" al final (Fase 6)', async () => {
       const r = await http().get('/api/v1/catalogos/actividades').expect(200);
-      expect(r.body).toHaveLength(15);
-      expect(r.body.at(-1)).toEqual({ nombre: 'Otro', requiereDetalle: true });
+      expect(r.body).toHaveLength(14);
+      expect(r.body.slice(-2)).toEqual([{ nombre: 'Otro', requiereDetalle: true }, { nombre: 'No sé', requiereDetalle: false }]);
+      for (const a of ['Mendicidad', 'Carga y descarga', 'Trabajo en comercio', 'Recolección de residuos']) {
+        expect(r.body.map((x: { nombre: string }) => x.nombre)).toContain(a);
+      }
+      expect(r.body.map((x: { nombre: string }) => x.nombre)).not.toContain('Mendicidad forzada');
       expect(r.body.filter((a: { requiereDetalle: boolean }) => a.requiereDetalle)).toHaveLength(1);
       const c = await http().get('/api/v1/catalogos').expect(200);
       expect(c.body.actividades).toEqual(r.body.map((a: { nombre: string }) => a.nombre));
@@ -635,6 +639,93 @@ describeBd('API RIETI (e2e)', () => {
     });
   });
 
+  describe('alineación con el socio formador (Fase 6)', () => {
+    const personal = { Authorization: 'Bearer token-personal' };
+    const nuevo = (extra: object = {}) => ({
+      municipioId: 1,
+      direccion: { calle: 'Calle Ficticia', numeroExterior: '10', colonia: 'Centro', codigoPostal: '52900' },
+      grupos: [{ rango: '12-14', cantidad: 1 }],
+      actividad: 'Carga y descarga', situacionRiesgo: 'No', descripcion: 'Reporte de prueba de la Fase 6.',
+      avisoPrivacidadVersion: '2026-10-v3', ...extra,
+    });
+    const enviar = (cuerpo: object) => http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send(cuerpo);
+
+    it('catálogos: estatus con etiqueta pública, rangos nuevos sin 12-17, peligro y cantidades', async () => {
+      const r = await http().get('/api/v1/catalogos').expect(200);
+      expect(r.body.estatusDetalle.map((e: { etiqueta: string }) => e.etiqueta))
+        .toEqual(['Registrado', 'En revisión', 'En seguimiento', 'Canalizado', 'Concluido', 'Cancelado', 'Archivado', 'Reincidente']);
+      expect(r.body.rangosEdad).toEqual(['0-5', '6-11', '12-14', '15-17', 'Sin determinar']);
+      expect(r.body.peligro).toEqual(['Sí', 'No', 'No sé']);
+      expect(r.body.cantidades).toEqual(['1', '2', '3', '4', '5+', 'No sé']);
+    });
+
+    it('con canal el folio lleva la clave municipal y se puede consultar; sin canal sigue el formato heredado', async () => {
+      const a = await enviar(nuevo({ canal: 'app' })).expect(201);
+      expect(a.body.folio).toMatch(/^RIETI-ATZ-\d{4}-\d{6}$/);
+      const c = await http().post('/api/v1/reportes/consulta').set('X-Forwarded-For', nuevaIp())
+        .send({ folio: a.body.folio.toLowerCase(), clave: a.body.claveConsulta }).expect(200);
+      expect(c.body).toMatchObject({ estatus: 'Recibido', estatusEtiqueta: 'Registrado' });
+      expect(c.body.historial[0]).toMatchObject({ estatus: 'Recibido', etiqueta: 'Registrado' });
+      const b = await enviar(nuevo()).expect(201);
+      expect(b.body.folio).toMatch(/^RIETI-\d{4}-\d{6}$/);
+      // El consecutivo es global por año: no revela el volumen de cada municipio.
+      expect(Number(b.body.folio.slice(-6))).toBe(Number(a.body.folio.slice(-6)) + 1);
+      await enviar(nuevo({ canal: 'institucional' })).expect(400); // el canal institucional no lo declara un cliente público
+    });
+
+    it('peligro inmediato → prioridad Alta calculada por el servidor (no se acepta del cliente) y primero en la bandeja', async () => {
+      await enviar(nuevo({ prioridad: 'Alta' })).expect(400);
+      const a = await enviar(nuevo({ peligroInmediato: 'Sí', canal: 'web' })).expect(201);
+      const m = await enviar(nuevo({ peligroInmediato: 'No', situacionRiesgo: 'Sí' })).expect(201);
+      const b = await http().get('/api/v1/reportes?orden=prioridad&tamano=100').set(personal).expect(200);
+      expect(b.body.elementos[0]).toMatchObject({ prioridad: 'Alta', peligroInmediato: 'Sí' });
+      const prios = b.body.elementos.map((e: { prioridad: string }) => ['Alta', 'Media', 'Normal'].indexOf(e.prioridad));
+      expect(prios).toEqual([...prios].sort((x: number, y: number) => x - y));
+      const alta = await http().get('/api/v1/reportes?prioridad=Alta&tamano=100').set(personal).expect(200);
+      expect(alta.body.elementos.map((e: { folio: string }) => e.folio)).toContain(a.body.folio);
+      expect(alta.body.elementos.map((e: { folio: string }) => e.folio)).not.toContain(m.body.folio);
+      const resumen = await http().get('/api/v1/estadisticas/resumen').set(personal).expect(200);
+      expect(resumen.body.prioridadAltaPendientes).toBeGreaterThanOrEqual(1);
+      const det = await http().get(`/api/v1/reportes/${alta.body.elementos[0].id}`).set(personal).expect(200);
+      expect(det.body).toMatchObject({ prioridad: 'Alta', canal: 'web', origen: 'ciudadano', estatusEtiqueta: 'Registrado' });
+      expect(det.body.historial[0].etiqueta).toBe('Registrado');
+    });
+
+    it('cantidad y edades nuevas: 12-14, 15-17 y "No sé" (= sin determinar); la cantidad debe cuadrar', async () => {
+      await enviar(nuevo({ grupos: [{ rango: '15-17', cantidad: 2 }, { rango: 'No sé', cantidad: 3 }], cantidad: '5+' })).expect(201);
+      await enviar(nuevo({ grupos: [{ rango: 'No sé', cantidad: 1 }], cantidad: 'No sé' })).expect(201);
+      const mal = await enviar(nuevo({ grupos: [{ rango: '6-11', cantidad: 2 }], cantidad: '3' })).expect(400);
+      expect(mal.body.codigo).toBe('CANTIDAD_INCOHERENTE');
+      await enviar(nuevo({ cantidad: '7' })).expect(400);
+      const [fila] = await adminDs.query(`SELECT cantidad_categoria FROM reporte ORDER BY id_reporte DESC LIMIT 1 OFFSET 0`);
+      expect(fila.cantidad_categoria).toBe('No sé');
+    });
+
+    it('compatibilidad: el formato anterior, 12-17 y las actividades heredadas siguen aceptándose', async () => {
+      const r = await enviar({ ...reporteValido(), edadAproximada: '12-17', actividad: 'Mendicidad forzada' }).expect(201);
+      expect(r.body.folio).toMatch(/^RIETI-\d{4}-\d{6}$/);
+    });
+
+    it('Reincidente exige comentario y vuelve a revisión; Archivado es terminal', async () => {
+      const a = await enviar(nuevo({ canal: 'app' })).expect(201);
+      const [{ id }] = await adminDs.query('SELECT f.id_reporte AS id FROM folio f WHERE f.codigo = $1', [a.body.folio]);
+      const cambiar = (estatus: string, extra: object = {}) => http().patch(`/api/v1/reportes/${id}/estatus`).set(personal).send({ estatus, ...extra });
+      await cambiar('En revisión').expect(200);
+      await cambiar('En atención').expect(200);
+      const concl = await cambiar('Concluido').expect(200);
+      expect(concl.body.transicionesPermitidas).toEqual(['Archivado', 'Reincidente']);
+      expect((await cambiar('Reincidente').expect(422)).body.codigo).toBe('COMENTARIO_REQUERIDO');
+      const re = await cambiar('Reincidente', { comentario: 'Se volvió a observar en el mismo crucero' }).expect(200);
+      expect(re.body).toMatchObject({ estatus: 'Reincidente', estatusEtiqueta: 'Reincidente', transicionesPermitidas: ['En revisión', 'En atención'] });
+      const pend = await http().get('/api/v1/reportes?pendientes=true&tamano=100').set(personal).expect(200);
+      expect(pend.body.elementos.map((e: { id: number }) => e.id)).toContain(Number(id)); // Reincidente cuenta como pendiente
+      await cambiar('En atención').expect(200);
+      await cambiar('Concluido').expect(200);
+      const arch = await cambiar('Archivado').expect(200);
+      expect(arch.body.transicionesPermitidas).toEqual([]);
+    });
+  });
+
   describe('panel del personal (Fase 3)', () => {
     const personal = { Authorization: 'Bearer token-personal' };
     const RUTAS = ['distribuciones', 'tiempos', 'sin-atender', 'mapa-calor'];
@@ -663,7 +754,7 @@ describeBd('API RIETI (e2e)', () => {
     it('tiempos por estatus: los 6 estatus en orden y nada de datos individuales', async () => {
       const r = await http().get('/api/v1/estadisticas/tiempos').set(personal).expect(200);
       expect(r.body.porEstatus.map((t: { estatus: string }) => t.estatus))
-        .toEqual(['Recibido', 'En revisión', 'En atención', 'Canalizado', 'Concluido', 'Descartado']);
+        .toEqual(['Recibido', 'En revisión', 'En atención', 'Canalizado', 'Concluido', 'Descartado', 'Archivado', 'Reincidente']);
       for (const t of r.body.porEstatus) expect(t.horasPromedio === null || t.casos >= 3).toBe(true);
       // Hitos (Fase 5): con pocos casos no se publica un promedio engañoso.
       for (const hito of [r.body.hastaPrimeraRevision, r.body.hastaConclusion]) {
@@ -850,9 +941,9 @@ describeBd('API RIETI (e2e)', () => {
 
     it('devuelve solo conteos, con los 6 estatus en orden', async () => {
       const r = await http().get('/api/v1/estadisticas/resumen').set(personal).expect(200);
-      expect(Object.keys(r.body).sort()).toEqual(['nuevosUltimos7Dias', 'pendientes', 'porEstatus', 'porMes', 'riesgoAltoPendientes', 'sinMunicipio', 'total']);
+      expect(Object.keys(r.body).sort()).toEqual(['nuevosUltimos7Dias', 'pendientes', 'porEstatus', 'porMes', 'prioridadAltaPendientes', 'riesgoAltoPendientes', 'sinMunicipio', 'total']);
       expect(r.body.porEstatus.map((e: { etiqueta: string }) => e.etiqueta))
-        .toEqual(['Recibido', 'En revisión', 'En atención', 'Canalizado', 'Concluido', 'Descartado']);
+        .toEqual(['Recibido', 'En revisión', 'En atención', 'Canalizado', 'Concluido', 'Descartado', 'Archivado', 'Reincidente']);
       const suma = (l: { total: number }[]) => l.reduce((a, e) => a + e.total, 0);
       expect(suma(r.body.porEstatus)).toBe(r.body.total);
       expect(suma(r.body.porMes)).toBe(r.body.total);

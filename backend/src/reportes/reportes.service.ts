@@ -7,7 +7,7 @@ import { Actividad, EstatusReporte, Municipio, RangoEdad, Riesgo } from '../cata
 import { Usuario } from '../auth/usuario.entity';
 import { Caso, Folio, GrupoMenores, Reporte, ReporteCaso, Seguimiento, Ubicacion } from './reporte.entities';
 import {
-  componerUbicacion, esCodigoPostalEdomex, normalizarGrupos, rangoPrincipal, redondearCoordenada, totalMenores,
+  componerUbicacion, esCodigoPostalEdomex, normalizarGrupos, ORDEN_RANGOS, rangoPrincipal, redondearCoordenada, totalMenores,
 } from './formulario';
 import {
   AgregarSeguimientoDto, CambiarEstatusDto, ConsultaPublicaDto, CrearReporteDto, EventoPublicoDto,
@@ -15,7 +15,8 @@ import {
   TipoEventoSeguimiento,
 } from './reporte.dto';
 import { generarClave, hashearClave, verificarClave } from './clave-consulta';
-import { ESTATUS, ESTATUS_INICIAL, transicionesPermitidas, validarTransicion } from './estatus';
+import { ESTATUS, ESTATUS_INICIAL, ESTATUS_PENDIENTES, etiquetaEstatus, transicionesPermitidas, validarTransicion } from './estatus';
+import { calcularPrioridad, categoriaCantidad, formatearFolio } from './clasificacion';
 import { LimitadorIntentos } from './limitador-intentos';
 import { celdaCsv } from '../estadisticas/agregados';
 
@@ -25,10 +26,7 @@ export const MAX_EXPORTACION = 5000;
 /** Hash Argon2id de una clave que nadie conoce: se verifica cuando el folio no existe para igualar tiempos. */
 const HASH_SENUELO = '$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 
-/** Formatea el folio público: RIETI-2026-000042. */
-export function formatearFolio(anio: number, consecutivo: number): string {
-  return `RIETI-${anio}-${String(consecutivo).padStart(6, '0')}`;
-}
+export { formatearFolio } from './clasificacion';
 
 /**
  * Reduce la bitácora a la línea de tiempo pública: solo cambios de estatus
@@ -37,7 +35,9 @@ export function formatearFolio(anio: number, consecutivo: number): string {
 export function lineaDeTiempoPublica(eventos: { estatus: string; fecha: Date }[]): EventoPublicoDto[] {
   const resultado: EventoPublicoDto[] = [];
   for (const e of eventos) {
-    if (resultado.at(-1)?.estatus !== e.estatus) resultado.push({ estatus: e.estatus, fecha: e.fecha.toISOString() });
+    if (resultado.at(-1)?.estatus !== e.estatus) {
+      resultado.push({ estatus: e.estatus, etiqueta: etiquetaEstatus(e.estatus), fecha: e.fecha.toISOString() });
+    }
   }
   return resultado;
 }
@@ -88,6 +88,8 @@ export class ReportesService {
 
     // Formato nuevo (grupos + dirección) o anterior (APK instaladas); ver CrearReporteDto.
     const grupos = normalizarGrupos(dto);
+    const cantidadCategoria = categoriaCantidad(dto.cantidad, totalMenores(grupos));
+    const prioridad = calcularPrioridad(dto.peligroInmediato, dto.situacionRiesgo);
     const formatoNuevo = dto.grupos !== undefined;
     if (formatoNuevo && dto.actividad.trim() === 'Otro' && !dto.actividadOtro) {
       throw new BadRequestException({ codigo: 'VALOR_NO_VALIDO', mensaje: 'Describe la actividad que observaste' });
@@ -128,6 +130,11 @@ export class ReportesService {
         claveConsultaHash,
         avisoPrivacidadVersion: dto.avisoPrivacidadVersion,
         cuentaCiudadanoId: idCuenta,
+        peligroInmediato: dto.peligroInmediato ?? null,
+        prioridad,
+        cantidadCategoria,
+        canal: dto.canal ?? null,
+        origen: 'ciudadano',
       }));
       await m.save(grupos.map((g) => m.create(GrupoMenores, {
         idReporte: reporte.id, idRangoEdad: rangoPorNombre.get(g.rango)!.id, cantidad: g.cantidad,
@@ -139,7 +146,8 @@ export class ReportesService {
         `INSERT INTO folio_contador (anio, ultimo) VALUES ($1, 1)
          ON CONFLICT (anio) DO UPDATE SET ultimo = folio_contador.ultimo + 1
          RETURNING ultimo`, [anio]);
-      const folio = formatearFolio(anio, ultimo);
+      // Clave municipal solo para clientes que declaran su canal (los anteriores solo saben consultar el formato heredado).
+      const folio = formatearFolio(anio, ultimo, dto.canal ? municipio.claveFolio : null);
       await m.save(m.create(Folio, { reporte, anio, consecutivo: ultimo, codigo: folio }));
 
       const caso = await m.save(m.create(Caso, { estatus }));
@@ -187,6 +195,7 @@ export class ReportesService {
     return {
       folio: reporte.folio,
       estatus: reporte.estatus,
+      estatusEtiqueta: etiquetaEstatus(reporte.estatus),
       fechaCreacion: reporte.fechaCreacion,
       fechaActualizacion: reporte.fechaActualizacion,
       historial: lineaDeTiempoPublica(eventos.map((e) => ({ estatus: e.estatus, fecha: new Date(e.fecha) }))),
@@ -194,7 +203,7 @@ export class ReportesService {
   }
 
   /**
-   * FROM/WHERE parametrizado de la bandeja y la exportación ($1…$9). El orden de
+   * FROM/WHERE parametrizado de la bandeja y la exportación ($1…$11). El orden de
    * los parámetros lo fija {@link parametrosBandeja}.
    */
   private static readonly DESDE_BANDEJA = `
@@ -210,15 +219,16 @@ export class ReportesService {
         AND ($4::date IS NULL OR (r.fecha_creacion AT TIME ZONE 'America/Mexico_City')::date >= $4::date)
         AND ($5::date IS NULL OR (r.fecha_creacion AT TIME ZONE 'America/Mexico_City')::date <= $5::date)
         AND ($6::text IS NULL OR f.codigo LIKE '%' || $6::text || '%')
-        AND ($7::int IS NULL OR (e.nombre IN ('Recibido', 'En revisión')
+        AND ($7::int IS NULL OR (e.nombre = ANY($11::text[])
              AND c.fecha_actualizacion < now() - make_interval(days => $7::int)))
         AND ($8::text IS NULL OR EXISTS (SELECT 1 FROM riesgo ri0 WHERE ri0.id_riesgo = r.id_riesgo AND ri0.nombre = $8::text))
-        AND ($9::boolean IS NOT TRUE OR e.nombre IN ('Recibido', 'En revisión'))`;
+        AND ($9::boolean IS NOT TRUE OR e.nombre = ANY($11::text[]))
+        AND ($10::text IS NULL OR r.prioridad = $10::text)`;
 
   private parametrosBandeja(f: FiltrosBandejaDto): unknown[] {
     // El folio ya viene validado (solo letras, dígitos y guiones), así que LIKE no recibe comodines.
     return [f.estatus ?? null, f.municipioId ?? null, f.actividad ?? null, f.desde ?? null, f.hasta ?? null,
-      f.folio ?? null, f.sinAtenderDias ?? null, f.riesgo ?? null, f.pendientes ?? null];
+      f.folio ?? null, f.sinAtenderDias ?? null, f.riesgo ?? null, f.pendientes ?? null, f.prioridad ?? null, [...ESTATUS_PENDIENTES]];
   }
 
   /** CU-09: bandeja del personal con filtros, búsqueda por folio, orden y paginación. */
@@ -227,11 +237,13 @@ export class ReportesService {
     const desde = ReportesService.DESDE_BANDEJA;
     const params = this.parametrosBandeja(f);
     const direccion = f.orden === 'antiguos' ? 'ASC' : 'DESC';
+    // Con orden por prioridad: Alta, Media, Normal y, dentro de cada una, lo más reciente primero.
+    const primero = f.orden === 'prioridad' ? "CASE r.prioridad WHEN 'Alta' THEN 0 WHEN 'Media' THEN 1 ELSE 2 END, " : '';
     const [{ total }] = await this.ds.query(`SELECT count(DISTINCT r.id_reporte)::int AS total ${desde}`, params);
     const filas: { id: number }[] = await this.ds.query(
-      `SELECT DISTINCT r.id_reporte AS id, r.fecha_creacion ${desde}
-       ORDER BY r.fecha_creacion ${direccion}, r.id_reporte ${direccion}
-       LIMIT $10 OFFSET $11`, [...params, tamano, (pagina - 1) * tamano]);
+      `SELECT DISTINCT r.id_reporte AS id, r.fecha_creacion, r.prioridad ${desde}
+       ORDER BY ${primero}r.fecha_creacion ${direccion}, r.id_reporte ${direccion}
+       LIMIT $12 OFFSET $13`, [...params, tamano, (pagina - 1) * tamano]);
 
     const ids = filas.map((f) => Number(f.id));
     const reportes = ids.length === 0 ? [] : await this.ds.getRepository(Reporte).findBy({ id: In(ids) });
@@ -261,7 +273,7 @@ export class ReportesService {
          JOIN riesgo ri ON ri.id_riesgo = r.id_riesgo
          LEFT JOIN municipio m ON m.id_municipio = r.id_municipio WHERE`)}
        ORDER BY r.fecha_creacion ${direccion}, r.id_reporte ${direccion}
-       LIMIT $10`, [...this.parametrosBandeja(f), MAX_EXPORTACION]);
+       LIMIT $12`, [...this.parametrosBandeja(f), MAX_EXPORTACION]);
     const columnas = ['folio', 'fecha', 'estatus', 'municipio', 'colonia', 'actividad', 'menores', 'grupos', 'riesgo', 'actualizado'];
     const encabezado = ['Folio', 'Fecha', 'Estatus', 'Municipio', 'Colonia', 'Actividad', 'Menores', 'Grupos de edad', 'Riesgo percibido', 'Última actualización'];
     const lineas = [encabezado.map(celdaCsv).join(','), ...filas.map((x) => columnas.map((c) => celdaCsv(x[c])).join(','))];
@@ -278,7 +290,7 @@ export class ReportesService {
     const grupos = await this.ds.getRepository(GrupoMenores).find({ where: { idReporte: id } });
     const u = reporte.ubicacion;
     const historial = await this.bitacora(id);
-    const posicion = (r: string) => ['0-5', '6-11', '12-17', 'Sin determinar'].indexOf(r);
+    const posicion = (r: string) => ORDEN_RANGOS.indexOf(r);
     return {
       ...resumen,
       latitud: u.latitud,
@@ -295,6 +307,9 @@ export class ReportesService {
       historial,
       transicionesPermitidas: transicionesPermitidas(resumen.estatus),
       fechaEstatusActual: fechaEstatusActual(historial, resumen.fechaCreacion),
+      cantidadCategoria: reporte.cantidadCategoria,
+      canal: reporte.canal,
+      origen: reporte.origen,
     };
   }
 
@@ -414,7 +429,7 @@ export class ReportesService {
        LEFT JOIN usuario u ON u.id_usuario = s.id_usuario
        WHERE rc.id_reporte = $1
        ORDER BY s.fecha, s.id_seguimiento`, [idReporte]);
-    return clasificarBitacora(filas.map((f) => ({ ...f, fecha: new Date(f.fecha).toISOString() })));
+    return clasificarBitacora(filas.map((f) => ({ ...f, etiqueta: etiquetaEstatus(f.estatus), fecha: new Date(f.fecha).toISOString() })));
   }
 
   /** Junta folio y estatus vigente en el resumen que usa la bandeja. */
@@ -433,6 +448,9 @@ export class ReportesService {
       id: r.id,
       folio: folioPor.get(r.id) ?? '',
       estatus: casoPor.get(r.id)?.estatus.nombre ?? ESTATUS_INICIAL,
+      estatusEtiqueta: etiquetaEstatus(casoPor.get(r.id)?.estatus.nombre ?? ESTATUS_INICIAL),
+      prioridad: r.prioridad,
+      peligroInmediato: r.peligroInmediato,
       ubicacion: r.ubicacion.descripcion,
       municipio: r.municipio?.nombre ?? null,
       actividad: r.actividad.nombre,

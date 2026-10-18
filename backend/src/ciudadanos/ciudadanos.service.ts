@@ -1,3 +1,4 @@
+import { etiquetaEstatus } from '../reportes/estatus';
 import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
@@ -184,6 +185,7 @@ export class CiudadanosService {
     return filas.map((f) => ({
       folio: f.folio,
       estatus: f.estatus,
+      estatusEtiqueta: etiquetaEstatus(f.estatus),
       municipio: f.municipio,
       actividad: f.actividad,
       fechaCreacion: new Date(f.creado).toISOString(),

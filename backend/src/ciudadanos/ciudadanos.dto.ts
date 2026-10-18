@@ -82,9 +82,11 @@ export interface CuentaDto {
 export interface MiReporteDto {
   folio: string;
   estatus: string;
+  /** Etiqueta pública del estatus (Fase 6). */
+  estatusEtiqueta: string;
   municipio: string | null;
   actividad: string;
   fechaCreacion: string;
   fechaActualizacion: string;
-  historial: { estatus: string; fecha: string }[];
+  historial: { estatus: string; etiqueta: string; fecha: string }[];
 }
