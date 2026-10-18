@@ -375,3 +375,36 @@ kbd { font-family: ui-monospace, Consolas, monospace; border: 1px solid var(--co
   .tarjeta { break-inside: avoid; border-color: #999; }
   .mini-mapa { display: none; }
 }
+
+/* ---------- Fase 6: estatus nuevos, prioridad y modo de reporte ---------- */
+:root {
+  --estatus-archivado: #37474f;   /* 9.65:1 con texto blanco */
+  --estatus-reincidente: #ad1457; /* 6.97:1 con texto blanco */
+}
+.estatus-archivado { background: var(--estatus-archivado); }
+.estatus-reincidente { background: var(--estatus-reincidente); }
+.relleno-archivado { fill: var(--estatus-archivado); }
+.relleno-reincidente { fill: var(--estatus-reincidente); }
+.relleno-fondo-archivado { background: var(--estatus-archivado); }
+.relleno-fondo-reincidente { background: var(--estatus-reincidente); }
+.borde-archivado { border-color: var(--estatus-archivado); color: var(--estatus-archivado); }
+.borde-reincidente { border-color: var(--estatus-reincidente); color: var(--estatus-reincidente); }
+.borde-archivado[aria-pressed="true"] { background: var(--estatus-archivado); color: #fff; }
+.borde-reincidente[aria-pressed="true"] { background: var(--estatus-reincidente); color: #fff; }
+
+.insignia-prioridad {
+  display: inline-flex; align-items: center; gap: var(--e1); padding: var(--e1) var(--e3); border-radius: 999px;
+  background: var(--color-error); color: #fff; font-weight: 700; font-size: var(--texto-xs);
+}
+.insignia-prioridad::before { content: "\26A0"; }
+.lista-reportes .insignias { margin-top: var(--e1); }
+
+.opciones-modo { display: grid; gap: var(--e3); }
+.opcion-modo { display: grid; grid-template-columns: auto 1fr; gap: var(--e3); align-items: start; padding: var(--e4);
+  border: 2px solid var(--color-borde); border-radius: var(--radio); background: var(--color-fondo); }
+.opcion-modo:has(input:checked) { border-color: var(--color-primario); background: var(--color-tinte-primario); }
+.opcion-modo input { width: 1.25rem; height: 1.25rem; margin-top: 0.2rem; accent-color: var(--color-primario); }
+.opcion-modo.deshabilitada { color: var(--color-texto-secundario); border-style: dashed; }
+.aviso-911 { display: grid; gap: var(--e3); }
+.aviso-911 p { margin: 0; }
+.aviso-911 .boton { justify-self: start; }

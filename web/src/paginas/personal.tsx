@@ -5,7 +5,7 @@ import {
 } from '../api';
 import { Esqueleto, Marco, MensajeError, useCarga, useSesion, Vacio } from '../componentes';
 import { Enlace, navegar, useTitulo } from '../enrutador';
-import { claseEstatus, ESTATUS, EtiquetaEstatus, formatearFecha, IconoEstatus } from '../estatus';
+import { claseEstatus, ESTATUS, EtiquetaEstatus, etiquetaEstatus, formatearFecha, IconoEstatus } from '../estatus';
 import { calcularLinea, LineaProgreso } from '../progreso';
 import { SelectorMunicipio } from '../SelectorMunicipio';
 
@@ -67,19 +67,20 @@ export function filtrosDesdeUrl(search: string): FiltrosUrl {
   return {
     estatus: texto('estatus'), municipioId: entero('municipioId'), actividad: texto('actividad'),
     desde: texto('desde'), hasta: texto('hasta'), folio: texto('folio'), sinAtenderDias: entero('sinAtenderDias'),
-    riesgo: texto('riesgo'), pendientes: q.get('pendientes') === 'true' || undefined,
-    orden: q.get('orden') === 'antiguos' ? 'antiguos' : 'recientes', pagina: entero('pagina') ?? 1,
+    riesgo: texto('riesgo'), pendientes: q.get('pendientes') === 'true' || undefined, prioridad: texto('prioridad'),
+    // Fase 6: por omisión la bandeja se ordena por prioridad (Alta primero).
+    orden: q.get('orden') === 'antiguos' ? 'antiguos' : q.get('orden') === 'recientes' ? 'recientes' : 'prioridad', pagina: entero('pagina') ?? 1,
   };
 }
 
-/** Cadena de consulta de los filtros (sin vacíos; sin `orden=recientes` ni `pagina=1`, que son los valores por omisión). */
+/** Cadena de consulta de los filtros (sin vacíos; sin `orden=prioridad` ni `pagina=1`, que son los valores por omisión). */
 export function urlDeFiltros(f: FiltrosUrl): string {
   const p = new URLSearchParams();
   const poner = (k: string, v: string | number | boolean | undefined) => { if (v !== undefined && v !== '' && v !== false) p.set(k, String(v)); };
   poner('estatus', f.estatus); poner('municipioId', f.municipioId); poner('actividad', f.actividad);
   poner('desde', f.desde); poner('hasta', f.hasta); poner('folio', f.folio); poner('sinAtenderDias', f.sinAtenderDias);
-  poner('riesgo', f.riesgo); poner('pendientes', f.pendientes);
-  if (f.orden === 'antiguos') poner('orden', 'antiguos');
+  poner('riesgo', f.riesgo); poner('pendientes', f.pendientes); poner('prioridad', f.prioridad);
+  if (f.orden && f.orden !== 'prioridad') poner('orden', f.orden);
   if (f.pagina > 1) poner('pagina', f.pagina);
   const s = p.toString();
   return s ? `?${s}` : '';
@@ -152,7 +153,7 @@ function ContenidoBandeja() {
   /** Cambia un filtro y regresa a la primera página. */
   const fijar = (cambio: Partial<FiltrosUrl>) => setF((x) => ({ ...x, ...cambio, pagina: cambio.pagina ?? 1 }));
   const municipio = municipios.datos?.find((m) => m.id === f.municipioId) ?? null;
-  const hayFiltros = Boolean(f.estatus || f.municipioId || f.actividad || f.desde || f.hasta || f.folio || f.sinAtenderDias || f.riesgo || f.pendientes);
+  const hayFiltros = Boolean(f.estatus || f.municipioId || f.actividad || f.desde || f.hasta || f.folio || f.sinAtenderDias || f.riesgo || f.pendientes || f.prioridad);
 
   const exportar = async () => {
     setExportando(true); setErrorExportar(null);
@@ -178,7 +179,16 @@ function ContenidoBandeja() {
           <label htmlFor="filtro-estatus">Estatus</label>
           <select id="filtro-estatus" value={f.estatus ?? ''} onChange={(e) => fijar({ estatus: e.target.value || undefined })}>
             <option value="">Todos</option>
-            {ESTATUS.map((e) => <option key={e} value={e}>{e}</option>)}
+            {ESTATUS.map((e) => <option key={e} value={e}>{etiquetaEstatus(e)}</option>)}
+          </select>
+        </div>
+        <div className="campo">
+          <label htmlFor="filtro-prioridad">Prioridad</label>
+          <select id="filtro-prioridad" value={f.prioridad ?? ''} onChange={(e) => fijar({ prioridad: e.target.value || undefined })}>
+            <option value="">Todas</option>
+            <option value="Alta">Alta (peligro inmediato)</option>
+            <option value="Media">Media (riesgo percibido)</option>
+            <option value="Normal">Normal</option>
           </select>
         </div>
         <div className="campo">
@@ -211,7 +221,8 @@ function ContenidoBandeja() {
         </div>
         <div className="campo">
           <label htmlFor="orden">Orden</label>
-          <select id="orden" value={f.orden} onChange={(e) => fijar({ orden: e.target.value as 'recientes' | 'antiguos' })}>
+          <select id="orden" value={f.orden} onChange={(e) => fijar({ orden: e.target.value as 'recientes' | 'antiguos' | 'prioridad' })}>
+            <option value="prioridad">Prioridad (alta primero)</option>
             <option value="recientes">Más recientes primero</option>
             <option value="antiguos">Más antiguos primero</option>
           </select>
@@ -222,7 +233,7 @@ function ContenidoBandeja() {
         </label>
         <div className="acciones">
           {hayFiltros && (
-            <button type="button" className="boton boton-secundario" onClick={() => { setFolioTexto(''); setF({ orden: 'recientes', pagina: 1 }); }}>Quitar filtros</button>
+            <button type="button" className="boton boton-secundario" onClick={() => { setFolioTexto(''); setF({ orden: 'prioridad', pagina: 1 }); }}>Quitar filtros</button>
           )}
           <button type="button" className="boton boton-secundario" onClick={exportar} disabled={exportando}>
             {exportando ? 'Preparando…' : 'Exportar CSV'}
@@ -247,7 +258,10 @@ function ContenidoBandeja() {
                         <div className="fila-titulo"><strong>{r.folio}</strong><EtiquetaEstatus estatus={r.estatus} /></div>
                         <span>{r.municipio ?? 'Municipio no indicado'} · {r.ubicacion}</span>
                         <span className="pequeno texto-secundario">{r.actividad} · {r.cantidadNinos} menor(es) · Riesgo: {r.situacionRiesgo} · {formatearFecha(r.fechaCreacion)}</span>
-                        {r.situacionRiesgo === 'Sí' && <span className="insignia-riesgo">Riesgo percibido</span>}
+                        <span className="insignias">
+                          {r.prioridad === 'Alta' && <span className="insignia-prioridad">Prioridad alta</span>}
+                          {r.situacionRiesgo === 'Sí' && <span className="insignia-riesgo">Riesgo percibido</span>}
+                        </span>
                       </div>
                     </Enlace>
                   </li>
@@ -292,7 +306,8 @@ function Acciones({ r, alGuardar, refNota }: { r: ReporteDetalle; alGuardar: (d:
   const [nota, setNota] = useState('');
   const [error, setError] = useState<unknown>(null);
   const [enviando, setEnviando] = useState(false);
-  const reabrir = r.estatus === 'Concluido';
+  // Fase 6: marcar un caso como Reincidente exige comentario (el servidor lo vuelve a validar).
+  const reabrir = destino === 'Reincidente';
 
   const ejecutar = async (accion: () => Promise<ReporteDetalle>, mensaje: string, limpiar: () => void) => {
     setEnviando(true); setError(null);
@@ -300,7 +315,7 @@ function Acciones({ r, alGuardar, refNota }: { r: ReporteDetalle; alGuardar: (d:
   };
   const cambiar = (e: FormEvent) => {
     e.preventDefault();
-    void ejecutar(() => api.cambiarEstatus(r.id, destino, comentario, motivo), `Estatus cambiado a “${destino}”.`,
+    void ejecutar(() => api.cambiarEstatus(r.id, destino, comentario, motivo), `Estatus cambiado a “${etiquetaEstatus(destino)}”.`,
       () => { setDestino(''); setComentario(''); setMotivo(''); });
   };
   const guardarNota = (e: FormEvent) => {
@@ -321,7 +336,7 @@ function Acciones({ r, alGuardar, refNota }: { r: ReporteDetalle; alGuardar: (d:
               {r.transicionesPermitidas.map((t) => (
                 <button key={t} type="button" aria-pressed={destino === t} className={`boton-transicion borde-${claseEstatus(t)}`}
                   onClick={() => { setDestino(destino === t ? '' : t); setError(null); }}>
-                  <IconoEstatus estatus={t} />{t}
+                  <IconoEstatus estatus={t} />{etiquetaEstatus(t)}
                 </button>
               ))}
             </div>
@@ -331,16 +346,16 @@ function Acciones({ r, alGuardar, refNota }: { r: ReporteDetalle; alGuardar: (d:
         <form onSubmit={cambiar} className="formulario-transicion" noValidate>
           {destino === 'Descartado' && (
             <div className="campo">
-              <label htmlFor="motivo">Motivo del descarte (obligatorio)</label>
+              <label htmlFor="motivo">Motivo de la cancelación (obligatorio)</label>
               <input id="motivo" type="text" maxLength={500} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
             </div>
           )}
           <div className="campo">
-            <label htmlFor="comentario">{reabrir ? 'Comentario de reincidencia (obligatorio)' : 'Comentario del cambio (opcional)'}</label>
+            <label htmlFor="comentario">{reabrir ? 'Comentario: por qué volvió a requerir atención (obligatorio)' : 'Comentario del cambio (opcional)'}</label>
             <textarea id="comentario" maxLength={2000} value={comentario} onChange={(e) => setComentario(e.target.value)} />
           </div>
           <div className="acciones">
-            <button type="submit" className="boton" disabled={enviando || faltaDato}>{enviando ? 'Guardando…' : `Cambiar a “${destino}”`}</button>
+            <button type="submit" className="boton" disabled={enviando || faltaDato}>{enviando ? 'Guardando…' : `Cambiar a “${etiquetaEstatus(destino)}”`}</button>
             <button type="button" className="boton boton-secundario" onClick={() => setDestino('')}>Cancelar</button>
           </div>
         </form>
@@ -394,7 +409,7 @@ function Bitacora({ historial }: { historial: EventoBitacora[] }) {
               {h.tipo === 'nota' ? '✎' : <IconoEstatus estatus={h.estatus} tamano={16} />}
             </span>
             <div>
-              <strong>{h.tipo === 'registro' ? 'Reporte recibido' : h.tipo === 'cambio' ? `Cambio de estatus a “${h.estatus}”` : 'Nota interna'}</strong>
+              <strong>{h.tipo === 'registro' ? 'Reporte recibido' : h.tipo === 'cambio' ? `Cambio de estatus a “${etiquetaEstatus(h.estatus)}”` : 'Nota interna'}</strong>
               <span className="pequeno texto-secundario"> {formatearFecha(h.fecha)}<span className="no-imprimir"> · {h.autor ?? 'Registro automático'}</span></span>
               {h.comentario && <p className="texto-largo">{h.comentario}</p>}
             </div>
@@ -467,11 +482,12 @@ function ContenidoDetalle({ id }: { id: number }) {
         </div>
         <div className="insignias">
           <EtiquetaEstatus estatus={r.estatus} />
+          {r.prioridad === 'Alta' && <span className="insignia-prioridad">Prioridad alta</span>}
           {r.situacionRiesgo === 'Sí' && <span className="insignia-riesgo">Riesgo percibido</span>}
         </div>
         <p><strong>{r.municipio ?? 'Municipio no indicado'}</strong></p>
         <p className="pequeno">Alta: {formatearFecha(r.fechaCreacion)}{desdeAlta && ` · hace ${desdeAlta}`}</p>
-        {enEstatus && <p className="pequeno"><strong>En “{r.estatus}” desde hace {enEstatus}</strong></p>}
+        {enEstatus && <p className="pequeno"><strong>En “{etiquetaEstatus(r.estatus)}” desde hace {enEstatus}</strong></p>}
         <p role="status" aria-live="polite" className="mensaje-guardado">{mensaje}</p>
         <div className="acciones no-imprimir">
           <button type="button" className="boton boton-secundario" onClick={() => window.print()}>Imprimir ficha</button>
@@ -508,7 +524,9 @@ function ContenidoDetalle({ id }: { id: number }) {
             <dl>
               <dt>Actividad</dt><dd>{r.actividadOtro ? `${r.actividad}: ${r.actividadOtro}` : r.actividad}</dd>
               <dt>¿Riesgo percibido?</dt><dd>{r.situacionRiesgo}{r.situacionRiesgo === 'Sí' && <> <span className="insignia-riesgo">Riesgo percibido</span></>}</dd>
-              {r.motivoDescarte && (<><dt>Motivo de descarte</dt><dd>{r.motivoDescarte}</dd></>)}
+              {r.peligroInmediato && (<><dt>¿Peligro inmediato?</dt><dd>{r.peligroInmediato}</dd></>)}
+              {r.prioridad && (<><dt>Prioridad</dt><dd>{r.prioridad}</dd></>)}
+              {r.motivoDescarte && (<><dt>Motivo de cancelación</dt><dd>{r.motivoDescarte}</dd></>)}
             </dl>
           </section>
           <section className="tarjeta" aria-labelledby="t-descripcion">
@@ -549,15 +567,15 @@ export function Detalle({ id }: { id: number }) {
 export function BarrasPorEstatus({ datos }: { datos: { etiqueta: string; total: number }[] }) {
   const max = Math.max(1, ...datos.map((d) => d.total));
   const alto = 34, izq = 110, ancho = 520;
-  const resumen = datos.map((d) => `${d.etiqueta}: ${d.total}`).join(', ');
+  const resumen = datos.map((d) => `${etiquetaEstatus(d.etiqueta)}: ${d.total}`).join(', ');
   return (
     <svg className="grafica" role="img" aria-label={`Reportes por estatus. ${resumen}.`} viewBox={`0 0 ${ancho} ${datos.length * alto + 8}`} width={ancho} height={datos.length * alto + 8}>
       {datos.map((d, i) => {
         const w = Math.round(((ancho - izq - 60) * d.total) / max);
         return (
           <g key={d.etiqueta} transform={`translate(0 ${i * alto + 4})`}>
-            <title>{`${d.etiqueta}: ${d.total} reporte(s)`}</title>
-            <text x={izq - 8} y={20} textAnchor="end">{d.etiqueta}</text>
+            <title>{`${etiquetaEstatus(d.etiqueta)}: ${d.total} reporte(s)`}</title>
+            <text x={izq - 8} y={20} textAnchor="end">{etiquetaEstatus(d.etiqueta)}</text>
             <rect x={izq} y={4} width={Math.max(w, 2)} height={22} rx={4} className={`relleno-${claseEstatus(d.etiqueta)}`} />
             <text x={izq + Math.max(w, 2) + 6} y={20}>{d.total}</text>
           </g>
@@ -695,7 +713,7 @@ function ContenidoPanel() {
   const datos = useCarga(() => Promise.all([api.estadisticas(f), api.distribuciones(f), api.tiempos(f), api.mapaCalor(f)]), [clave]);
   const sinAtender = useCarga(() => api.sinAtender({ ...f, dias }), [clave, dias]);
   const hayFiltros = Boolean(desde || hasta || municipio || estatus || actividad);
-  const filtrosBandeja = (extra: Partial<FiltrosUrl>) => `/personal${urlDeFiltros({ ...f, orden: 'recientes', pagina: 1, ...extra })}`;
+  const filtrosBandeja = (extra: Partial<FiltrosUrl>) => `/personal${urlDeFiltros({ ...f, orden: 'prioridad', pagina: 1, ...extra })}`;
 
   const exportar = async () => {
     setExportando(true); setErrorExportar(null);
@@ -714,7 +732,7 @@ function ContenidoPanel() {
           <label htmlFor="p-estatus">Estatus</label>
           <select id="p-estatus" value={estatus} onChange={(e) => setEstatus(e.target.value)}>
             <option value="">Todos</option>
-            {ESTATUS.map((e) => <option key={e} value={e}>{e}</option>)}
+            {ESTATUS.map((e) => <option key={e} value={e}>{etiquetaEstatus(e)}</option>)}
           </select>
         </div>
         <div className="campo">
@@ -746,9 +764,11 @@ function ContenidoPanel() {
             <section aria-labelledby="t-atencion">
               <h2 id="t-atencion">Requiere atención</h2>
               <div className="tarjetas-cifras">
-                <Cifra valor={d.riesgoAltoPendientes ?? '—'} titulo="Riesgo alto pendientes" destacada={(d.riesgoAltoPendientes ?? 0) > 0}
-                  ayuda="Pendientes en los que quien reportó percibió riesgo." enlace={filtrosBandeja({ riesgo: 'Sí', pendientes: true })} />
-                <Cifra valor={d.pendientes} titulo="Pendientes de atender" ayuda="En Recibido o En revisión." enlace={filtrosBandeja({ pendientes: true })} />
+                <Cifra valor={d.prioridadAltaPendientes ?? '—'} titulo="Prioridad alta pendientes" destacada={(d.prioridadAltaPendientes ?? 0) > 0}
+                  ayuda="Quien reportó indicó peligro inmediato." enlace={filtrosBandeja({ prioridad: 'Alta', pendientes: true })} />
+                <Cifra valor={d.riesgoAltoPendientes ?? '—'} titulo="Riesgo percibido pendientes"
+                  ayuda="Quien reportó percibió riesgo (prioridad media o alta)." enlace={filtrosBandeja({ riesgo: 'Sí', pendientes: true })} />
+                <Cifra valor={d.pendientes} titulo="Pendientes de atender" ayuda="Registrados, en revisión o reincidentes." enlace={filtrosBandeja({ pendientes: true })} />
                 <Cifra valor={sinAtender.datos?.total ?? '…'} titulo={`Sin cambios en más de ${dias} días`} ayuda="Pendientes sin ningún movimiento."
                   enlace={filtrosBandeja({ sinAtenderDias: dias })}>
                   <p className="pequeno">
@@ -775,7 +795,7 @@ function ContenidoPanel() {
             <section className="tarjeta">
               <h2>Reportes por estatus (número de reportes)</h2>
               <BarrasPorEstatus datos={d.porEstatus} />
-              <TablaAlternativa titulo="reportes por estatus" datos={d.porEstatus} columna="Estatus" />
+              <TablaAlternativa titulo="reportes por estatus" datos={d.porEstatus.map((x) => ({ ...x, etiqueta: etiquetaEstatus(x.etiqueta) }))} columna="Estatus" />
             </section>
             <div className="rejilla rejilla-2">
               <section className="tarjeta">

@@ -2,7 +2,7 @@ import { FormEvent, useState } from 'react';
 import { api, ConsultaPublica, ErrorApi } from '../api';
 import { ALT, Esqueleto, LOGOS, Marco, MensajeError, useCarga, Vacio, TextoAviso } from '../componentes';
 import { Enlace, useTitulo } from '../enrutador';
-import { ESTATUS, EtiquetaEstatus, formatearFecha, SIGNIFICADO } from '../estatus';
+import { ESTATUS, EtiquetaEstatus, formatearFecha, PATRON_FOLIO, SIGNIFICADO } from '../estatus';
 import { calcularLinea, LineaProgreso } from '../progreso';
 
 /** Inicio: qué es RIETI y las dos acciones principales. */
@@ -69,8 +69,9 @@ export function ComoFunciona() {
         ))}
       </ul>
       <p className="texto-secundario">
-        El orden normal es Recibido → En revisión → En atención → Canalizado → Concluido; algunos casos no pasan por todas
-        las etapas. Un reporte puede terminar como Descartado si, después de revisarlo, no puede atenderse.
+        El orden normal es Registrado → En revisión → En seguimiento → Canalizado → Concluido; algunos casos no pasan por
+        todas las etapas. Un caso concluido puede archivarse o, si la situación vuelve a ocurrir, marcarse como Reincidente.
+        Un reporte puede cancelarse si, después de revisarlo, no puede atenderse.
       </p>
       <div className="acciones"><Enlace a="/reportar" className="boton">Reportar una situación</Enlace></div>
     </Marco>
@@ -109,7 +110,7 @@ export function Seguimiento() {
   const consultar = async (e: FormEvent) => {
     e.preventDefault();
     const f = folio.trim().toUpperCase().replace(/\s+/g, '');
-    if (!/^RIETI-\d{4}-\d{6}$/.test(f)) { setErrorFolio('Escribe el folio completo, por ejemplo RIETI-2026-000123.'); return; }
+    if (!PATRON_FOLIO.test(f)) { setErrorFolio('Escribe el folio completo, por ejemplo RIETI-ATZ-2026-000123.'); return; }
     setErrorFolio('');
     setEnviando(true); setError(null); setResultado(null);
     try { setResultado(await api.consultar(f, clave)); } catch (err) { setError(err); } finally { setEnviando(false); }
@@ -122,7 +123,7 @@ export function Seguimiento() {
       <form onSubmit={consultar} noValidate className="tarjeta">
         <div className="campo">
           <label htmlFor="folio">Folio</label>
-          <input id="folio" type="text" autoComplete="off" inputMode="text" placeholder="RIETI-2026-000123" value={folio}
+          <input id="folio" type="text" autoComplete="off" inputMode="text" placeholder="RIETI-ATZ-2026-000123" value={folio}
             onChange={(e) => setFolio(e.target.value)} aria-invalid={errorFolio ? true : undefined}
             aria-describedby={errorFolio ? 'error-folio' : undefined} required />
           {errorFolio && <span id="error-folio" className="error-campo">{errorFolio}</span>}
