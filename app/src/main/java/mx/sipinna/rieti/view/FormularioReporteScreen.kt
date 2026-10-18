@@ -117,8 +117,9 @@ fun FormularioReporteScreen(
             alEnviar(e.datos)
         }
     }
-    // Cada paso empieza arriba; si hay errores, también se sube para ver el resumen.
-    LaunchedEffect(estado.paso, estado.errores.isNotEmpty()) {
+    // Cada paso empieza arriba; si un intento de avanzar falla, también se sube para ver el resumen.
+    // (Corregir campos no mueve la pantalla.)
+    LaunchedEffect(estado.paso, estado.intentosFallidos) {
         if (sinAnimaciones) desplazamiento.scrollTo(0) else desplazamiento.animateScrollTo(0)
     }
 

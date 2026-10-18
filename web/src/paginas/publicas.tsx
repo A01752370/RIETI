@@ -146,7 +146,7 @@ export function Seguimiento() {
         <section className="tarjeta tarjeta-tinte" aria-live="polite">
           <h2>{resultado.folio}</h2>
           <p>Estado actual: <EtiquetaEstatus estatus={resultado.estatus} /></p>
-          <p className="pequeno">Registrado el {formatearFecha(resultado.fechaCreacion)}.</p>
+          <p className="pequeno">Registrado el {formatearFecha(resultado.fechaCreacion)}</p>
           <h3>Avance</h3>
           <LineaProgreso linea={calcularLinea(resultado.estatus, resultado.historial, resultado.fechaCreacion)} />
         </section>

@@ -55,12 +55,14 @@ data class DatosFormulario(
  * @property datos lo capturado
  * @property errores errores del paso visible, por campo (vacío hasta que la persona intenta avanzar)
  * @property maximo paso más avanzado al que ya llegó (permite "Editar" y volver directo a revisar)
+ * @property intentosFallidos cuántas veces se intentó avanzar con datos faltantes (la pantalla sube al resumen de errores)
  */
 data class EstadoAsistente(
     val paso: PasoReporte = PasoReporte.DONDE,
     val datos: DatosFormulario = DatosFormulario(),
     val errores: Map<CampoReporte, String> = emptyMap(),
-    val maximo: PasoReporte = PasoReporte.DONDE
+    val maximo: PasoReporte = PasoReporte.DONDE,
+    val intentosFallidos: Int = 0
 ) {
     /** Fracción completada para la barra de progreso (0.25 en el paso 1, 1.0 en el último). */
     val progreso: Float get() = paso.numero / PasoReporte.entries.size.toFloat()
@@ -94,7 +96,7 @@ object AsistenteReporte {
      */
     fun avanzar(e: EstadoAsistente, actividades: List<String>): EstadoAsistente {
         val problemas = problemas(e.paso, e.datos, actividades)
-        if (problemas.isNotEmpty()) return e.copy(errores = porCampo(problemas))
+        if (problemas.isNotEmpty()) return e.copy(errores = porCampo(problemas), intentosFallidos = e.intentosFallidos + 1)
         if (e.paso == PasoReporte.REVISAR) return e.copy(errores = emptyMap())
         val siguiente = if (e.maximo == PasoReporte.REVISAR) PasoReporte.REVISAR else PasoReporte.entries[e.paso.ordinal + 1]
         return e.copy(paso = siguiente, errores = emptyMap(), maximo = maxOf(e.maximo, siguiente))

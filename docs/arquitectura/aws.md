@@ -91,6 +91,21 @@ flowchart LR
 
 Las teselas pasan por CloudFront sin caché (política `CachingDisabled` del API) y el backend las guarda en memoria. Si el uso crece, conviene un comportamiento de CloudFront con caché para `/api/v1/geo/teselas/*` (cambio de infraestructura que requiere aprobación). El WAF limita a 300 peticiones por IP cada 5 minutos; osmdroid guarda teselas en la caché del teléfono, así que una sesión normal queda por debajo.
 
+## WAF: límite por IP y el 403 "Request blocked" (Fase 5)
+
+**Qué pasó.** La portada respondió `403 Request blocked` de CloudFront. El ID de solicitud ya no se puede buscar: el WAF no tiene logs y sus muestras solo duran 3 horas. Las métricas de CloudWatch de los últimos 15 días (consultadas el 18-oct-2026) muestran **un solo episodio de bloqueos: 33 peticiones el 15-oct-2026 entre las 18:00 y las 19:00 (hora de la Ciudad de México), todas por la regla `limite-por-ip`**. Las reglas administradas (reputación de IP, Common, Known Bad Inputs, SQLi) no bloquearon nada en ese periodo.
+
+**Por qué.** `limite-por-ip` permite **300 peticiones por IP cada 5 minutos y cuenta todo**: la página, sus recursos, cada llamada al API y cada tesela del mapa. Ese día, desde la misma red se hicieron pruebas del emulador contra producción (el mapa pide decenas de teselas por vista); cualquier navegador de esa red quedó bloqueado hasta 5 minutos. Con varias personas detrás de la misma IP (la red de la escuela durante la demo) el límite se alcanza fácil.
+
+**Propuesta (no aplicada; requiere aprobación).** `terraform plan`: **0 recursos nuevos, 1 cambio en el lugar (la web ACL), 0 destrucciones**.
+
+| Regla | Hoy | Propuesta |
+|---|---|---|
+| `limite-por-ip` (todo) | 300 / 5 min | **2000 / 5 min** (`waf_limite_general`) |
+| `limite-api-por-ip` (nueva: `/api/` sin teselas) | — | **600 / 5 min** (`waf_limite_api`) |
+
+Las rutas sensibles conservan su límite propio en el API (5 reportes y 5 inicios de sesión por minuto por IP, bloqueo por folio en la consulta). **Ojo para la demo:** esos límites del API también son por IP; desde una sola red, el sexto reporte del mismo minuto recibe 429. Es intencional (ataque A9); si se prevé una demo con muchas personas reportando a la vez, conviene escalonar los envíos.
+
 ## Correo de Cognito y SES
 
 El pool de ciudadanos envía los códigos de verificación y de recuperación con el **remitente por defecto de Cognito** (`COGNITO_DEFAULT`). Sirve para la demostración, pero:

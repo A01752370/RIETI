@@ -123,6 +123,16 @@ Las pruebas e2e corrieron en una máquina de desarrollo con PostgreSQL local. **
 | Aviso de privacidad obligatorio; la versión aceptada se guarda con el reporte | `aviso-privacidad.ts`, `AvisoPrivacidadScreen.kt` | RF-44 | e2e "exige aceptar el aviso vigente" |
 | Logs sin datos sensibles: OkHttp sin cuerpos (`BASIC` en debug, nada en release); pgAudit sin parámetros | `ServicioRemoto.kt`, `rds.tf` | A15 | Revisión de código |
 
+### Experiencia de usuario (Fase 5)
+
+| Control | Dónde | Mitiga | Verificación |
+|---|---|---|---|
+| Sin borradores: el asistente de reporte vive solo en memoria (ViewModel en Android; estado de React en la web, nada en almacenamiento del navegador) | `FormularioReporteViewModel.kt`, `AsistenteReporte.kt`, `Reportar.tsx` | A17 (teléfono compartido o revisado) | `AsistenteReporteTest` ("nada del formulario se persiste"); prueba web que vigila `Storage.setItem` y `document.cookie` |
+| La línea de progreso del ciudadano solo usa estatus y fechas | `LineaEstatus.kt`, `progreso.tsx` | RF-38 (sin notas internas) | Pruebas de la línea en ambas plataformas; e2e "el ciudadano ve el nuevo estatus, pero no los comentarios internos" |
+| Filtros nuevos de la bandeja (`riesgo`, `pendientes`) validados con `@IsIn`/`@IsBoolean` en la misma ruta y permiso (`reportes.ver`) | `reporte.dto.ts` | A5 | e2e "filtra la bandeja por riesgo y por pendientes" (valores inválidos → 400) |
+| Ficha imprimible del detalle sin correos (ni del personal) y sin datos de cuenta | `personal.tsx` (clase `no-imprimir`) | Minimización | Revisión de código y prueba en Chrome |
+| "Abrir en el mapa del teléfono" (personal): el punto se entrega a la app de mapas que la persona elija | `DetalleReporteScreen.kt` | — (decisión D-29) | La pantalla lo advierte ("esa app recibirá el punto"); solo personal autenticado y a petición |
+
 ### App Android
 
 | Control | Dónde | Mitiga | Verificación |

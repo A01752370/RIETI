@@ -2,7 +2,7 @@ package mx.sipinna.rieti.view
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -215,7 +215,7 @@ private fun fechaEstatus(r: ReporteDetalle): String =
 private fun Encabezado(r: ReporteDetalle, mensaje: String?) {
     val portapapeles = LocalClipboardManager.current
     var copiado by remember(r.folio) { mutableStateOf(false) }
-    Card(colors = CardDefaults.cardColors(containerColor = TintePrimario), modifier = Modifier.fillMaxWidth()) {
+    Card(colors = CardDefaults.cardColors(containerColor = TintePrimario, contentColor = MaterialTheme.colorScheme.onSurface), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SelectionContainer(Modifier.weight(1f)) {
@@ -346,7 +346,7 @@ private fun TarjetaUbicacion(r: ReporteDetalle) {
                 onClick = {
                     val geo = String.format(Locale.US, "geo:%.5f,%.5f?q=%.5f,%.5f", r.latitud, r.longitud, r.latitud, r.longitud)
                     try {
-                        contexto.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(geo)))
+                        contexto.startActivity(Intent(Intent.ACTION_VIEW, geo.toUri()))
                     } catch (e: ActivityNotFoundException) {
                         // Sin app de mapas: el punto ya se ve en el mini mapa y en las coordenadas.
                     }
