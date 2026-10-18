@@ -133,6 +133,15 @@ Las pruebas e2e corrieron en una máquina de desarrollo con PostgreSQL local. **
 | Ficha imprimible del detalle sin correos (ni del personal) y sin datos de cuenta | `personal.tsx` (clase `no-imprimir`) | Minimización | Revisión de código y prueba en Chrome |
 | "Abrir en el mapa del teléfono" (personal): el punto se entrega a la app de mapas que la persona elija | `DetalleReporteScreen.kt` | — (decisión D-29) | La pantalla lo advierte ("esa app recibirá el punto"); solo personal autenticado y a petición |
 
+### Alineación con el socio (Fase 6)
+
+| Control | Dónde | Mitiga | Verificación |
+|---|---|---|---|
+| La prioridad la calcula el servidor (peligro inmediato y riesgo); un campo `prioridad` enviado por el cliente se rechaza (`forbidNonWhitelisted`) | `clasificacion.ts`, `reporte.dto.ts` | Manipulación de la cola de atención | e2e "peligro inmediato → prioridad Alta calculada por el servidor" |
+| `canal` validado: un cliente público solo declara `app` o `web`; `institucional` y `whatsapp` no se aceptan; `origen` lo fija el servidor | `reporte.dto.ts`, `reportes.service.ts` | Suplantar registros institucionales | e2e (canal institucional → 400) |
+| Folio nuevo con clave municipal pero **consecutivo global**: no revela el volumen por municipio; la consulta sigue exigiendo folio + clave (A1) | `clasificacion.ts` | A1, reidentificación por volumen | e2e de folios nuevos y heredados |
+| Cantidad coherente con los grupos de edad (`CANTIDAD_INCOHERENTE`) y catálogos validados contra la base | `clasificacion.ts`, `formulario.ts` | Datos inválidos | `clasificacion.spec.ts`, e2e |
+
 ### App Android
 
 | Control | Dónde | Mitiga | Verificación |
