@@ -242,7 +242,7 @@ describeBd('API RIETI (e2e)', () => {
       const r = await http().post('/api/v1/reportes/consulta').set('X-Forwarded-For', nuevaIp())
         .send({ folio: folio.toLowerCase(), clave: clave.toLowerCase() }).expect(200);
       expect(r.body.estatus).toBe('Recibido');
-      expect(r.body.historial).toEqual([{ estatus: 'Recibido', fecha: expect.any(String) }]);
+      expect(r.body.historial).toEqual([{ estatus: 'Recibido', etiqueta: 'Registrado', fecha: expect.any(String) }]);
       expect(Object.keys(r.body).sort()).toEqual(['estatus', 'estatusEtiqueta', 'fechaActualizacion', 'fechaCreacion', 'folio', 'historial']);
     });
 
