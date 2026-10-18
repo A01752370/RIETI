@@ -104,3 +104,15 @@ variable "retencion_logs_dias" {
   type    = number
   default = 30
 }
+
+variable "waf_limite_general" {
+  description = "Peticiones por IP cada 5 minutos (todas las rutas). Holgado: una red escolar comparte IP."
+  type        = number
+  default     = 2000
+}
+
+variable "waf_limite_api" {
+  description = "Peticiones por IP cada 5 minutos a /api/ sin contar las teselas del mapa."
+  type        = number
+  default     = 600
+}

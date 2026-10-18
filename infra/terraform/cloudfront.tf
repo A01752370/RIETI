@@ -75,6 +75,9 @@ resource "aws_wafv2_web_acl" "api" {
     allow {}
   }
 
+  # Límite general por IP (todas las peticiones: página, recursos y teselas del mapa).
+  # Varias personas detrás de la misma red (p. ej. la escuela) comparten IP, así que el
+  # umbral es holgado; las rutas sensibles conservan su propio límite en el API.
   rule {
     name     = "limite-por-ip"
     priority = 0
@@ -83,13 +86,67 @@ resource "aws_wafv2_web_acl" "api" {
     }
     statement {
       rate_based_statement {
-        limit              = 300 # peticiones por IP cada 5 min
+        limit              = var.waf_limite_general # peticiones por IP cada 5 min
         aggregate_key_type = "IP"
       }
     }
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "limite-por-ip"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # Límite más estricto solo para el API, sin contar las teselas del mapa.
+  rule {
+    name     = "limite-api-por-ip"
+    priority = 5
+    action {
+      block {}
+    }
+    statement {
+      rate_based_statement {
+        limit              = var.waf_limite_api
+        aggregate_key_type = "IP"
+        scope_down_statement {
+          and_statement {
+            statement {
+              byte_match_statement {
+                search_string         = "/api/"
+                positional_constraint = "STARTS_WITH"
+                field_to_match {
+                  uri_path {}
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "NONE"
+                }
+              }
+            }
+            statement {
+              not_statement {
+                statement {
+                  byte_match_statement {
+                    search_string         = "/api/v1/geo/teselas/"
+                    positional_constraint = "STARTS_WITH"
+                    field_to_match {
+                      uri_path {}
+                    }
+                    text_transformation {
+                      priority = 0
+                      type     = "NONE"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "limite-api-por-ip"
       sampled_requests_enabled   = true
     }
   }
