@@ -22,7 +22,9 @@ data class DatosDireccion(
 )
 
 /** Campo del formulario al que se refiere un problema (para mostrar el error junto a él). */
-enum class CampoReporte { MUNICIPIO, CALLE, COLONIA, CODIGO_POSTAL, DIRECCION, GRUPOS, ACTIVIDAD, ACTIVIDAD_OTRO, RIESGO, DESCRIPCION }
+enum class CampoReporte {
+    MODO, MUNICIPIO, CALLE, COLONIA, CODIGO_POSTAL, DIRECCION, PELIGRO, CANTIDAD, EDADES, GRUPOS, ACTIVIDAD, ACTIVIDAD_OTRO, RIESGO, DESCRIPCION
+}
 
 /**
  * Problema de validación.
@@ -39,16 +41,33 @@ data class Problema(val campo: CampoReporte, val mensaje: String)
  */
 object ValidadorReporte {
 
-    /** Rangos de edad (catálogo `rango_edad`), en el orden en que se muestran. */
-    val EDADES = listOf("0-5", "6-11", "12-17", "Sin determinar")
+    /** Rangos de edad vigentes (catálogo `rango_edad`, Fase 6), en el orden en que se muestran. */
+    val EDADES = listOf("0-5", "6-11", "12-14", "15-17", "Sin determinar")
 
-    /** Texto amable de cada rango para la pantalla. */
+    /** Orden para enviar y mostrar, incluido el rango heredado `12-17` (reportes anteriores). */
+    private val ORDEN_EDADES = listOf("0-5", "6-11", "12-14", "15-17", "12-17", "Sin determinar")
+
+    /** Texto amable de cada rango para la pantalla ("Sin determinar" es el "No sé" del formulario). */
     val ETIQUETAS_EDAD = mapOf(
         "0-5" to "De 0 a 5 años",
         "6-11" to "De 6 a 11 años",
+        "12-14" to "De 12 a 14 años",
+        "15-17" to "De 15 a 17 años",
         "12-17" to "De 12 a 17 años",
-        "Sin determinar" to "No estoy seguro/a de la edad"
+        "Sin determinar" to "Edad sin determinar"
     )
+
+    /** Texto corto de cada rango para los chips del formulario. */
+    val CHIPS_EDAD = mapOf("0-5" to "0–5", "6-11" to "6–11", "12-14" to "12–14", "15-17" to "15–17", "Sin determinar" to "No sé")
+
+    /** Categorías de "¿Cuántas viste?" (Fase 6). */
+    val CANTIDADES = listOf("1", "2", "3", "4", "5+", "No sé")
+
+    /** Texto de cada categoría de cantidad. */
+    val TEXTO_CANTIDAD = mapOf("5+" to "5 o más")
+
+    /** Respuestas a "¿Está en peligro inmediato?" (Fase 6). */
+    val PELIGRO = listOf("Sí", "No", "No sé")
 
     /** Tope de menores en un reporte (igual que en el servidor). */
     const val TOTAL_MAXIMO = 50
@@ -59,21 +78,23 @@ object ValidadorReporte {
      */
     val ACTIVIDADES_RESPALDO = listOf(
         "Venta ambulante",
-        "Mendicidad forzada",
         "Limpieza de parabrisas o actividades en cruceros",
+        "Mendicidad",
+        "Carga y descarga",
+        "Trabajo en comercio",
         "Trabajo en mercados o tianguis",
-        "Comercio familiar",
-        "Servicio en comercios o restaurantes",
-        "Cargador o carretillero",
-        "Reciclaje o pepena",
-        "Trabajo doméstico",
-        "Construcción",
         "Trabajo agrícola",
+        "Construcción",
+        "Trabajo doméstico",
+        "Recolección de residuos",
         "Talleres mecánicos",
         "Trabajo nocturno o en bares",
-        "Actividades ilícitas o explotación",
-        "Otro"
+        "Otro",
+        "No sé"
     )
+
+    /** Texto que se muestra para una actividad ("Otro" se presenta como "Otra actividad"). */
+    fun textoActividad(actividad: String): String = if (actividad == ACTIVIDAD_OTRO) "Otra actividad" else actividad
 
     /** Actividad que pide una descripción libre. */
     const val ACTIVIDAD_OTRO = "Otro"
@@ -95,9 +116,46 @@ object ValidadorReporte {
     /** ¿Se puede sumar uno más sin pasar del tope? */
     fun puedeAumentar(conteos: Map<String, Int>): Boolean = total(conteos) < TOTAL_MAXIMO
 
-    /** Grupos a enviar: solo los rangos con al menos uno, en el orden de [EDADES]. */
+    /** Grupos a enviar: solo los rangos con al menos uno, en orden de edad. */
     fun gruposParaEnviar(conteos: Map<String, Int>): List<GrupoMenores> =
-        EDADES.mapNotNull { r -> conteos[r]?.takeIf { it > 0 }?.let { GrupoMenores(r, it) } }
+        ORDEN_EDADES.mapNotNull { r -> conteos[r]?.takeIf { it > 0 }?.let { GrupoMenores(r, it) } }
+
+    /**
+     * Grupos de edad a partir de lo que pide el formulario del socio (Fase 6): con una sola edad
+     * elegida, la cantidad va toda a esa edad (`5 o más` cuenta como 5 y `No sé` como 1, la cota
+     * mínima); con varias edades, se usan los contadores por edad.
+     */
+    fun gruposDesdeFormulario(cantidad: String, edades: Set<String>, conteos: Map<String, Int>): List<GrupoMenores> {
+        if (edades.size == 1) {
+            val n = when (cantidad) { "5+" -> 5; "No sé" -> 1; else -> cantidad.toIntOrNull() ?: 0 }
+            return if (n > 0) listOf(GrupoMenores(edades.single(), n)) else emptyList()
+        }
+        return gruposParaEnviar(conteos.filterKeys { it in edades })
+    }
+
+    /**
+     * Paso "A quiénes" del asistente (Fase 6): peligro inmediato, cantidad y edad aproximada.
+     * Con varias edades, los contadores deben cuadrar con la cantidad (las mismas reglas que el servidor).
+     */
+    fun problemasMenores(peligro: String, cantidad: String, edades: Set<String>, conteos: Map<String, Int>): List<Problema> = buildList {
+        if (peligro !in PELIGRO) add(Problema(CampoReporte.PELIGRO, "Indica si está en peligro inmediato"))
+        if (cantidad !in CANTIDADES) add(Problema(CampoReporte.CANTIDAD, "Indica cuántas niñas, niños o adolescentes viste"))
+        if (edades.isEmpty()) add(Problema(CampoReporte.EDADES, "Indica la edad aproximada"))
+        if (edades.size > 1 && cantidad in CANTIDADES) {
+            val porEdad = edades.associateWith { conteos[it] ?: 0 }
+            val suma = porEdad.values.sum()
+            val cuadra = when (cantidad) {
+                "No sé" -> true
+                "5+" -> suma >= 5
+                else -> suma == cantidad.toInt()
+            }
+            when {
+                porEdad.values.any { it < 1 } -> add(Problema(CampoReporte.GRUPOS, "Indica cuántas hay en cada edad que elegiste"))
+                !cuadra -> add(Problema(CampoReporte.GRUPOS, "La suma por edad ($suma) no coincide con la cantidad que indicaste"))
+                suma > TOTAL_MAXIMO -> add(Problema(CampoReporte.GRUPOS, "El total no puede pasar de $TOTAL_MAXIMO"))
+            }
+        }
+    }
 
     /** Los códigos postales del Estado de México van de 50000 a 57999. */
     fun esCodigoPostalEdomex(cp: String): Boolean =
@@ -193,11 +251,11 @@ object ValidadorReporte {
 
     /**
      * Normaliza un folio escrito a mano: mayúsculas y sin espacios.
-     * Devuelve null si no tiene el formato `RIETI-AAAA-NNNNNN`.
+     * Devuelve null si no tiene el formato `RIETI-ATZ-AAAA-NNNNNN` ni el heredado `RIETI-AAAA-NNNNNN`.
      */
     fun normalizarFolio(texto: String): String? {
         val folio = texto.trim().uppercase().replace(" ", "")
-        return folio.takeIf { Regex("^RIETI-\\d{4}-\\d{6}$").matches(it) }
+        return folio.takeIf { Regex("^RIETI-(?:[A-Z]{3}-)?\\d{4}-\\d{6}$").matches(it) }
     }
 
     /**

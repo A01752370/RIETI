@@ -113,4 +113,14 @@ class ExtractorFolioClaveTest {
         val largo = "x".repeat(100)
         assertEquals(ExtractorFolioClave.MAX_TEXTO_LIBRE, ExtractorFolioClave.alCambiar(largo, true, "", "").first.length)
     }
+
+    @Test
+    fun `Fase 6 - folio con clave municipal, junto, separado o en minusculas`() {
+        val nuevo = "RIETI-ATZ-2026-000123"
+        assertEquals(FolioYClave(nuevo, clave), extraer("Folio: RIETI-ATZ-2026-000123\nClave de consulta: ABCD-EFGH-2345"))
+        assertEquals(FolioYClave(nuevo, clave), extraer(" rieti atz 2026 000123  abcd efgh 2345 "))
+        assertEquals(FolioYClave(nuevo, null), extraer("RIETIATZ2026000123"))
+        // Los folios heredados siguen funcionando.
+        assertEquals(FolioYClave(folio, null), extraer("RIETI-2026-000123"))
+    }
 }

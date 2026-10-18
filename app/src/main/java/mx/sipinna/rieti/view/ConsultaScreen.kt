@@ -73,7 +73,7 @@ fun ConsultaScreen(alRegresar: () -> Unit, viewModel: ConsultaViewModel = viewMo
                 folio = f; clave = c; avisoPegar = null
             },
             label = { Text("Folio") },
-            placeholder = { Text("RIETI-2026-000123") },
+            placeholder = { Text("RIETI-ATZ-2026-000123") },
             singleLine = true,
             textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Next),

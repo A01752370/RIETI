@@ -52,7 +52,7 @@ class ConsultaViewModel(
         if (_consulta.value is UiState.Cargando) return
         val folio = ValidadorReporte.normalizarFolio(folioTexto)
         when {
-            folio == null -> _consulta.value = UiState.Error("Escribe el folio completo, por ejemplo RIETI-2026-000123")
+            folio == null -> _consulta.value = UiState.Error("Escribe el folio completo, por ejemplo RIETI-ATZ-2026-000123")
             clave.isBlank() -> _consulta.value = UiState.Error("Escribe la clave de consulta que recibiste al reportar")
             else -> {
                 _consulta.value = UiState.Cargando

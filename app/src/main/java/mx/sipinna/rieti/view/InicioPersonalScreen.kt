@@ -55,7 +55,7 @@ import mx.sipinna.rieti.viewmodel.UiState
  * bandeja ya filtrada. Se actualiza deslizando hacia abajo.
  *
  * @param alAbrirBandeja abre la bandeja con filtro de estatus o de "sin atender" (ambos opcionales)
- * @param alAbrirRiesgoAlto abre la bandeja con los pendientes en los que se percibió riesgo
+ * @param alAbrirPrioridadAlta abre la bandeja con los pendientes de prioridad Alta (peligro inmediato)
  * @param alAbrirPendientes abre la bandeja con los pendientes (Recibido y En revisión)
  * @param alCerrarSesion descarta el token y vuelve al inicio
  * @param alSesionExpirada el servidor respondió 401: hay que volver a iniciar sesión
@@ -64,7 +64,7 @@ import mx.sipinna.rieti.viewmodel.UiState
 @Composable
 fun InicioPersonalScreen(
     alAbrirBandeja: (estatus: String?, sinAtender: Int?) -> Unit,
-    alAbrirRiesgoAlto: () -> Unit,
+    alAbrirPrioridadAlta: () -> Unit,
     alAbrirPendientes: () -> Unit,
     alCerrarSesion: () -> Unit,
     alSesionExpirada: () -> Unit,
@@ -96,7 +96,7 @@ fun InicioPersonalScreen(
                         MensajeError(e.mensaje)
                         OutlinedButton(onClick = viewModel::cargar, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Reintentar") }
                     }
-                    is UiState.Exito -> Tablero(e.datos, alAbrirBandeja, alAbrirRiesgoAlto, alAbrirPendientes)
+                    is UiState.Exito -> Tablero(e.datos, alAbrirBandeja, alAbrirPrioridadAlta, alAbrirPendientes)
                 }
             }
             // Solo durante el gesto o la recarga (en reposo el indicador asomaría arriba).
@@ -109,17 +109,17 @@ fun InicioPersonalScreen(
 
 /** Contenido del inicio con datos. */
 @Composable
-private fun Tablero(d: InicioPersonal, alAbrirBandeja: (String?, Int?) -> Unit, alAbrirRiesgoAlto: () -> Unit, alAbrirPendientes: () -> Unit) {
+private fun Tablero(d: InicioPersonal, alAbrirBandeja: (String?, Int?) -> Unit, alAbrirPrioridadAlta: () -> Unit, alAbrirPendientes: () -> Unit) {
     Text("Desliza hacia abajo para actualizar.", style = MaterialTheme.typography.bodySmall)
 
     // Fase 5: lo más urgente arriba.
     TarjetaAccion(
         icono = Icons.Filled.Warning,
-        cifra = d.resumen.riesgoAltoPendientes,
-        titulo = "Riesgo alto pendientes",
-        detalle = if (d.resumen.riesgoAltoPendientes == 0) "Ninguno por ahora" else "Quien reportó percibió riesgo",
-        fondo = if (d.resumen.riesgoAltoPendientes > 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant,
-        alTocar = alAbrirRiesgoAlto
+        cifra = d.resumen.prioridadAltaPendientes,
+        titulo = "Prioridad alta pendientes",
+        detalle = if (d.resumen.prioridadAltaPendientes == 0) "Ninguno por ahora" else "Quien reportó indicó peligro inmediato",
+        fondo = if (d.resumen.prioridadAltaPendientes > 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant,
+        alTocar = alAbrirPrioridadAlta
     )
     TarjetaAccion(
         icono = Icons.Filled.Notifications,

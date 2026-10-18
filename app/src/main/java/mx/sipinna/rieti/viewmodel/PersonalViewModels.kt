@@ -15,8 +15,8 @@ import mx.sipinna.rieti.repository.ReportesRepositorio
 import mx.sipinna.rieti.repository.Resultado
 import mx.sipinna.rieti.repository.SesionRepositorio
 
-/** Estatus canónicos (Etapa 1, D-11), en el orden de los filtros de la bandeja. */
-val ESTATUS_CANONICOS = listOf("Recibido", "En revisión", "En atención", "Canalizado", "Concluido", "Descartado")
+/** Estatus canónicos (nombres internos; Etapa 1, D-11 y Fase 6), en el orden de los filtros de la bandeja. */
+val ESTATUS_CANONICOS = CatalogoEstatus.TODOS
 
 /**
  * ViewModel de la bandeja del personal (CU-09).
@@ -45,10 +45,10 @@ class BandejaViewModel @JvmOverloads constructor(
     /** Si no es null, solo se muestran pendientes sin cambios en más de esos días (enlace del inicio). */
     val sinAtenderDias: StateFlow<Int?> = _sinAtenderDias.asStateFlow()
 
-    private val _riesgoAlto = MutableStateFlow(estado.get<Boolean>("riesgoAlto") == true)
+    private val _prioridadAlta = MutableStateFlow(estado.get<Boolean>("prioridadAlta") == true)
 
-    /** true: solo pendientes en los que quien reportó percibió riesgo (enlace del inicio, Fase 5). */
-    val riesgoAlto: StateFlow<Boolean> = _riesgoAlto.asStateFlow()
+    /** true: solo pendientes con prioridad Alta, es decir, con peligro inmediato (enlace del inicio, Fase 6). */
+    val prioridadAlta: StateFlow<Boolean> = _prioridadAlta.asStateFlow()
 
     private val _pendientes = MutableStateFlow(estado.get<Boolean>("pendientes") == true)
 
@@ -59,7 +59,7 @@ class BandejaViewModel @JvmOverloads constructor(
     fun filtrar(estatus: String?) {
         _filtro.value = estatus
         _sinAtenderDias.value = null
-        _riesgoAlto.value = false
+        _prioridadAlta.value = false
         _pendientes.value = false
         cargar()
     }
@@ -69,8 +69,8 @@ class BandejaViewModel @JvmOverloads constructor(
         _reportes.value = UiState.Cargando
         val estatus = _filtro.value
         val dias = _sinAtenderDias.value
-        val riesgo = _riesgoAlto.value
-        // "Riesgo alto" siempre se refiere a casos pendientes de atender.
+        val riesgo = _prioridadAlta.value
+        // "Prioridad alta" en el inicio siempre se refiere a casos pendientes de atender.
         val soloPendientes = _pendientes.value || riesgo
         viewModelScope.launch {
             _reportes.value = repositorio.listarFiltrado(estatus, dias, riesgo, soloPendientes).aUiState()

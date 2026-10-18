@@ -128,8 +128,13 @@ class FormularioReporteViewModel(
         elegirMunicipio((_municipios.value as? UiState.Exito)?.datos?.find { it.id == propuesto.id })
     }
 
-    /** Valida el paso actual y, si todo está bien, pasa al siguiente. */
-    fun avanzar() = _asistente.update { AsistenteReporte.avanzar(it, _actividades.value) }
+    /**
+     * Valida el paso actual y, si todo está bien, pasa al siguiente.
+     *
+     * @param haySesion true si hay sesión de ciudadano (necesaria para reportar con seguimiento)
+     */
+    fun avanzar(haySesion: Boolean = SesionCiudadanoRepositorio.haySesion.value) =
+        _asistente.update { AsistenteReporte.avanzar(it, _actividades.value, haySesion) }
 
     /** Regresa un paso; devuelve false si ya estaba en el primero (la pantalla decide si sale). */
     fun retroceder(): Boolean {
@@ -211,11 +216,11 @@ class FormularioReporteViewModel(
         if (_envio.value is UiState.Cargando) return
         val estado = _asistente.value
         val pendiente = PasoReporte.entries.firstOrNull {
-            it != PasoReporte.REVISAR && AsistenteReporte.problemas(it, estado.datos, _actividades.value).isNotEmpty()
+            it != PasoReporte.REVISAR && AsistenteReporte.problemas(it, estado.datos, _actividades.value, haySesion).isNotEmpty()
         }
         if (pendiente != null) {
-            // No debería pasar (cada paso se valida al avanzar); si pasa, se lleva a la persona al paso con el problema.
-            _asistente.value = AsistenteReporte.avanzar(estado.copy(paso = pendiente), _actividades.value)
+            // Puede pasar si la sesión venció en el camino; se lleva a la persona al paso con el problema.
+            _asistente.value = AsistenteReporte.avanzar(estado.copy(paso = pendiente), _actividades.value, haySesion)
             return
         }
         val vincular = haySesion && estado.datos.vincular

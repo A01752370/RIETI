@@ -3,7 +3,7 @@ package mx.sipinna.rieti.viewmodel
 /**
  * Folio y clave encontrados en un texto. Cualquiera puede faltar.
  *
- * @property folio folio normalizado `RIETI-AAAA-NNNNNN`, o null
+ * @property folio folio normalizado `RIETI-ATZ-AAAA-NNNNNN` o el heredado `RIETI-AAAA-NNNNNN`, o null
  * @property clave clave normalizada `XXXX-XXXX-XXXX`, o null
  */
 data class FolioYClave(val folio: String?, val clave: String?)
@@ -25,8 +25,8 @@ object ExtractorFolioClave {
     // Separadores tolerados entre bloques: espacios, saltos de línea o guiones (también varios seguidos).
     private const val SEP = "[\\s\\-–—]*"
 
-    /** RIETI-2026-000123, "rieti 2026 000123", "RIETI2026000123"… */
-    private val FOLIO = Regex("RIETI$SEP(\\d{4})$SEP(\\d{6})(?!\\d)")
+    /** RIETI-ATZ-2026-000123 (Fase 6) o RIETI-2026-000123, "rieti atz 2026 000123", "RIETI2026000123"… */
+    private val FOLIO = Regex("RIETI$SEP(?:([A-Z]{3})$SEP)?(\\d{4})$SEP(\\d{6})(?!\\d)")
 
     /** Etiquetas que acompañan a los datos en el texto compartido; se ignoran. */
     private val ETIQUETAS = Regex("\\b(FOLIO|CLAVE|DE|CONSULTA|RIETI)\\b")
@@ -49,7 +49,10 @@ object ExtractorFolioClave {
     fun extraer(texto: String): FolioYClave {
         val mayus = texto.uppercase()
         val coincidenciaFolio = FOLIO.find(mayus)
-        val folio = coincidenciaFolio?.let { "RIETI-${it.groupValues[1]}-${it.groupValues[2]}" }
+        val folio = coincidenciaFolio?.let { m ->
+            val clave = m.groupValues[1].takeIf { it.isNotEmpty() }?.let { "$it-" } ?: ""
+            "RIETI-$clave${m.groupValues[2]}-${m.groupValues[3]}"
+        }
 
         val resto = (coincidenciaFolio?.let { mayus.removeRange(it.range) } ?: mayus)
             .replace(ETIQUETAS, " ")

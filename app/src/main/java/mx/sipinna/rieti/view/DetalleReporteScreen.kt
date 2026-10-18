@@ -72,6 +72,7 @@ import mx.sipinna.rieti.model.ReporteDetalle
 import mx.sipinna.rieti.ui.theme.Primario
 import mx.sipinna.rieti.ui.theme.TextoSecundario
 import mx.sipinna.rieti.ui.theme.TintePrimario
+import mx.sipinna.rieti.viewmodel.CatalogoEstatus
 import mx.sipinna.rieti.viewmodel.DetalleReporteViewModel
 import mx.sipinna.rieti.viewmodel.FormatoReporte
 import mx.sipinna.rieti.viewmodel.LineaEstatus
@@ -145,7 +146,7 @@ private fun ContenidoDetalle(r: ReporteDetalle, guardado: UiState<Unit>, viewMod
     // Al guardar con éxito se cierra el diálogo y se avisa sin recargar la pantalla.
     LaunchedEffect(guardado) {
         if (guardado is UiState.Exito && accion != null) {
-            mensaje = if (accion == NOTA) "Nota agregada." else "Estatus cambiado a \"$accion\"."
+            mensaje = if (accion == NOTA) "Nota agregada." else "Estatus cambiado a \"${CatalogoEstatus.etiqueta(accion!!)}\"."
             accion = null
             viewModel.consumirGuardado()
         }
@@ -164,11 +165,13 @@ private fun ContenidoDetalle(r: ReporteDetalle, guardado: UiState<Unit>, viewMod
     TarjetaMenores(r)
     Tarjeta("Actividad y riesgo") {
         Dato("Actividad", FormatoReporte.actividad(r.actividad, r.actividadOtro))
+        r.peligroInmediato?.let { Dato("¿Peligro inmediato?", it) }
+        r.prioridad?.let { Dato("Prioridad", it) }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Dato("¿Riesgo percibido?", r.situacionRiesgo)
             if (r.situacionRiesgo == "Sí") IndicadorRiesgo()
         }
-        r.motivoDescarte?.let { Dato("Motivo de descarte", it) }
+        r.motivoDescarte?.let { Dato("Motivo de cancelación", it) }
     }
     TarjetaDescripcion(r.descripcion)
     Bitacora(r)
@@ -228,13 +231,14 @@ private fun Encabezado(r: ReporteDetalle, mensaje: String?) {
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 EtiquetaEstatus(r.estatus)
+                IndicadorPrioridad(r.prioridad)
                 if (r.situacionRiesgo == "Sí") IndicadorRiesgo()
             }
             Text(r.municipio ?: "Municipio no indicado", style = MaterialTheme.typography.titleSmall)
             val desdeAlta = FormatoReporte.transcurrido(r.fechaCreacion)
             val enEstatus = FormatoReporte.transcurrido(fechaEstatus(r))
             Text("Alta: ${formatearFecha(r.fechaCreacion)}${desdeAlta?.let { " · hace $it" } ?: ""}", style = MaterialTheme.typography.bodyMedium)
-            enEstatus?.let { Text("En \"${r.estatus}\" desde hace $it", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold) }
+            enEstatus?.let { Text("En \"${CatalogoEstatus.etiqueta(r.estatus)}\" desde hace $it", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold) }
             if (copiado) Text("Folio copiado.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
             mensaje?.let {
                 Text(it, color = Primario, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
@@ -262,7 +266,7 @@ private fun Acciones(r: ReporteDetalle, enabled: Boolean, alElegir: (String) -> 
                     modifier = Modifier.heightIn(min = 48.dp)
                 ) {
                     Icon(iconoEstatus(destino), contentDescription = null, tint = colorEstatus(destino), modifier = Modifier.size(ButtonDefaults.IconSize))
-                    Text(destino, color = colorEstatus(destino), modifier = Modifier.padding(start = 6.dp))
+                    Text(CatalogoEstatus.etiqueta(destino), color = colorEstatus(destino), modifier = Modifier.padding(start = 6.dp))
                 }
             }
             OutlinedButton(onClick = { alElegir(NOTA) }, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -287,7 +291,8 @@ private fun DialogoAccion(
     var motivo by rememberSaveable(destino) { mutableStateOf("") }
     val esNota = destino == NOTA
     val descartar = destino == "Descartado"
-    val reabrir = r.estatus == "Concluido" && !esNota
+    // Fase 6: marcar un caso como Reincidente exige comentario (el servidor lo vuelve a validar).
+    val reabrir = destino == CatalogoEstatus.REINCIDENTE
     val listo = when {
         esNota -> comentario.isNotBlank()
         descartar -> motivo.isNotBlank()
@@ -296,14 +301,14 @@ private fun DialogoAccion(
     }
     AlertDialog(
         onDismissRequest = { if (!ocupado) alCancelar() },
-        title = { Text(if (esNota) "Agregar nota interna" else "Cambiar a \"$destino\"") },
+        title = { Text(if (esNota) "Agregar nota interna" else "Cambiar a \"${CatalogoEstatus.etiqueta(destino)}\"") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (!esNota) Text("Estatus actual: ${r.estatus}", style = MaterialTheme.typography.bodyMedium)
+                if (!esNota) Text("Estatus actual: ${CatalogoEstatus.etiqueta(r.estatus)}", style = MaterialTheme.typography.bodyMedium)
                 if (descartar) {
                     OutlinedTextField(
                         value = motivo, onValueChange = { motivo = it.take(500) },
-                        label = { Text("Motivo del descarte (obligatorio)") }, modifier = Modifier.fillMaxWidth()
+                        label = { Text("Motivo de la cancelación (obligatorio)") }, modifier = Modifier.fillMaxWidth()
                     )
                 }
                 OutlinedTextField(
@@ -311,7 +316,7 @@ private fun DialogoAccion(
                     label = {
                         Text(when {
                             esNota -> "Nota (solo la ve el personal)"
-                            reabrir -> "Comentario de reincidencia (obligatorio)"
+                            reabrir -> "Comentario: por qué volvió a requerir atención (obligatorio)"
                             else -> "Comentario (opcional)"
                         })
                     },
@@ -416,7 +421,7 @@ private fun Bitacora(r: ReporteDetalle) {
 private fun EventoBitacora(ev: EventoSeguimiento, tipo: String, conector: Boolean) {
     val (color, titulo) = when (tipo) {
         "registro" -> colorEstatus("Recibido") to "Reporte recibido"
-        "cambio" -> colorEstatus(ev.estatus) to "Cambio de estatus a \"${ev.estatus}\""
+        "cambio" -> colorEstatus(ev.estatus) to "Cambio de estatus a \"${CatalogoEstatus.etiqueta(ev.estatus)}\""
         else -> TextoSecundario to "Nota interna"
     }
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -140,7 +140,9 @@ interface ApiService {
         @Query("tamano") tamano: Int,
         @Query("sinAtenderDias") sinAtenderDias: Int? = null,
         @Query("riesgo") riesgo: String? = null,
-        @Query("pendientes") pendientes: Boolean? = null
+        @Query("pendientes") pendientes: Boolean? = null,
+        @Query("prioridad") prioridad: String? = null,
+        @Query("orden") orden: String? = null
     ): Pagina<ReporteResumen>
 
     /** Resumen agregado para el inicio del personal (requiere sesión). */

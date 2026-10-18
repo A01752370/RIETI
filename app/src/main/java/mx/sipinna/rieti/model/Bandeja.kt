@@ -14,11 +14,15 @@ package mx.sipinna.rieti.model
  * @property situacionRiesgo "Sí", "No" o "No sé"
  * @property fechaCreacion fecha de registro (ISO-8601)
  * @property fechaActualizacion fecha del último cambio (ISO-8601)
+ * @property prioridad "Alta", "Media" o "Normal" (la calcula el servidor; Fase 6), o null si el servidor es anterior
+ * @property peligroInmediato "Sí", "No" o "No sé" (null en reportes anteriores a la Fase 6)
  */
 data class ReporteResumen(
     val id: Int,
     val folio: String,
     val estatus: String,
+    val prioridad: String? = null,
+    val peligroInmediato: String? = null,
     val ubicacion: String,
     val municipio: String?,
     val actividad: String,
@@ -64,6 +68,11 @@ data class ReporteDetalle(
     val id: Int,
     val folio: String,
     val estatus: String,
+    val prioridad: String? = null,
+    val peligroInmediato: String? = null,
+    val cantidadCategoria: String? = null,
+    val canal: String? = null,
+    val origen: String? = null,
     val ubicacion: String,
     val municipio: String?,
     val actividad: String,
@@ -140,12 +149,14 @@ data class AgregarSeguimientoRequest(
  * @property pendientes casos en Recibido o En revisión
  * @property porEstatus conteo por estatus, en el orden del proceso
  * @property riesgoAltoPendientes pendientes en los que quien reportó percibió riesgo (Fase 5)
+ * @property prioridadAltaPendientes pendientes con prioridad Alta: peligro inmediato (Fase 6)
  */
 data class ResumenPersonal(
     val total: Int,
     val nuevosUltimos7Dias: Int,
     val pendientes: Int = 0,
     val riesgoAltoPendientes: Int = 0,
+    val prioridadAltaPendientes: Int = 0,
     val porEstatus: List<ConteoEstatus>
 )
 
