@@ -1,4 +1,4 @@
-import { formatearFolio, lineaDeTiempoPublica } from '../src/reportes/reportes.service';
+import { clasificarBitacora, fechaEstatusActual, formatearFolio, lineaDeTiempoPublica } from '../src/reportes/reportes.service';
 
 describe('formatearFolio', () => {
   it('rellena el consecutivo a 6 dígitos', () => {
@@ -60,5 +60,27 @@ describe('validarContacto (D-17)', () => {
     expect(validarContacto({ tipo: 'enlace', valor: 'http://example.org' })).toMatch(/https/);
     expect(validarContacto({ tipo: 'enlace', valor: 'javascript:alert(1)' })).toMatch(/https/);
     expect(validarContacto({ tipo: 'correo', valor: 'no-es-correo' })).toMatch(/correo/);
+  });
+});
+
+describe('bitácora clasificada (Fase 5)', () => {
+  const ev = (estatus: string, fecha: string) => ({ estatus, fecha, comentario: null, autor: null });
+
+  it('registro, cambios y notas; la fecha del estatus vigente ignora las notas', () => {
+    const b = clasificarBitacora([
+      ev('Recibido', '2026-10-01T00:00:00.000Z'),
+      ev('En revisión', '2026-10-02T00:00:00.000Z'),
+      ev('En revisión', '2026-10-03T00:00:00.000Z'),
+      ev('En atención', '2026-10-04T00:00:00.000Z'),
+      ev('En atención', '2026-10-05T00:00:00.000Z'),
+    ]);
+    expect(b.map((e) => e.tipo)).toEqual(['registro', 'cambio', 'nota', 'cambio', 'nota']);
+    expect(fechaEstatusActual(b, 'x')).toBe('2026-10-04T00:00:00.000Z');
+  });
+
+  it('reabrir un caso concluido es un cambio; sin eventos usa la fecha de respaldo', () => {
+    const b = clasificarBitacora([ev('Recibido', 'a'), ev('Concluido', 'b'), ev('En atención', 'c')]);
+    expect(b.map((e) => e.tipo)).toEqual(['registro', 'cambio', 'cambio']);
+    expect(fechaEstatusActual([], '2026-10-01T00:00:00.000Z')).toBe('2026-10-01T00:00:00.000Z');
   });
 });

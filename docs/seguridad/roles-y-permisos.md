@@ -36,7 +36,7 @@
 | Ver el directorio de la red | `GET /red-municipios` | ✅ | ✅ | ✅ | ✅ |
 | Iniciar sesión | `POST /auth/login` | — (sin cuenta) | — (usa `/ciudadanos/login`) | ✅ | ✅ |
 | Ver su perfil y permisos (`perfil.ver`) | `GET /auth/perfil` | — | — | ✅ | ✅ |
-| Ver la bandeja y el detalle (`reportes.ver`) | `GET /reportes`, `GET /reportes/:id` | — | — | ✅ | ✅ |
+| Ver la bandeja (con filtros de estatus, municipio, actividad, fechas, folio, sin atender, riesgo y pendientes) y el detalle (`reportes.ver`) | `GET /reportes`, `GET /reportes/:id` | — | — | ✅ | ✅ |
 | Cambiar estatus y agregar notas (`reportes.gestionar`) | `PATCH /reportes/:id/estatus`, `POST /reportes/:id/seguimientos` | — | — | ✅ | ✅ |
 | Ver el panel de estadísticas, solo agregados (`estadisticas.ver`) | `GET /estadisticas/resumen`, `/distribuciones`, `/tiempos`, `/sin-atender`, `/mapa-calor` | — | — | ✅ | ✅ |
 | Exportar la bandeja filtrada a CSV, sin descripciones ni coordenadas (`reportes.exportar`) | `GET /reportes/exportar.csv` | — | — | ✅ | ✅ |

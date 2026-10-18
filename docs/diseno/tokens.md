@@ -53,3 +53,7 @@ En las gráficas se usan los mismos colores **más** etiquetas directas con el n
 - **Espaciado:** escala de 4 px (4, 8, 12, 16, 24, 32, 48).
 - **Objetivos táctiles:** ≥ 44 px (web) y ≥ 48 dp (Android).
 - **Radio:** 12 px.
+
+## Componentes
+
+Indicador de pasos, barra de progreso y línea de progreso del estatus (Fase 5): [componentes-progreso.md](componentes-progreso.md).

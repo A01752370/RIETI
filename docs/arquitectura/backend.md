@@ -57,8 +57,8 @@ src/
 | GET | `/api/v1/ciudadano/cuenta`, `/api/v1/ciudadano/reportes` | Ciudadano (token del pool de ciudadanos) | "Mi panel" |
 | POST | `/api/v1/ciudadano/cuenta/contrasena`, `/api/v1/ciudadano/cuenta/cerrar-sesion` | Ciudadano | Configuración de la cuenta |
 | DELETE | `/api/v1/ciudadano/cuenta` | Ciudadano, 3/min | Eliminar la cuenta (los reportes se conservan) |
-| GET | `/api/v1/reportes` | Personal | CU-09 bandeja |
-| GET | `/api/v1/reportes/:id` | Personal | CU-09 detalle |
+| GET | `/api/v1/reportes` | Personal | CU-09 bandeja (filtros: `estatus`, `municipioId`, `actividad`, `desde`, `hasta`, `folio`, `sinAtenderDias`, `riesgo`, `pendientes`, `orden`) |
+| GET | `/api/v1/reportes/:id` | Personal | CU-09 detalle (Fase 5: `fechaEstatusActual` y `tipo` de cada evento de la bitácora) |
 | PATCH | `/api/v1/reportes/:id/estatus` | Personal | CU-09/CU-10 |
 | POST | `/api/v1/reportes/:id/seguimientos` | Personal | Nota de seguimiento |
 
@@ -140,6 +140,8 @@ Las migraciones corren al arrancar (`migrationsRun`). Con un usuario sin permiso
 | `COGNITO_CIUDADANOS_POOL_ID`, `COGNITO_CIUDADANOS_CLIENT_ID` | Pool y cliente de las cuentas de ciudadano (los inyecta el workflow desde variables del repositorio) |
 | `TRUST_PROXY_HOPS` | Saltos de proxy (CloudFront → ALB = 2) para obtener la IP del límite de tasa |
 | `CORS_ORIGINS` | Orígenes web permitidos (vacío: sin CORS) |
+| `ESTADISTICAS_UMBRAL` | Conteo mínimo de una celda de las estadísticas (3) |
+| `ESTADISTICAS_MIN_CASOS_TIEMPO` | Casos mínimos para publicar un tiempo de proceso (5; nunca menos que el umbral). Con menos: "datos insuficientes" |
 
 ## Pruebas
 

@@ -4,9 +4,10 @@ import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 import { DataSource } from 'typeorm';
 import { Requiere } from '../auth/roles';
-import { ESTATUS_ORDENADOS } from '../reportes/estatus';
+import { ESTATUS, ESTATUS_ORDENADOS } from '../reportes/estatus';
 import {
-  celdasDeCalor, CeldaCalorDto, ConteoProtegidoDto, proteger, TAMANO_CELDA_GRADOS, tiemposPorEstatus, TiempoEstatusDto, umbralMinimo,
+  celdasDeCalor, CeldaCalorDto, ConteoProtegidoDto, minimoCasosTiempo, proteger, TAMANO_CELDA_GRADOS, tiempoHastaHito, TiempoHitoDto,
+  tiemposPorEstatus, TiempoEstatusDto, umbralMinimo,
 } from './agregados';
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
@@ -71,6 +72,8 @@ export interface ResumenEstadisticasDto {
   sinMunicipio: number;
   /** Casos que esperan atención: Recibido o En revisión. */
   pendientes: number;
+  /** Pendientes en los que quien reportó percibió riesgo ("Sí"; Fase 5). */
+  riesgoAltoPendientes: number;
   /** Los 6 estatus canónicos en el orden del proceso, incluso con 0. */
   porEstatus: ConteoDto[];
   /** Por mes `AAAA-MM`, del más antiguo al más reciente. */
@@ -92,6 +95,10 @@ export interface TiemposDto {
   umbral: number;
   /** Tiempo promedio que los casos permanecen en cada estatus antes de cambiar. */
   porEstatus: TiempoEstatusDto[];
+  /** Del alta al primer cambio de estatus (la primera revisión del personal; Fase 5). */
+  hastaPrimeraRevision: TiempoHitoDto;
+  /** Del alta a la primera vez que el caso llegó a "Concluido" (Fase 5). */
+  hastaConclusion: TiempoHitoDto;
 }
 
 /** Respuesta de `GET /api/v1/estadisticas/sin-atender`. */
@@ -159,13 +166,14 @@ export class EstadisticasController {
         `SELECT count(*)::int AS total,
                 count(*) FILTER (WHERE r.fecha_creacion >= now() - interval '7 days')::int AS nuevos,
                 count(*) FILTER (WHERE r.id_municipio IS NULL)::int AS sin_municipio,
-                count(*) FILTER (WHERE e.nombre = ANY($7::text[]))::int AS pendientes
-         ${DESDE_FILTRADO}`, [...params, PENDIENTES]),
+                count(*) FILTER (WHERE e.nombre = ANY($7::text[]))::int AS pendientes,
+                count(*) FILTER (WHERE e.nombre = ANY($7::text[]) AND ri.nombre = 'Sí')::int AS riesgo_alto
+         ${DESDE_FILTRADO.replace('WHERE', 'JOIN riesgo ri ON ri.id_riesgo = r.id_riesgo WHERE')}`, [...params, PENDIENTES]),
       this.ds.query(`SELECT e.nombre AS etiqueta, count(*)::int AS total ${DESDE_FILTRADO} GROUP BY e.nombre`, params),
       this.ds.query(
         `SELECT to_char(date_trunc('month', r.fecha_creacion AT TIME ZONE $4), 'YYYY-MM') AS etiqueta, count(*)::int AS total
          ${DESDE_FILTRADO} GROUP BY 1 ORDER BY 1`, params),
-    ]) as [[{ total: number; nuevos: number; sin_municipio: number; pendientes: number }], ConteoDto[], ConteoDto[]];
+    ]) as [[{ total: number; nuevos: number; sin_municipio: number; pendientes: number; riesgo_alto: number }], ConteoDto[], ConteoDto[]];
 
     const porNombre = new Map(estatus.map((e) => [e.etiqueta, e.total]));
     return {
@@ -173,6 +181,7 @@ export class EstadisticasController {
       nuevosUltimos7Dias: tarjetas.nuevos,
       sinMunicipio: tarjetas.sin_municipio,
       pendientes: tarjetas.pendientes,
+      riesgoAltoPendientes: tarjetas.riesgo_alto,
       porEstatus: ESTATUS_ORDENADOS.map((e) => ({ etiqueta: e, total: porNombre.get(e) ?? 0 })),
       porMes: meses,
     };
@@ -214,10 +223,13 @@ export class EstadisticasController {
        FROM seguimiento s JOIN estatus_reporte es ON es.id_estatus = s.id_estatus
        WHERE s.id_caso IN (SELECT c.id_caso ${DESDE_FILTRADO})
        ORDER BY s.id_caso, s.fecha, s.id_seguimiento`, parametros(f));
+    const eventos = filas.map((x) => ({ idCaso: Number(x.id_caso), estatus: x.estatus, fecha: new Date(x.fecha) }));
+    const minimo = minimoCasosTiempo(umbral);
     return {
       umbral,
-      porEstatus: tiemposPorEstatus(
-        filas.map((x) => ({ idCaso: Number(x.id_caso), estatus: x.estatus, fecha: new Date(x.fecha) })), ESTATUS_ORDENADOS, umbral),
+      porEstatus: tiemposPorEstatus(eventos, ESTATUS_ORDENADOS, umbral),
+      hastaPrimeraRevision: tiempoHastaHito(eventos, (e) => e !== ESTATUS.RECIBIDO, minimo),
+      hastaConclusion: tiempoHastaHito(eventos, (e) => e === ESTATUS.CONCLUIDO, minimo),
     };
   }
 

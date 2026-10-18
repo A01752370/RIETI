@@ -73,6 +73,49 @@ export function tiemposPorEstatus(eventos: EventoCaso[], ordenEstatus: readonly 
   });
 }
 
+/**
+ * Mínimo de casos para publicar un tiempo promedio de proceso (Fase 5). Con
+ * menos casos un promedio engaña (un solo caso lento o rápido lo domina), así
+ * que se responde "datos insuficientes". Nunca es menor que el umbral de celda.
+ */
+export function minimoCasosTiempo(umbral: number): number {
+  const v = Number(process.env.ESTADISTICAS_MIN_CASOS_TIEMPO ?? 5);
+  return Math.max(umbral, Number.isInteger(v) && v >= 1 ? v : 5);
+}
+
+/** Tiempo de proceso hasta un hito (primera revisión o conclusión). */
+export interface TiempoHitoDto {
+  /** Promedio en horas (1 decimal), o null si hay menos de `minimoCasos` casos. */
+  horasPromedio: number | null;
+  /** Mediana en horas (1 decimal), o null en el mismo caso: no la desvían los casos extremos. */
+  horasMediana: number | null;
+  /** Casos que ya alcanzaron el hito (los que no lo alcanzan no se cuentan). */
+  casos: number;
+  /** Casos necesarios para publicar el promedio. */
+  minimoCasos: number;
+}
+
+/**
+ * Tiempo desde el alta (primer evento) hasta el primer evento que cumple `hito`,
+ * por caso. Los casos que nunca lo alcanzan no se cuentan (aún no terminan).
+ */
+export function tiempoHastaHito(eventos: EventoCaso[], hito: (estatus: string) => boolean, minimoCasos: number): TiempoHitoDto {
+  const porCaso = new Map<number, EventoCaso[]>();
+  for (const e of eventos) porCaso.set(e.idCaso, [...(porCaso.get(e.idCaso) ?? []), e]);
+  const horas: number[] = [];
+  for (const lista of porCaso.values()) {
+    lista.sort((a, b) => a.fecha.getTime() - b.fecha.getTime());
+    const alcanzado = lista.slice(1).find((e) => hito(e.estatus));
+    if (alcanzado) horas.push((alcanzado.fecha.getTime() - lista[0].fecha.getTime()) / 3_600_000);
+  }
+  const redondear = (h: number) => Math.round(h * 10) / 10;
+  if (horas.length < minimoCasos || horas.length === 0) return { horasPromedio: null, horasMediana: null, casos: horas.length, minimoCasos };
+  const orden = [...horas].sort((a, b) => a - b);
+  const mitad = Math.floor(orden.length / 2);
+  const mediana = orden.length % 2 ? orden[mitad] : (orden[mitad - 1] + orden[mitad]) / 2;
+  return { horasPromedio: redondear(horas.reduce((a, b) => a + b, 0) / horas.length), horasMediana: redondear(mediana), casos: horas.length, minimoCasos };
+}
+
 /** Tamaño de la celda del mapa de calor, en grados (≈ 550 m en la latitud del Estado de México). */
 export const TAMANO_CELDA_GRADOS = 0.005;
 

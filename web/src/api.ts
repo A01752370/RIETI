@@ -139,12 +139,19 @@ export interface Pagina<T> { elementos: T[]; total: number; pagina: number; tama
 /** Detalle de un reporte para el personal. */
 export interface ReporteDetalle extends ReporteResumen {
   latitud: number | null; longitud: number | null; descripcion: string; motivoDescarte: string | null;
-  historial: { estatus: string; comentario: string | null; autor: string | null; fecha: string }[];
+  historial: EventoBitacora[];
   transicionesPermitidas: string[];
+  /** Cuándo entró el caso a su estatus vigente (Fase 5; servidores anteriores no lo envían). */
+  fechaEstatusActual?: string;
   /** Menores por grupo de edad (Fase 2; servidores anteriores no lo envían). */
   grupos?: GrupoMenores[];
   actividadOtro?: string | null;
   direccion?: DireccionRespuesta | null;
+}
+/** Evento de la bitácora (solo personal). `tipo` llega desde la Fase 5. */
+export interface EventoBitacora {
+  estatus: string; comentario: string | null; autor: string | null; fecha: string;
+  tipo?: 'registro' | 'cambio' | 'nota';
 }
 /** Menores observados en un rango de edad. */
 export interface GrupoMenores { rango: string; cantidad: number }
@@ -159,6 +166,8 @@ export interface Perfil { correo: string; perfil: string; grupos: string[]; perm
 /** Resumen del panel (solo agregados). */
 export interface ResumenEstadisticas {
   total: number; nuevosUltimos7Dias: number; sinMunicipio: number; pendientes: number;
+  /** Pendientes en los que quien reportó percibió riesgo (Fase 5). */
+  riesgoAltoPendientes?: number;
   porEstatus: { etiqueta: string; total: number }[]; porMes: { etiqueta: string; total: number }[];
 }
 /** Conteo que el servidor oculta (`null`) si es menor que el umbral. */
@@ -166,7 +175,15 @@ export interface ConteoProtegido { etiqueta: string; total: number | null }
 /** Distribuciones del panel (Fase 3). */
 export interface Distribuciones { umbral: number; porMunicipio: ConteoProtegido[]; porActividad: ConteoProtegido[]; porGrupoEdad: ConteoProtegido[] }
 /** Tiempo promedio en cada estatus. */
-export interface Tiempos { umbral: number; porEstatus: { estatus: string; horasPromedio: number | null; casos: number }[] }
+export interface Tiempos {
+  umbral: number; porEstatus: { estatus: string; horasPromedio: number | null; casos: number }[];
+  /** Del alta al primer cambio de estatus (Fase 5). */
+  hastaPrimeraRevision?: TiempoHito;
+  /** Del alta a "Concluido" (Fase 5). */
+  hastaConclusion?: TiempoHito;
+}
+/** Tiempo hasta un hito: promedio y mediana en horas, o null si hay menos de `minimoCasos` (datos insuficientes). */
+export interface TiempoHito { horasPromedio: number | null; horasMediana: number | null; casos: number; minimoCasos: number }
 /** Casos pendientes sin cambios en más de N días. */
 export interface SinAtender { dias: number; total: number; umbral: number; porMunicipio: ConteoProtegido[] }
 /** Celda del mapa de calor (centro de la celda, nunca la ubicación de un reporte). */
@@ -176,7 +193,13 @@ export interface MapaCalor { umbral: number; tamanoCelda: number; celdas: CeldaC
 /** Filtros comunes del panel. */
 export interface FiltrosPanel { desde?: string; hasta?: string; municipioId?: number; estatus?: string; actividad?: string }
 /** Filtros de la bandeja y la exportación. */
-export interface FiltrosBandeja extends FiltrosPanel { folio?: string; sinAtenderDias?: number; orden?: 'recientes' | 'antiguos' }
+export interface FiltrosBandeja extends FiltrosPanel {
+  folio?: string; sinAtenderDias?: number; orden?: 'recientes' | 'antiguos';
+  /** Riesgo percibido ("Sí" = riesgo alto; Fase 5). */
+  riesgo?: string;
+  /** Solo casos pendientes, Recibido o En revisión (Fase 5). */
+  pendientes?: boolean;
+}
 
 /** Datos del formulario de reporte (formato de la Fase 2: grupos de edad y dirección). */
 export interface NuevoReporte {
@@ -184,10 +207,10 @@ export interface NuevoReporte {
   situacionRiesgo: string; descripcion: string; avisoPrivacidadVersion: string;
 }
 
-/** Arma una cadena de consulta omitiendo valores vacíos. */
-export function consulta(params: { [k: string]: string | number | undefined | null }): string {
+/** Arma una cadena de consulta omitiendo valores vacíos (y los booleanos en `false`). */
+export function consulta(params: { [k: string]: string | number | boolean | undefined | null }): string {
   const p = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') p.set(k, String(v));
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '' && v !== false) p.set(k, String(v));
   const s = p.toString();
   return s ? `?${s}` : '';
 }

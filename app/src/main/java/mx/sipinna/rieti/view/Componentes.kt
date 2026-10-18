@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -30,6 +31,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -68,6 +70,7 @@ import java.util.Locale
  * @param acciones botones a la derecha de la barra (p. ej. "Cerrar sesión")
  * @param desplazable false para pantallas con listas propias (LazyColumn)
  * @param barraInferior contenido fijo abajo (p. ej. el botón de aceptar), fuera del desplazamiento
+ * @param desplazamiento estado del desplazamiento, para que la pantalla pueda volver arriba (p. ej. al cambiar de paso)
  * @param contenido contenido de la pantalla
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,6 +81,7 @@ fun PantallaRieti(
     acciones: @Composable () -> Unit = {},
     desplazable: Boolean = true,
     barraInferior: (@Composable () -> Unit)? = null,
+    desplazamiento: ScrollState? = null,
     contenido: @Composable ColumnScope.() -> Unit
 ) {
     Scaffold(
@@ -121,7 +125,7 @@ fun PantallaRieti(
             .padding(relleno)
             .padding(horizontal = 20.dp, vertical = 16.dp)
         Column(
-            modifier = if (desplazable) base.verticalScroll(rememberScrollState()) else base,
+            modifier = if (desplazable) base.verticalScroll(desplazamiento ?: rememberScrollState()) else base,
             verticalArrangement = Arrangement.spacedBy(12.dp),
             content = contenido
         )
@@ -361,4 +365,19 @@ fun formatearFecha(iso: String): String = try {
     OffsetDateTime.parse(iso).atZoneSameInstant(ZoneId.systemDefault()).format(FORMATO_FECHA)
 } catch (e: Exception) {
     iso
+}
+
+/** Indicador visible de riesgo percibido por quien reportó ("Sí"): icono + texto, nunca solo color. */
+@Composable
+fun IndicadorRiesgo() {
+    Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.extraLarge) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        ) {
+            Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(16.dp))
+            Text("Riesgo percibido", color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.labelLarge)
+        }
+    }
 }

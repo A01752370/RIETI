@@ -364,7 +364,8 @@ describeBd('API RIETI (e2e)', () => {
       expect(r.body.descripcion).toContain('Dos menores');
       expect(r.body.latitud).toBeCloseTo(19.5594);
       expect(r.body.transicionesPermitidas).toEqual(['En revisión', 'Descartado']);
-      expect(r.body.historial).toEqual([{ estatus: 'Recibido', comentario: null, autor: null, fecha: expect.any(String) }]);
+      expect(r.body.historial).toEqual([{ tipo: 'registro', estatus: 'Recibido', comentario: null, autor: null, fecha: expect.any(String) }]);
+      expect(r.body.fechaEstatusActual).toBe(r.body.historial[0].fecha);
     });
 
     it('rechaza una transición inválida (Recibido → Concluido)', async () => {
@@ -383,8 +384,9 @@ describeBd('API RIETI (e2e)', () => {
       expect(r.body.estatus).toBe('En revisión');
       expect(r.body.transicionesPermitidas).toEqual(['En atención', 'Canalizado', 'Descartado']);
       expect(r.body.historial.at(-1)).toMatchObject({
-        estatus: 'En revisión', comentario: 'Se asigna a enlace municipal', autor: 'enlace@ejemplo.mx',
+        tipo: 'cambio', estatus: 'En revisión', comentario: 'Se asigna a enlace municipal', autor: 'enlace@ejemplo.mx',
       });
+      expect(r.body.fechaEstatusActual).toBe(r.body.historial.at(-1).fecha);
     });
 
     it('agrega una nota sin cambiar el estatus', async () => {
@@ -392,6 +394,19 @@ describeBd('API RIETI (e2e)', () => {
         .send({ comentario: 'Se programa recorrido' }).expect(201);
       expect(r.body.estatus).toBe('En revisión');
       expect(r.body.historial).toHaveLength(3);
+      expect(r.body.historial.map((e: { tipo: string }) => e.tipo)).toEqual(['registro', 'cambio', 'nota']);
+      // Una nota no cambia la fecha del estatus vigente.
+      expect(r.body.fechaEstatusActual).toBe(r.body.historial[1].fecha);
+    });
+
+    it('filtra la bandeja por riesgo y por pendientes (Fase 5)', async () => {
+      const pendientes = await http().get('/api/v1/reportes?pendientes=true&tamano=100').set(auth).expect(200);
+      expect(pendientes.body.elementos.length).toBeGreaterThanOrEqual(1);
+      expect(pendientes.body.elementos.every((e: { estatus: string }) => ['Recibido', 'En revisión'].includes(e.estatus))).toBe(true);
+      const conRiesgo = await http().get(`/api/v1/reportes?riesgo=${encodeURIComponent('Sí')}&tamano=100`).set(auth).expect(200);
+      expect(conRiesgo.body.elementos.every((e: { situacionRiesgo: string }) => e.situacionRiesgo === 'Sí')).toBe(true);
+      await http().get('/api/v1/reportes?riesgo=Alto').set(auth).expect(400);
+      await http().get('/api/v1/reportes?pendientes=quizas').set(auth).expect(400);
     });
 
     it('filtra la bandeja por estatus', async () => {
@@ -650,6 +665,23 @@ describeBd('API RIETI (e2e)', () => {
       expect(r.body.porEstatus.map((t: { estatus: string }) => t.estatus))
         .toEqual(['Recibido', 'En revisión', 'En atención', 'Canalizado', 'Concluido', 'Descartado']);
       for (const t of r.body.porEstatus) expect(t.horasPromedio === null || t.casos >= 3).toBe(true);
+      // Hitos (Fase 5): con pocos casos no se publica un promedio engañoso.
+      for (const hito of [r.body.hastaPrimeraRevision, r.body.hastaConclusion]) {
+        expect(Object.keys(hito).sort()).toEqual(['casos', 'horasMediana', 'horasPromedio', 'minimoCasos']);
+        expect(hito).toMatchObject({ casos: expect.any(Number), minimoCasos: 5 });
+        if (hito.casos < 5) expect(hito.horasPromedio).toBeNull();
+      }
+    });
+
+    it('resumen: pendientes con riesgo percibido (Fase 5)', async () => {
+      const r = await http().get('/api/v1/estadisticas/resumen').set(personal).expect(200);
+      const esperado = (await adminDs.query(`
+        SELECT count(*)::int AS n FROM reporte r JOIN reporte_caso rc ON rc.id_reporte = r.id_reporte
+        JOIN caso c ON c.id_caso = rc.id_caso JOIN estatus_reporte e ON e.id_estatus = c.id_estatus
+        JOIN riesgo ri ON ri.id_riesgo = r.id_riesgo
+        WHERE e.nombre IN ('Recibido', 'En revisión') AND ri.nombre = 'Sí'`))[0].n;
+      expect(r.body.riesgoAltoPendientes).toBe(esperado);
+      expect(r.body.riesgoAltoPendientes).toBeLessThanOrEqual(r.body.pendientes);
     });
 
     it('casos sin atender: cuenta pendientes viejos y la bandeja los lista con el mismo filtro', async () => {
@@ -818,7 +850,7 @@ describeBd('API RIETI (e2e)', () => {
 
     it('devuelve solo conteos, con los 6 estatus en orden', async () => {
       const r = await http().get('/api/v1/estadisticas/resumen').set(personal).expect(200);
-      expect(Object.keys(r.body).sort()).toEqual(['nuevosUltimos7Dias', 'pendientes', 'porEstatus', 'porMes', 'sinMunicipio', 'total']);
+      expect(Object.keys(r.body).sort()).toEqual(['nuevosUltimos7Dias', 'pendientes', 'porEstatus', 'porMes', 'riesgoAltoPendientes', 'sinMunicipio', 'total']);
       expect(r.body.porEstatus.map((e: { etiqueta: string }) => e.etiqueta))
         .toEqual(['Recibido', 'En revisión', 'En atención', 'Canalizado', 'Concluido', 'Descartado']);
       const suma = (l: { total: number }[]) => l.reduce((a, e) => a + e.total, 0);

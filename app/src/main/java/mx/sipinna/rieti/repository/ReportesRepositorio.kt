@@ -61,6 +61,25 @@ class ReportesRepositorio(private val api: ApiService = ServicioRemoto.api) {
     suspend fun listar(estatus: String?, pagina: Int = 1, tamano: Int = 50): Resultado<Pagina<ReporteResumen>> =
         ejecutar { api.listarReportes(estatus, pagina, tamano) }
 
+    /**
+     * Bandeja con todos los filtros de la app (Fase 5).
+     *
+     * @param estatus estatus vigente, o null
+     * @param sinAtenderDias solo pendientes sin cambios en más de N días, o null
+     * @param riesgoAlto solo reportes en los que quien reportó percibió riesgo ("Sí")
+     * @param pendientes solo casos en Recibido o En revisión
+     */
+    suspend fun listarFiltrado(
+        estatus: String?,
+        sinAtenderDias: Int?,
+        riesgoAlto: Boolean,
+        pendientes: Boolean,
+        pagina: Int = 1,
+        tamano: Int = 50
+    ): Resultado<Pagina<ReporteResumen>> = ejecutar {
+        api.listarReportes(estatus, pagina, tamano, sinAtenderDias, riesgo = if (riesgoAlto) "Sí" else null, pendientes = if (pendientes) true else null)
+    }
+
     /** Detalle de un reporte para el personal. */
     suspend fun detalle(id: Int): Resultado<ReporteDetalle> = ejecutar { api.detalle(id) }
 

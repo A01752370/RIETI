@@ -12,6 +12,7 @@ import {
 import {
   AgregarSeguimientoDto, CambiarEstatusDto, ConsultaPublicaDto, CrearReporteDto, EventoPublicoDto,
   EventoSeguimientoDto, FiltrosBandejaDto, ListarReportesDto, PaginaDto, ReporteCreadoDto, ReporteDetalleDto, ReporteResumenDto,
+  TipoEventoSeguimiento,
 } from './reporte.dto';
 import { generarClave, hashearClave, verificarClave } from './clave-consulta';
 import { ESTATUS, ESTATUS_INICIAL, transicionesPermitidas, validarTransicion } from './estatus';
@@ -39,6 +40,23 @@ export function lineaDeTiempoPublica(eventos: { estatus: string; fecha: Date }[]
     if (resultado.at(-1)?.estatus !== e.estatus) resultado.push({ estatus: e.estatus, fecha: e.fecha.toISOString() });
   }
   return resultado;
+}
+
+/**
+ * Clasifica los eventos de la bitácora (ordenados del más antiguo al más reciente):
+ * el primero es el `registro`, un evento con estatus distinto al anterior es un
+ * `cambio` y uno con el mismo estatus es una `nota` interna.
+ */
+export function clasificarBitacora<T extends { estatus: string }>(eventos: T[]): (T & { tipo: TipoEventoSeguimiento })[] {
+  return eventos.map((e, i) => ({
+    ...e,
+    tipo: i === 0 ? 'registro' : e.estatus !== eventos[i - 1].estatus ? 'cambio' : 'nota',
+  }));
+}
+
+/** Fecha en que el caso entró a su estatus vigente: la del último registro o cambio (las notas no cuentan). */
+export function fechaEstatusActual(eventos: { tipo: TipoEventoSeguimiento; fecha: string }[], respaldo: string): string {
+  return [...eventos].reverse().find((e) => e.tipo !== 'nota')?.fecha ?? respaldo;
 }
 
 /** Error uniforme de la consulta pública: no revela si falló el folio o la clave (ataque A1). */
@@ -176,7 +194,7 @@ export class ReportesService {
   }
 
   /**
-   * FROM/WHERE parametrizado de la bandeja y la exportación ($1…$8). El orden de
+   * FROM/WHERE parametrizado de la bandeja y la exportación ($1…$9). El orden de
    * los parámetros lo fija {@link parametrosBandeja}.
    */
   private static readonly DESDE_BANDEJA = `
@@ -193,12 +211,14 @@ export class ReportesService {
         AND ($5::date IS NULL OR (r.fecha_creacion AT TIME ZONE 'America/Mexico_City')::date <= $5::date)
         AND ($6::text IS NULL OR f.codigo LIKE '%' || $6::text || '%')
         AND ($7::int IS NULL OR (e.nombre IN ('Recibido', 'En revisión')
-             AND c.fecha_actualizacion < now() - make_interval(days => $7::int)))`;
+             AND c.fecha_actualizacion < now() - make_interval(days => $7::int)))
+        AND ($8::text IS NULL OR EXISTS (SELECT 1 FROM riesgo ri0 WHERE ri0.id_riesgo = r.id_riesgo AND ri0.nombre = $8::text))
+        AND ($9::boolean IS NOT TRUE OR e.nombre IN ('Recibido', 'En revisión'))`;
 
   private parametrosBandeja(f: FiltrosBandejaDto): unknown[] {
     // El folio ya viene validado (solo letras, dígitos y guiones), así que LIKE no recibe comodines.
     return [f.estatus ?? null, f.municipioId ?? null, f.actividad ?? null, f.desde ?? null, f.hasta ?? null,
-      f.folio ?? null, f.sinAtenderDias ?? null];
+      f.folio ?? null, f.sinAtenderDias ?? null, f.riesgo ?? null, f.pendientes ?? null];
   }
 
   /** CU-09: bandeja del personal con filtros, búsqueda por folio, orden y paginación. */
@@ -211,7 +231,7 @@ export class ReportesService {
     const filas: { id: number }[] = await this.ds.query(
       `SELECT DISTINCT r.id_reporte AS id, r.fecha_creacion ${desde}
        ORDER BY r.fecha_creacion ${direccion}, r.id_reporte ${direccion}
-       LIMIT $8 OFFSET $9`, [...params, tamano, (pagina - 1) * tamano]);
+       LIMIT $10 OFFSET $11`, [...params, tamano, (pagina - 1) * tamano]);
 
     const ids = filas.map((f) => Number(f.id));
     const reportes = ids.length === 0 ? [] : await this.ds.getRepository(Reporte).findBy({ id: In(ids) });
@@ -241,7 +261,7 @@ export class ReportesService {
          JOIN riesgo ri ON ri.id_riesgo = r.id_riesgo
          LEFT JOIN municipio m ON m.id_municipio = r.id_municipio WHERE`)}
        ORDER BY r.fecha_creacion ${direccion}, r.id_reporte ${direccion}
-       LIMIT $8`, [...this.parametrosBandeja(f), MAX_EXPORTACION]);
+       LIMIT $10`, [...this.parametrosBandeja(f), MAX_EXPORTACION]);
     const columnas = ['folio', 'fecha', 'estatus', 'municipio', 'colonia', 'actividad', 'menores', 'grupos', 'riesgo', 'actualizado'];
     const encabezado = ['Folio', 'Fecha', 'Estatus', 'Municipio', 'Colonia', 'Actividad', 'Menores', 'Grupos de edad', 'Riesgo percibido', 'Última actualización'];
     const lineas = [encabezado.map(celdaCsv).join(','), ...filas.map((x) => columnas.map((c) => celdaCsv(x[c])).join(','))];
@@ -257,6 +277,7 @@ export class ReportesService {
     const rc = await this.ds.getRepository(ReporteCaso).findOneBy({ idReporte: id });
     const grupos = await this.ds.getRepository(GrupoMenores).find({ where: { idReporte: id } });
     const u = reporte.ubicacion;
+    const historial = await this.bitacora(id);
     const posicion = (r: string) => ['0-5', '6-11', '12-17', 'Sin determinar'].indexOf(r);
     return {
       ...resumen,
@@ -271,8 +292,9 @@ export class ReportesService {
         ? { calle: u.calle, numeroExterior: u.numeroExterior, colonia: u.colonia, codigoPostal: u.codigoPostal, referencias: u.referencias }
         : null,
       motivoDescarte: rc?.caso.motivoDescarte ?? null,
-      historial: await this.bitacora(id),
+      historial,
       transicionesPermitidas: transicionesPermitidas(resumen.estatus),
+      fechaEstatusActual: fechaEstatusActual(historial, resumen.fechaCreacion),
     };
   }
 
@@ -392,7 +414,7 @@ export class ReportesService {
        LEFT JOIN usuario u ON u.id_usuario = s.id_usuario
        WHERE rc.id_reporte = $1
        ORDER BY s.fecha, s.id_seguimiento`, [idReporte]);
-    return filas.map((f) => ({ ...f, fecha: new Date(f.fecha).toISOString() }));
+    return clasificarBitacora(filas.map((f) => ({ ...f, fecha: new Date(f.fecha).toISOString() })));
   }
 
   /** Junta folio y estatus vigente en el resumen que usa la bandeja. */
