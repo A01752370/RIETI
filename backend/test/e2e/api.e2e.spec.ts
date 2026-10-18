@@ -850,7 +850,7 @@ describeBd('API RIETI (e2e)', () => {
 
     it('devuelve solo conteos, con los 6 estatus en orden', async () => {
       const r = await http().get('/api/v1/estadisticas/resumen').set(personal).expect(200);
-      expect(Object.keys(r.body).sort()).toEqual(['nuevosUltimos7Dias', 'pendientes', 'porEstatus', 'porMes', 'sinMunicipio', 'total']);
+      expect(Object.keys(r.body).sort()).toEqual(['nuevosUltimos7Dias', 'pendientes', 'porEstatus', 'porMes', 'riesgoAltoPendientes', 'sinMunicipio', 'total']);
       expect(r.body.porEstatus.map((e: { etiqueta: string }) => e.etiqueta))
         .toEqual(['Recibido', 'En revisión', 'En atención', 'Canalizado', 'Concluido', 'Descartado']);
       const suma = (l: { total: number }[]) => l.reduce((a, e) => a + e.total, 0);
