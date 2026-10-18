@@ -40,4 +40,8 @@ object ColoresEstatus {
     val Canalizado = Color(0xFF6A1B9A)
     val Concluido = Color(0xFF2E7D32)
     val Descartado = Color(0xFF757575)
+    /** Fase 6: concluido y archivado (9.65:1). */
+    val Archivado = Color(0xFF37474F)
+    /** Fase 6: volvió a requerir atención (6.97:1). */
+    val Reincidente = Color(0xFFAD1457)
 }

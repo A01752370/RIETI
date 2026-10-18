@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { normalizarRango } from './clasificacion';
 
 /**
  * Reglas del formulario de reporte (Fase 2), como funciones puras para poder
@@ -9,7 +10,7 @@ import { BadRequestException } from '@nestjs/common';
 export const TOTAL_MAXIMO_MENORES = 50;
 
 /** Orden de los rangos de edad para desempatar (los más pequeños primero, por ser más vulnerables). */
-export const ORDEN_RANGOS = ['0-5', '6-11', '12-17', 'Sin determinar'];
+export const ORDEN_RANGOS = ['0-5', '6-11', '12-14', '15-17', '12-17', 'Sin determinar'];
 
 /** Menores observados en un rango de edad. */
 export interface Grupo {
@@ -39,7 +40,7 @@ function invalido(codigo: string, mensaje: string): BadRequestException {
  */
 export function normalizarGrupos(e: EntradaGrupos): Grupo[] {
   if (e.grupos !== undefined) {
-    const rangos = e.grupos.map((g) => g.rango.trim());
+    const rangos = e.grupos.map((g) => normalizarRango(g.rango));
     if (new Set(rangos).size !== rangos.length) throw invalido('GRUPOS_INVALIDOS', 'Cada grupo de edad debe aparecer una sola vez');
     const total = e.grupos.reduce((s, g) => s + g.cantidad, 0);
     if (total > TOTAL_MAXIMO_MENORES) {
@@ -50,7 +51,7 @@ export function normalizarGrupos(e: EntradaGrupos): Grupo[] {
   if (e.edadAproximada === undefined || e.cantidadNinos === undefined) {
     throw invalido('GRUPOS_INVALIDOS', 'Indica cuántas niñas, niños o adolescentes viste y su edad aproximada');
   }
-  return [{ rango: e.edadAproximada.trim(), cantidad: e.cantidadNinos }];
+  return [{ rango: normalizarRango(e.edadAproximada), cantidad: e.cantidadNinos }];
 }
 
 /** Suma de menores de todos los grupos. */

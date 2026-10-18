@@ -17,6 +17,9 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Refresh
+import mx.sipinna.rieti.viewmodel.CatalogoEstatus
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -329,6 +332,8 @@ fun colorEstatus(estatus: String): Color = when (estatus) {
     "Canalizado" -> ColoresEstatus.Canalizado
     "Concluido" -> ColoresEstatus.Concluido
     "Descartado" -> ColoresEstatus.Descartado
+    "Archivado" -> ColoresEstatus.Archivado
+    "Reincidente" -> ColoresEstatus.Reincidente
     else -> Color(0xFF424242)
 }
 
@@ -340,10 +345,15 @@ fun iconoEstatus(estatus: String): ImageVector = when (estatus) {
     "Canalizado" -> Icons.AutoMirrored.Filled.ArrowForward
     "Concluido" -> Icons.Filled.CheckCircle
     "Descartado" -> Icons.Filled.Close
+    "Archivado" -> Icons.Filled.Lock
+    "Reincidente" -> Icons.Filled.Refresh
     else -> Icons.Filled.Info
 }
 
-/** Etiqueta de estatus: color + icono + texto (nunca solo color). */
+/**
+ * Etiqueta de estatus: color + icono + texto (nunca solo color). Recibe el nombre
+ * interno y muestra la etiqueta pública del catálogo del socio (Fase 6).
+ */
 @Composable
 fun EtiquetaEstatus(estatus: String) {
     Surface(color = colorEstatus(estatus), shape = MaterialTheme.shapes.extraLarge) {
@@ -353,7 +363,7 @@ fun EtiquetaEstatus(estatus: String) {
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         ) {
             Icon(iconoEstatus(estatus), contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-            Text(estatus, color = Color.White, style = MaterialTheme.typography.labelLarge)
+            Text(CatalogoEstatus.etiqueta(estatus), color = Color.White, style = MaterialTheme.typography.labelLarge)
         }
     }
 }
@@ -365,6 +375,22 @@ fun formatearFecha(iso: String): String = try {
     OffsetDateTime.parse(iso).atZoneSameInstant(ZoneId.systemDefault()).format(FORMATO_FECHA)
 } catch (e: Exception) {
     iso
+}
+
+/** Indicador de prioridad Alta (peligro inmediato, Fase 6): icono + texto, nunca solo color. Media y Normal no llevan insignia. */
+@Composable
+fun IndicadorPrioridad(prioridad: String?) {
+    if (prioridad != "Alta") return
+    Surface(color = MaterialTheme.colorScheme.error, shape = MaterialTheme.shapes.extraLarge) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        ) {
+            Icon(Icons.Filled.Warning, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Text("Prioridad alta", color = Color.White, style = MaterialTheme.typography.labelLarge)
+        }
+    }
 }
 
 /** Indicador visible de riesgo percibido por quien reportó ("Sí"): icono + texto, nunca solo color. */

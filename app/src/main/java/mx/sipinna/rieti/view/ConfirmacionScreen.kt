@@ -84,8 +84,8 @@ fun ConfirmacionScreen(folio: String, clave: String, fecha: String? = null, alTe
             ) {
                 Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("¡Gracias! Recibimos tu reporte", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
-                    Text("El personal del SIPINNA lo revisará.", style = MaterialTheme.typography.bodyMedium)
+                    Text("¡Gracias por ayudar a proteger los derechos de niñas, niños y adolescentes!", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
+                    Text("Tu reporte fue recibido correctamente.", style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }

@@ -4,7 +4,8 @@ import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 import { DataSource } from 'typeorm';
 import { Requiere } from '../auth/roles';
-import { ESTATUS, ESTATUS_ORDENADOS } from '../reportes/estatus';
+import { ESTATUS, ESTATUS_ORDENADOS, ESTATUS_PENDIENTES } from '../reportes/estatus';
+import { PRIORIDADES } from '../reportes/clasificacion';
 import {
   celdasDeCalor, CeldaCalorDto, ConteoProtegidoDto, minimoCasosTiempo, proteger, TAMANO_CELDA_GRADOS, tiempoHastaHito, TiempoHitoDto,
   tiemposPorEstatus, TiempoEstatusDto, umbralMinimo,
@@ -41,6 +42,11 @@ export class FiltrosEstadisticasDto {
   @IsString()
   @MaxLength(80)
   actividad?: string;
+
+  /** Prioridad (`Alta`, `Media`, `Normal`; Fase 6). */
+  @IsOptional()
+  @IsIn(PRIORIDADES)
+  prioridad?: string;
 }
 
 /** Filtros + antigüedad para "sin atender". */
@@ -74,6 +80,8 @@ export interface ResumenEstadisticasDto {
   pendientes: number;
   /** Pendientes en los que quien reportó percibió riesgo ("Sí"; Fase 5). */
   riesgoAltoPendientes: number;
+  /** Pendientes con prioridad Alta: quien reportó indicó peligro inmediato (Fase 6). */
+  prioridadAltaPendientes: number;
   /** Los 6 estatus canónicos en el orden del proceso, incluso con 0. */
   porEstatus: ConteoDto[];
   /** Por mes `AAAA-MM`, del más antiguo al más reciente. */
@@ -127,7 +135,7 @@ export interface MapaCalorDto {
 const ZONA = 'America/Mexico_City';
 
 /** Estatus que cuentan como "pendientes de atender". */
-const PENDIENTES = ['Recibido', 'En revisión'];
+const PENDIENTES = [...ESTATUS_PENDIENTES];
 
 /**
  * Cláusula FROM/WHERE común a todas las estadísticas (consultas parametrizadas:
@@ -143,10 +151,11 @@ const DESDE_FILTRADO = `
     AND ($2::date IS NULL OR (r.fecha_creacion AT TIME ZONE $4)::date <= $2::date)
     AND ($3::int IS NULL OR r.id_municipio = $3::int)
     AND ($5::text IS NULL OR e.nombre = $5::text)
-    AND ($6::text IS NULL OR a.nombre = $6::text)`;
+    AND ($6::text IS NULL OR a.nombre = $6::text)
+    AND ($7::text IS NULL OR r.prioridad = $7::text)`;
 
 const parametros = (f: FiltrosEstadisticasDto) =>
-  [f.desde ?? null, f.hasta ?? null, f.municipioId ?? null, ZONA, f.estatus ?? null, f.actividad ?? null];
+  [f.desde ?? null, f.hasta ?? null, f.municipioId ?? null, ZONA, f.estatus ?? null, f.actividad ?? null, f.prioridad ?? null];
 
 /**
  * Panel de estadísticas del personal (`estadisticas.ver`). Solo datos agregados,
@@ -166,14 +175,15 @@ export class EstadisticasController {
         `SELECT count(*)::int AS total,
                 count(*) FILTER (WHERE r.fecha_creacion >= now() - interval '7 days')::int AS nuevos,
                 count(*) FILTER (WHERE r.id_municipio IS NULL)::int AS sin_municipio,
-                count(*) FILTER (WHERE e.nombre = ANY($7::text[]))::int AS pendientes,
-                count(*) FILTER (WHERE e.nombre = ANY($7::text[]) AND ri.nombre = 'Sí')::int AS riesgo_alto
+                count(*) FILTER (WHERE e.nombre = ANY($8::text[]))::int AS pendientes,
+                count(*) FILTER (WHERE e.nombre = ANY($8::text[]) AND ri.nombre = 'Sí')::int AS riesgo_alto,
+                count(*) FILTER (WHERE e.nombre = ANY($8::text[]) AND r.prioridad = 'Alta')::int AS prioridad_alta
          ${DESDE_FILTRADO.replace('WHERE', 'JOIN riesgo ri ON ri.id_riesgo = r.id_riesgo WHERE')}`, [...params, PENDIENTES]),
       this.ds.query(`SELECT e.nombre AS etiqueta, count(*)::int AS total ${DESDE_FILTRADO} GROUP BY e.nombre`, params),
       this.ds.query(
         `SELECT to_char(date_trunc('month', r.fecha_creacion AT TIME ZONE $4), 'YYYY-MM') AS etiqueta, count(*)::int AS total
          ${DESDE_FILTRADO} GROUP BY 1 ORDER BY 1`, params),
-    ]) as [[{ total: number; nuevos: number; sin_municipio: number; pendientes: number; riesgo_alto: number }], ConteoDto[], ConteoDto[]];
+    ]) as [[{ total: number; nuevos: number; sin_municipio: number; pendientes: number; riesgo_alto: number; prioridad_alta: number }], ConteoDto[], ConteoDto[]];
 
     const porNombre = new Map(estatus.map((e) => [e.etiqueta, e.total]));
     return {
@@ -182,6 +192,7 @@ export class EstadisticasController {
       sinMunicipio: tarjetas.sin_municipio,
       pendientes: tarjetas.pendientes,
       riesgoAltoPendientes: tarjetas.riesgo_alto,
+      prioridadAltaPendientes: tarjetas.prioridad_alta,
       porEstatus: ESTATUS_ORDENADOS.map((e) => ({ etiqueta: e, total: porNombre.get(e) ?? 0 })),
       porMes: meses,
     };
@@ -203,7 +214,7 @@ export class EstadisticasController {
         `SELECT re.nombre AS etiqueta, sum(g.cantidad)::int AS total
          ${DESDE_FILTRADO.replace('WHERE', `JOIN reporte_menores_grupo g ON g.id_reporte = r.id_reporte
            JOIN rango_edad re ON re.id_rango_edad = g.id_rango_edad WHERE`)}
-         GROUP BY re.nombre, re.id_rango_edad ORDER BY re.id_rango_edad`, params),
+         GROUP BY re.nombre, re.orden ORDER BY re.orden`, params),
     ]) as [ConteoDto[], ConteoDto[], ConteoDto[]];
     return {
       umbral,
@@ -241,7 +252,7 @@ export class EstadisticasController {
     const filas: ConteoDto[] = await this.ds.query(
       `SELECT coalesce(m.nombre, 'Sin municipio') AS etiqueta, count(*)::int AS total
        ${DESDE_FILTRADO.replace('WHERE', 'LEFT JOIN municipio m ON m.id_municipio = r.id_municipio WHERE')}
-         AND e.nombre = ANY($7::text[]) AND c.fecha_actualizacion < now() - make_interval(days => $8::int)
+         AND e.nombre = ANY($8::text[]) AND c.fecha_actualizacion < now() - make_interval(days => $9::int)
        GROUP BY 1 ORDER BY 2 DESC, 1`, [...parametros(f), PENDIENTES, f.dias]);
     return { dias: f.dias, total: filas.reduce((s, x) => s + x.total, 0), umbral, porMunicipio: proteger(filas, umbral) };
   }

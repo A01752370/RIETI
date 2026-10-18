@@ -114,16 +114,31 @@ El API acepta dos formatos, porque hay APK instaladas:
 
 Las migraciones corren al arrancar (`migrationsRun`). Con un usuario sin permisos de DDL (`rieti_app`, D-08) se desactivan con `DB_MIGRAR_AL_INICIAR=false` y se corren aparte con el usuario maestro.
 
+### Fase 6: campos del reporte y canales
+
+| Campo | Valores | Quién lo pone |
+|---|---|---|
+| `peligro_inmediato` | `Sí`, `No`, `No sé` (null en reportes anteriores) | Ciudadano (opcional para clientes anteriores) |
+| `prioridad` | `Alta`, `Media`, `Normal` | Servidor (`calcularPrioridad`) |
+| `cantidad_categoria` | `1`–`4`, `5+`, `No sé` | Ciudadano (se valida contra los grupos) o derivada |
+| `canal` | `app`, `web`, `institucional`, `whatsapp` (reservado) | Cliente público: `app`/`web`; el resto, el servidor |
+| `origen` | `ciudadano`, `institucional` | Servidor |
+| `municipio.clave_folio` | 3 letras, única | Catálogo (provisional salvo ATZ, NAU, TLA, CIZ) |
+
+**WhatsApp (propuesta, no implementada; D-34).** Una entrada por WhatsApp Business API (Cloud API de Meta) llegaría a un webhook propio (`POST /api/v1/canales/whatsapp`, verificado con la firma de Meta), que conversaría con la persona con las mismas preguntas del formulario, guardaría el estado de la conversación solo en memoria con caducidad corta y, al final, llamaría al mismo servicio `ReportesService.crear` con `canal = whatsapp`. El número de teléfono **no** se guardaría con el reporte (minimización); el folio y la clave se responderían en el mismo chat. Requisitos: cuenta de WhatsApp Business verificada, plantilla de mensajes aprobada, costos por conversación y una revisión de privacidad, porque Meta procesa los mensajes.
+
 ## Máquina de estados
 
-| Desde | Hacia |
+| Desde (interno → etiqueta pública) | Hacia |
 |---|---|
-| Recibido | En revisión, Descartado |
+| Recibido → **Registrado** | En revisión, Descartado |
 | En revisión | En atención, Canalizado, Descartado |
-| En atención | Canalizado, Concluido |
-| Canalizado | Concluido |
-| Concluido | En atención (reincidencia; exige comentario) |
-| Descartado | — (terminal; exige motivo) |
+| En atención → **En seguimiento** | Canalizado, Concluido |
+| Canalizado | En atención, Concluido |
+| Concluido | Archivado, Reincidente (exige comentario) |
+| Reincidente | En revisión, En atención |
+| Archivado | — (terminal) |
+| Descartado → **Cancelado** | — (terminal; exige motivo) |
 
 `estatus.ts` es la única fuente de verdad. El detalle del reporte incluye `transicionesPermitidas` para que los clientes no dupliquen la regla.
 

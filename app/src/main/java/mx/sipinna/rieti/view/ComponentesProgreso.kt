@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import mx.sipinna.rieti.ui.theme.Primario
 import mx.sipinna.rieti.ui.theme.TextoSecundario
 import mx.sipinna.rieti.ui.theme.TintePrimario
+import mx.sipinna.rieti.viewmodel.CatalogoEstatus
 import mx.sipinna.rieti.viewmodel.EstadoPaso
 import mx.sipinna.rieti.viewmodel.LineaEstatus
 import mx.sipinna.rieti.viewmodel.PasoLinea
@@ -202,9 +203,9 @@ fun LineaProgresoEstatus(linea: LineaEstatus, mostrarSignificado: Boolean = true
         verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
         linea.pasos.forEachIndexed { i, paso ->
-            FilaLinea(paso, conectorAbajo = i < linea.pasos.lastIndex || linea.descartado != null)
+            FilaLinea(paso, conectorAbajo = i < linea.pasos.lastIndex || linea.final != null)
         }
-        linea.descartado?.let { d ->
+        linea.final?.let { d ->
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
@@ -214,7 +215,14 @@ fun LineaProgresoEstatus(linea: LineaEstatus, mostrarSignificado: Boolean = true
                         EtiquetaEstatus(d.estatus)
                         d.fecha?.let { Text(formatearFecha(it), style = MaterialTheme.typography.bodySmall) }
                     }
-                    Text("El reporte se cerró sin continuar el avance normal.", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        when (d.estatus) {
+                            CatalogoEstatus.ARCHIVADO -> "El caso concluyó y se archivó."
+                            CatalogoEstatus.REINCIDENTE -> "Etapa actual: el caso volvió a requerir atención."
+                            else -> "El reporte se cerró sin continuar el avance normal."
+                        },
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
             }
         }
@@ -268,7 +276,7 @@ private fun FilaLinea(paso: PasoLinea, conectorAbajo: Boolean) {
         }
         Column(Modifier.weight(1f).padding(top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                paso.estatus,
+                CatalogoEstatus.etiqueta(paso.estatus),
                 style = if (paso.estado == EstadoPaso.ACTUAL) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
                 fontWeight = if (paso.estado == EstadoPaso.ACTUAL) FontWeight.Bold else FontWeight.Normal,
                 color = if (atenuado) TextoSecundario else MaterialTheme.colorScheme.onSurface

@@ -4,6 +4,7 @@ import {
   Matches, Max, MaxLength, Min, ValidateIf, ValidateNested,
 } from 'class-validator';
 import { AVISO_PRIVACIDAD_VERSION } from '../avisos/aviso-privacidad';
+import { CANALES_PUBLICOS, CANTIDADES, PATRON_FOLIO, PELIGRO, PRIORIDADES } from './clasificacion';
 import { ESTATUS_ORDENADOS } from './estatus';
 
 /** Respuestas del catálogo `riesgo`, en su orden. */
@@ -112,11 +113,11 @@ export class CrearReporteDto {
   @MaxLength(20)
   edadAproximada?: string;
 
-  /** Menores por grupo de edad (formato nuevo): de 1 a 4 grupos, sin repetir rango. */
+  /** Menores por grupo de edad (formato nuevo): de 1 a 5 grupos, sin repetir rango ("No sé" = sin determinar). */
   @IsOptional()
   @IsArray()
   @ArrayMinSize(1, { message: 'Indica al menos un grupo de edad' })
-  @ArrayMaxSize(4)
+  @ArrayMaxSize(5)
   @ValidateNested({ each: true })
   @Type(() => GrupoMenoresDto)
   grupos?: GrupoMenoresDto[];
@@ -164,6 +165,27 @@ export class CrearReporteDto {
   @IsBoolean()
   vincularCuenta?: boolean;
 
+  /**
+   * ¿La niña, niño o adolescente está en peligro inmediato? (Fase 6). Con "Sí" el
+   * servidor marca el reporte con prioridad Alta. Opcional para los clientes anteriores.
+   */
+  @IsOptional()
+  @IsIn(PELIGRO)
+  peligroInmediato?: string;
+
+  /** Categoría de "¿Cuántas viste?" (`1`–`4`, `5+`, `No sé`); si se envía, debe cuadrar con los grupos. */
+  @IsOptional()
+  @IsIn(CANTIDADES)
+  cantidad?: string;
+
+  /**
+   * Canal del cliente (`app` o `web`; Fase 6). Los clientes que lo envían reciben el folio
+   * con clave municipal; los anteriores, el formato `RIETI-AAAA-NNNNNN` que saben consultar.
+   */
+  @IsOptional()
+  @IsIn(CANALES_PUBLICOS)
+  canal?: string;
+
   /** Versión del aviso de privacidad que la persona aceptó; debe ser la vigente. */
   @Equals(AVISO_PRIVACIDAD_VERSION, { message: 'Debes aceptar el aviso de privacidad vigente' })
   avisoPrivacidadVersion: string;
@@ -171,7 +193,7 @@ export class CrearReporteDto {
 
 /** Respuesta de `POST /api/v1/reportes`. La clave solo se entrega esta vez. */
 export interface ReporteCreadoDto {
-  /** Folio público `RIETI-AAAA-NNNNNN`. */
+  /** Folio público `RIETI-ATZ-AAAA-NNNNNN` (o `RIETI-AAAA-NNNNNN` para clientes anteriores). */
   folio: string;
   /** Clave de consulta `XXXX-XXXX-XXXX`; no se puede recuperar después. */
   claveConsulta: string;
@@ -183,10 +205,10 @@ export interface ReporteCreadoDto {
 
 /** Cuerpo de `POST /api/v1/reportes/consulta`. Por POST para no dejar la clave en URLs ni logs. */
 export class ConsultarReporteDto {
-  /** Folio `RIETI-AAAA-NNNNNN` (se aceptan minúsculas). */
+  /** Folio `RIETI-ATZ-AAAA-NNNNNN` o el heredado `RIETI-AAAA-NNNNNN` (se aceptan minúsculas). */
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
   @IsString()
-  @Matches(/^RIETI-\d{4}-\d{6}$/, { message: 'El folio debe tener el formato RIETI-AAAA-NNNNNN' })
+  @Matches(PATRON_FOLIO, { message: 'El folio debe tener el formato RIETI-ATZ-AAAA-NNNNNN' })
   folio: string;
 
   /** Clave de consulta; se aceptan minúsculas, espacios y guiones. */
@@ -198,8 +220,10 @@ export class ConsultarReporteDto {
 
 /** Un evento de la línea de tiempo pública: solo estatus y fecha, sin comentarios internos. */
 export interface EventoPublicoDto {
-  /** Estatus alcanzado. */
+  /** Estatus alcanzado (nombre interno). */
   estatus: string;
+  /** Etiqueta pública del estatus (Fase 6). */
+  etiqueta: string;
   /** Fecha del cambio (ISO-8601). */
   fecha: string;
 }
@@ -208,8 +232,10 @@ export interface EventoPublicoDto {
 export interface ConsultaPublicaDto {
   /** Folio consultado. */
   folio: string;
-  /** Estatus vigente. */
+  /** Estatus vigente (nombre interno). */
   estatus: string;
+  /** Etiqueta pública del estatus vigente (Fase 6). */
+  estatusEtiqueta: string;
   /** Fecha de registro (ISO-8601). */
   fechaCreacion: string;
   /** Fecha de la última actualización (ISO-8601). */
@@ -267,16 +293,21 @@ export class FiltrosBandejaDto {
   @IsIn(RIESGOS)
   riesgo?: string;
 
-  /** Solo casos pendientes de atender (Recibido o En revisión), sin importar su antigüedad (Fase 5). */
+  /** Filtra por prioridad (`Alta`, `Media`, `Normal`; Fase 6). */
+  @IsOptional()
+  @IsIn(PRIORIDADES)
+  prioridad?: string;
+
+  /** Solo casos pendientes de atender (Registrado, En revisión o Reincidente), sin importar su antigüedad (Fase 5). */
   @IsOptional()
   @Transform(({ value }) => (value === 'true' || value === true ? true : value === 'false' || value === false ? false : value))
   @IsBoolean()
   pendientes?: boolean;
 
-  /** Orden por fecha de creación. */
+  /** Orden: por fecha de creación, o `prioridad` (Alta primero y, dentro de cada prioridad, lo más reciente). */
   @IsOptional()
-  @IsIn(['recientes', 'antiguos'])
-  orden: 'recientes' | 'antiguos' = 'recientes';
+  @IsIn(['recientes', 'antiguos', 'prioridad'])
+  orden: 'recientes' | 'antiguos' | 'prioridad' = 'recientes';
 }
 
 /** Filtros y paginación de la bandeja (`GET /api/v1/reportes`). */
@@ -317,6 +348,12 @@ export interface ReporteResumenDto {
   id: number;
   folio: string;
   estatus: string;
+  /** Etiqueta pública del estatus (Fase 6). */
+  estatusEtiqueta: string;
+  /** Prioridad calculada por el servidor (Fase 6). */
+  prioridad: string;
+  /** ¿Peligro inmediato? (null en reportes anteriores a la Fase 6). */
+  peligroInmediato: string | null;
   ubicacion: string;
   /** Municipio donde ocurre, o null si el reporte no lo indicó. */
   municipio: string | null;
@@ -338,6 +375,8 @@ export interface PaginaDto<T> {
 
 /** Evento de la bitácora de seguimiento, visible solo para el personal. */
 export interface EventoSeguimientoDto {
+  /** Etiqueta pública del estatus del evento (Fase 6). */
+  etiqueta: string;
   /**
    * Clase del evento (Fase 5): `registro` (alta automática), `cambio` (cambio de
    * estatus, con su comentario si lo hubo) o `nota` (nota interna sin cambio de estatus).
@@ -371,6 +410,12 @@ export interface ReporteDetalleDto extends ReporteResumenDto {
   transicionesPermitidas: string[];
   /** Fecha en que el caso entró a su estatus vigente (ISO-8601; Fase 5). Las notas no la cambian. */
   fechaEstatusActual: string;
+  /** Categoría de cantidad del formulario (`1`–`4`, `5+`, `No sé`; Fase 6), o null. */
+  cantidadCategoria: string | null;
+  /** Canal de entrada (Fase 6), o null si el cliente no lo declaró. */
+  canal: string | null;
+  /** `ciudadano` o `institucional`. */
+  origen: string;
 }
 
 /** Cuerpo de `PATCH /api/v1/reportes/:id/estatus`. */

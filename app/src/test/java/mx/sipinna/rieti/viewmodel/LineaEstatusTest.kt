@@ -19,7 +19,7 @@ class LineaEstatusTest {
         assertEquals("2026-10-14T09:00:00Z", l.pasos[0].fecha)
         assertTrue(l.pasos.drop(1).all { it.estado == EstadoPaso.PENDIENTE && it.fecha == null })
         assertNull(l.descartado)
-        assertEquals("Etapa 1 de 5: Recibido", l.descripcion)
+        assertEquals("Etapa 1 de 5: Registrado", l.descripcion)
     }
 
     @Test
@@ -48,22 +48,25 @@ class LineaEstatusTest {
         assertEquals(listOf("Recibido" to EstadoPaso.ALCANZADO, "En revisión" to EstadoPaso.ALCANZADO), estados(l))
         assertNotNull(l.descartado)
         assertEquals("c", l.descartado!!.fecha)
-        assertEquals("Reporte descartado", l.descripcion)
+        assertEquals("Reporte cancelado", l.descripcion)
     }
 
     @Test
-    fun `reincidencia - un caso concluido que vuelve a atencion deja Concluido pendiente`() {
-        val l = LineaEstatus.calcular(
-            "En atención", listOf("Recibido" to "a", "En revisión" to "b", "En atención" to "c", "Concluido" to "d", "En atención" to "e")
-        )
-        assertEquals(EstadoPaso.ACTUAL, l.pasos[2].estado)
-        assertEquals("e", l.pasos[2].fecha)
-        assertEquals(EstadoPaso.PENDIENTE, l.pasos[4].estado)
+    fun `Fase 6 - Reincidente y Archivado se muestran aparte de la linea, con etiquetas del socio`() {
+        val r = LineaEstatus.calcular("Reincidente", listOf("Recibido" to "a", "En revisión" to "b", "En atención" to "c", "Concluido" to "d", "Reincidente" to "e"))
+        assertEquals("Reincidente", r.final?.estatus)
+        assertEquals("e", r.final?.fecha)
+        assertTrue(r.pasos.all { it.estado == EstadoPaso.ALCANZADO })
+        val a = LineaEstatus.calcular("Archivado", listOf("Recibido" to "a", "Concluido" to "d", "Archivado" to "f"))
+        assertEquals("Archivado", a.final?.estatus)
+        assertEquals("Reporte concluido y archivado", a.descripcion)
+        assertEquals(listOf("Registrado", "En revisión", "En seguimiento", "Canalizado", "Concluido", "Cancelado", "Archivado", "Reincidente"),
+            CatalogoEstatus.TODOS.map { CatalogoEstatus.etiqueta(it) })
     }
 
     @Test
     fun `cada estatus tiene una explicacion sin plazos ni promesas`() {
-        (CatalogoEstatus.FLUJO + CatalogoEstatus.DESCARTADO).forEach { e ->
+        CatalogoEstatus.TODOS.forEach { e ->
             val texto = CatalogoEstatus.significado(e)
             assertTrue(texto.isNotBlank())
             assertNull("\"$e\" no debe prometer tiempos: $texto", Regex("(?i)\\b(horas?|d[ií]as?|semanas?|pronto|plazo|m[aá]ximo)\\b").find(texto))

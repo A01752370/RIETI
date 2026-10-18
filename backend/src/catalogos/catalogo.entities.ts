@@ -21,6 +21,10 @@ export class Municipio {
   /** Si se ofrece en el selector del formulario. */
   @Column({ default: true })
   activo: boolean;
+
+  /** Clave de 3 letras para el folio `RIETI-ATZ-2026-000123` (Fase 6; provisional salvo ATZ, NAU, TLA y CIZ). */
+  @Column({ name: 'clave_folio', type: 'varchar', length: 3, nullable: true })
+  claveFolio: string | null;
 }
 
 /** Contacto institucional de un municipio de la red (D-17). */
@@ -72,9 +76,13 @@ export class Actividad {
   @Column({ length: 80, unique: true })
   nombre: string;
 
-  /** Posición en el selector ("Otro" al final). */
+  /** Posición en el selector ("Otro" y "No sé" al final). */
   @Column({ type: 'smallint', default: 100 })
   orden: number;
+
+  /** false para actividades heredadas que ya no se ofrecen (siguen siendo válidas para reportes anteriores). */
+  @Column({ default: true })
+  vigente: boolean;
 }
 
 @Entity('riesgo')
@@ -93,6 +101,14 @@ export class RangoEdad {
 
   @Column({ length: 20, unique: true })
   nombre: string;
+
+  /** Posición en el formulario y en las gráficas. */
+  @Column({ type: 'smallint', default: 100 })
+  orden: number;
+
+  /** false para `12-17`, que solo queda como valor heredado (Fase 6). */
+  @Column({ default: true })
+  vigente: boolean;
 }
 
 @Entity('estatus_reporte')
@@ -105,4 +121,8 @@ export class EstatusReporte {
 
   @Column({ type: 'smallint' })
   orden: number;
+
+  /** Nombre público del catálogo del socio (Recibido → Registrado, etc.; Fase 6). */
+  @Column({ length: 40 })
+  etiqueta: string;
 }

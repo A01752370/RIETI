@@ -102,6 +102,26 @@ export class Reporte {
   @Column({ name: 'aviso_privacidad_version', type: 'varchar', length: 20, nullable: true })
   avisoPrivacidadVersion: string | null;
 
+  /** ¿Peligro inmediato? (`Sí`, `No`, `No sé`; null en reportes anteriores a la Fase 6). */
+  @Column({ name: 'peligro_inmediato', type: 'varchar', length: 6, nullable: true })
+  peligroInmediato: string | null;
+
+  /** Prioridad calculada por el servidor (`Alta`, `Media`, `Normal`); ver `calcularPrioridad`. */
+  @Column({ type: 'varchar', length: 6, default: 'Normal' })
+  prioridad: string;
+
+  /** Categoría de cantidad del formulario (`1`–`4`, `5+`, `No sé`). */
+  @Column({ name: 'cantidad_categoria', type: 'varchar', length: 6, nullable: true })
+  cantidadCategoria: string | null;
+
+  /** Canal de entrada (`app`, `web`, `institucional`; `whatsapp` reservado). Null si el cliente no lo declaró. */
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  canal: string | null;
+
+  /** `ciudadano` o `institucional` (detección en recorridos). */
+  @Column({ type: 'varchar', length: 20, default: 'ciudadano' })
+  origen: string;
+
   @CreateDateColumn({ name: 'fecha_creacion', type: 'timestamptz' })
   fechaCreacion: Date;
 
@@ -109,7 +129,7 @@ export class Reporte {
   fechaActualizacion: Date;
 }
 
-/** Folio público `RIETI-<año>-<consecutivo>`; el consecutivo sale de `folio_contador`. */
+/** Folio público `RIETI-<año>-<consecutivo>` o `RIETI-<clave>-<año>-<consecutivo>`; el consecutivo sale de `folio_contador`. */
 @Entity('folio')
 export class Folio {
   @PrimaryGeneratedColumn({ name: 'id_folio' })

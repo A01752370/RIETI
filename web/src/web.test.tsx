@@ -83,26 +83,29 @@ describe('selector de municipios (D-16)', () => {
 describe('validación del formulario de reporte', () => {
   const completo = {
     ...FORMULARIO_VACIO, municipio: MUNICIPIOS[0], calle: 'Av. López Mateos', numero: '12', colonia: 'Centro', codigoPostal: '52900',
-    conteos: { '0-5': 2, '12-17': 1 }, actividad: 'Venta ambulante', riesgo: 'No sé', descripcion: 'Dos menores vendiendo',
+    peligro: 'No', cantidad: '3', edades: ['0-5', '12-14'],
+    conteos: { '0-5': 2, '12-14': 1 }, actividad: 'Venta ambulante', riesgo: 'No sé', descripcion: 'Dos menores vendiendo',
   };
   it('pide todos los campos, incluido el municipio', () => {
     expect(Object.keys(validarFormulario(FORMULARIO_VACIO)).sort())
-      .toEqual(['actividad', 'calle', 'codigoPostal', 'colonia', 'descripcion', 'grupos', 'municipio', 'riesgo'].sort());
+      .toEqual(['actividad', 'calle', 'cantidad', 'codigoPostal', 'colonia', 'descripcion', 'edades', 'municipio', 'peligro', 'riesgo'].sort());
   });
   it('acepta un formulario completo', () => {
     expect(validarFormulario(completo)).toEqual({});
   });
   it('valida el código postal del Estado de México, el tope de 50 y "Otro"', () => {
     expect(validarFormulario({ ...completo, codigoPostal: '06000' }).codigoPostal).toContain('Estado de México');
-    expect(validarFormulario({ ...completo, conteos: { '0-5': 30, '6-11': 21 } }).grupos).toContain('50');
+    expect(validarFormulario({ ...completo, cantidad: '5+', conteos: { '0-5': 30, '12-14': 21 } }).grupos).toContain('50');
+    expect(validarFormulario({ ...completo, cantidad: '4' }).grupos).toContain('no coincide');
     expect(validarFormulario({ ...completo, actividad: 'Otro' }).actividadOtro).toBeTruthy();
   });
   it('arma el cuerpo con el formato nuevo: grupos en orden y sin campos vacíos', () => {
-    expect(aNuevoReporte({ ...completo, conteos: { '12-17': 1, '6-11': 0, '0-5': 2 } }, '2026-10-v1')).toEqual({
+    expect(aNuevoReporte({ ...completo, conteos: { '12-14': 1, '6-11': 4, '0-5': 2 } }, '2026-10-v1')).toEqual({
       municipioId: MUNICIPIOS[0].id,
       direccion: { calle: 'Av. López Mateos', numeroExterior: '12', colonia: 'Centro', codigoPostal: '52900' },
-      grupos: [{ rango: '0-5', cantidad: 2 }, { rango: '12-17', cantidad: 1 }],
+      grupos: [{ rango: '0-5', cantidad: 2 }, { rango: '12-14', cantidad: 1 }],
       actividad: 'Venta ambulante', situacionRiesgo: 'No sé', descripcion: 'Dos menores vendiendo', avisoPrivacidadVersion: '2026-10-v1',
+      peligroInmediato: 'No', cantidad: '3', canal: 'web',
     });
   });
 });
@@ -138,8 +141,8 @@ describe('panel (Fase 3)', () => {
 });
 
 describe('estatus', () => {
-  it('los 6 estatus tienen significado y clase de color', () => {
-    expect(ESTATUS.map(claseEstatus)).toEqual(['recibido', 'en-revision', 'en-atencion', 'canalizado', 'concluido', 'descartado']);
+  it('los 8 estatus tienen significado y clase de color (Fase 6)', () => {
+    expect(ESTATUS.map(claseEstatus)).toEqual(['recibido', 'en-revision', 'en-atencion', 'canalizado', 'concluido', 'descartado', 'archivado', 'reincidente']);
     for (const e of ESTATUS) expect(SIGNIFICADO[e]).toBeTruthy();
   });
 });
@@ -150,9 +153,9 @@ describe('gráficas', () => {
     const { container } = render(<BarrasPorEstatus datos={porEstatus} />);
     const svg = container.querySelector('svg')!;
     expect(svg.getAttribute('role')).toBe('img');
-    expect(svg.getAttribute('aria-label')).toContain('En atención: 2');
-    expect(container.querySelectorAll('rect')).toHaveLength(6);
-    expect(container.querySelectorAll('title')[5].textContent).toBe('Descartado: 5 reporte(s)');
+    expect(svg.getAttribute('aria-label')).toContain('En seguimiento: 2');
+    expect(container.querySelectorAll('rect')).toHaveLength(8);
+    expect(container.querySelectorAll('title')[5].textContent).toBe('Cancelado: 5 reporte(s)');
   });
   it('no usan estilos en línea (la CSP los bloquearía)', () => {
     const { container } = render(<><BarrasPorEstatus datos={porEstatus} /><SeriePorMes datos={[{ etiqueta: '2026-10', total: 3 }]} /></>);

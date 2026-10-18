@@ -80,11 +80,11 @@ class ValidadorReporteTest {
 
     @Test
     fun `los catalogos de respaldo coinciden con los del servidor`() {
-        assertEquals(listOf("0-5", "6-11", "12-17", "Sin determinar"), ValidadorReporte.EDADES)
+        assertEquals(listOf("0-5", "6-11", "12-14", "15-17", "Sin determinar"), ValidadorReporte.EDADES)
         assertEquals(listOf("Sí", "No", "No sé"), ValidadorReporte.RIESGOS)
-        assertEquals(15, ValidadorReporte.ACTIVIDADES_RESPALDO.size)
-        assertEquals("Otro", ValidadorReporte.ACTIVIDADES_RESPALDO.last())
-        assertEquals(ValidadorReporte.EDADES.toSet(), ValidadorReporte.ETIQUETAS_EDAD.keys)
+        assertEquals(14, ValidadorReporte.ACTIVIDADES_RESPALDO.size)
+        assertEquals(listOf("Otro", "No sé"), ValidadorReporte.ACTIVIDADES_RESPALDO.takeLast(2))
+        assertTrue(ValidadorReporte.ETIQUETAS_EDAD.keys.containsAll(ValidadorReporte.EDADES))
     }
 
     @Test
@@ -99,6 +99,8 @@ class ValidadorReporteTest {
     @Test
     fun `normaliza el folio escrito a mano`() {
         assertEquals("RIETI-2026-000123", ValidadorReporte.normalizarFolio(" rieti-2026-000123 "))
+        assertEquals("RIETI-ATZ-2026-000123", ValidadorReporte.normalizarFolio(" rieti-atz-2026-000123 "))
+        assertNull(ValidadorReporte.normalizarFolio("RIETI-AT-2026-000123"))
         assertNull(ValidadorReporte.normalizarFolio("RIETI-2026-123"))
         assertNull(ValidadorReporte.normalizarFolio("RIETI-2026-000001' OR '1'='1"))
     }

@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import mx.sipinna.rieti.model.ReporteResumen
 import mx.sipinna.rieti.viewmodel.BandejaViewModel
+import mx.sipinna.rieti.viewmodel.CatalogoEstatus
 import mx.sipinna.rieti.viewmodel.ESTATUS_CANONICOS
 import mx.sipinna.rieti.viewmodel.UiState
 
@@ -48,9 +49,9 @@ fun BandejaScreen(
     val estado by viewModel.reportes.collectAsState()
     val filtro by viewModel.filtro.collectAsState()
     val sinAtender by viewModel.sinAtenderDias.collectAsState()
-    val riesgoAlto by viewModel.riesgoAlto.collectAsState()
+    val prioridadAlta by viewModel.prioridadAlta.collectAsState()
     val pendientes by viewModel.pendientes.collectAsState()
-    val filtroInicio = sinAtender != null || riesgoAlto || pendientes
+    val filtroInicio = sinAtender != null || prioridadAlta || pendientes
 
     // Se recarga cada vez que se vuelve a la bandeja (p. ej. tras cambiar un estatus).
     LaunchedEffect(Unit) { viewModel.cargar() }
@@ -75,8 +76,8 @@ fun BandejaScreen(
                     FilterChip(selected = true, onClick = { viewModel.filtrar(null) }, label = { Text("Sin cambios en más de $dias días ✕") })
                 }
             }
-            if (riesgoAlto) {
-                item { FilterChip(selected = true, onClick = { viewModel.filtrar(null) }, label = { Text("Riesgo alto pendientes ✕") }) }
+            if (prioridadAlta) {
+                item { FilterChip(selected = true, onClick = { viewModel.filtrar(null) }, label = { Text("Prioridad alta pendientes ✕") }) }
             } else if (pendientes) {
                 item { FilterChip(selected = true, onClick = { viewModel.filtrar(null) }, label = { Text("Pendientes ✕") }) }
             }
@@ -84,7 +85,7 @@ fun BandejaScreen(
                 FilterChip(selected = filtro == null && !filtroInicio, onClick = { viewModel.filtrar(null) }, label = { Text("Todos") })
             }
             items(ESTATUS_CANONICOS) { e ->
-                FilterChip(selected = filtro == e && !filtroInicio, onClick = { viewModel.filtrar(e) }, label = { Text(e) })
+                FilterChip(selected = filtro == e && !filtroInicio, onClick = { viewModel.filtrar(e) }, label = { Text(CatalogoEstatus.etiqueta(e)) })
             }
         }
 
@@ -104,10 +105,10 @@ fun BandejaScreen(
                     EstadoVacio(
                         when {
                             sinAtender != null -> "No hay casos pendientes sin cambios en más de $sinAtender días."
-                            riesgoAlto -> "No hay casos pendientes en los que se haya percibido riesgo."
+                            prioridadAlta -> "No hay casos pendientes con prioridad alta."
                             pendientes -> "No hay casos pendientes de atender."
                             filtro == null -> "Todavía no hay reportes."
-                            else -> "No hay reportes en “$filtro”. Toca “Todos” para ver el resto."
+                            else -> "No hay reportes en “${CatalogoEstatus.etiqueta(filtro!!)}”. Toca “Todos” para ver el resto."
                         }
                     )
                 }
@@ -135,7 +136,10 @@ private fun FilaReporte(r: ReporteResumen, alTocar: () -> Unit) {
                 "${r.actividad} · ${r.cantidadNinos} menor(es) · Riesgo: ${r.situacionRiesgo}",
                 style = MaterialTheme.typography.bodySmall
             )
-            if (r.situacionRiesgo == "Sí") IndicadorRiesgo()
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                IndicadorPrioridad(r.prioridad)
+                if (r.situacionRiesgo == "Sí") IndicadorRiesgo()
+            }
             Text(formatearFecha(r.fechaCreacion), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

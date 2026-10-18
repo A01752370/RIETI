@@ -42,13 +42,14 @@ import mx.sipinna.rieti.viewmodel.ValidadorReporte
  * total al final. El total nunca pasa de [ValidadorReporte.TOTAL_MAXIMO].
  *
  * @param conteos cantidad actual por rango
+ * @param rangos rangos a mostrar (por omisión todos los vigentes; en la Fase 6, solo los elegidos)
  * @param alCambiar se llama con el rango y su nueva cantidad
  */
 @Composable
-fun ContadorEdades(conteos: Map<String, Int>, alCambiar: (String, Int) -> Unit) {
-    val total = ValidadorReporte.total(conteos)
+fun ContadorEdades(conteos: Map<String, Int>, rangos: List<String> = ValidadorReporte.EDADES, alCambiar: (String, Int) -> Unit) {
+    val total = ValidadorReporte.total(conteos.filterKeys { it in rangos })
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ValidadorReporte.EDADES.forEach { rango ->
+        rangos.forEach { rango ->
             val cantidad = conteos[rango] ?: 0
             val etiqueta = ValidadorReporte.ETIQUETAS_EDAD.getValue(rango)
             // Bloque con cantidad: borde de color (los botones tonales siguen viéndose sobre el fondo gris).
@@ -114,7 +115,7 @@ fun SelectorActividad(actividades: List<String>, seleccion: String, alElegir: (S
     var abierto by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = abierto, onExpandedChange = { abierto = it }) {
         OutlinedTextField(
-            value = seleccion,
+            value = if (seleccion.isEmpty()) "" else ValidadorReporte.textoActividad(seleccion),
             onValueChange = {},
             readOnly = true,
             label = { Text("Actividad observada") },
@@ -125,7 +126,7 @@ fun SelectorActividad(actividades: List<String>, seleccion: String, alElegir: (S
         ExposedDropdownMenu(expanded = abierto, onDismissRequest = { abierto = false }) {
             actividades.forEach { actividad ->
                 DropdownMenuItem(
-                    text = { Text(actividad, style = MaterialTheme.typography.bodyLarge) },
+                    text = { Text(ValidadorReporte.textoActividad(actividad), style = MaterialTheme.typography.bodyLarge) },
                     onClick = { alElegir(actividad); abierto = false },
                     modifier = Modifier.heightIn(min = 48.dp),
                     contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding

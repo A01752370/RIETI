@@ -112,7 +112,11 @@ export interface SeccionAviso { titulo: string; parrafos: string[] }
 /** Aviso de privacidad vigente. `secciones` agrupa el mismo texto con títulos (servidores anteriores no lo envían). */
 export interface AvisoPrivacidad { version: string; parrafos: string[]; secciones?: SeccionAviso[] }
 /** Catálogos del formulario. */
-export interface Catalogos { actividades: string[]; rangosEdad: string[]; riesgos: string[]; estatus: string[] }
+export interface Catalogos {
+  actividades: string[]; rangosEdad: string[]; riesgos: string[]; estatus: string[];
+  /** Fase 6 (servidores anteriores no lo envían). */
+  estatusDetalle?: { nombre: string; etiqueta: string }[]; peligro?: string[]; cantidades?: string[];
+}
 /** Municipio del selector (D-16). */
 export interface Municipio { id: number; clave: string | null; nombre: string }
 /** Respuesta al crear un reporte. */
@@ -132,6 +136,8 @@ export interface RedMunicipios {
 /** Fila de la bandeja. */
 export interface ReporteResumen {
   id: number; folio: string; estatus: string; ubicacion: string; municipio: string | null; actividad: string;
+  /** Fase 6: prioridad calculada por el servidor y peligro inmediato (servidores anteriores no los envían). */
+  prioridad?: 'Alta' | 'Media' | 'Normal'; peligroInmediato?: string | null;
   edadAproximada: string; cantidadNinos: number; situacionRiesgo: string; fechaCreacion: string; fechaActualizacion: string;
 }
 /** Página de la bandeja. */
@@ -168,6 +174,8 @@ export interface ResumenEstadisticas {
   total: number; nuevosUltimos7Dias: number; sinMunicipio: number; pendientes: number;
   /** Pendientes en los que quien reportó percibió riesgo (Fase 5). */
   riesgoAltoPendientes?: number;
+  /** Pendientes con prioridad Alta, es decir, con peligro inmediato (Fase 6). */
+  prioridadAltaPendientes?: number;
   porEstatus: { etiqueta: string; total: number }[]; porMes: { etiqueta: string; total: number }[];
 }
 /** Conteo que el servidor oculta (`null`) si es menor que el umbral. */
@@ -191,10 +199,10 @@ export interface CeldaCalor { lat: number; lng: number; total: number }
 /** Mapa de calor agregado. */
 export interface MapaCalor { umbral: number; tamanoCelda: number; celdas: CeldaCalor[]; ocultas: number; sinUbicacion: number }
 /** Filtros comunes del panel. */
-export interface FiltrosPanel { desde?: string; hasta?: string; municipioId?: number; estatus?: string; actividad?: string }
+export interface FiltrosPanel { desde?: string; hasta?: string; municipioId?: number; estatus?: string; actividad?: string; prioridad?: string }
 /** Filtros de la bandeja y la exportación. */
 export interface FiltrosBandeja extends FiltrosPanel {
-  folio?: string; sinAtenderDias?: number; orden?: 'recientes' | 'antiguos';
+  folio?: string; sinAtenderDias?: number; orden?: 'recientes' | 'antiguos' | 'prioridad';
   /** Riesgo percibido ("Sí" = riesgo alto; Fase 5). */
   riesgo?: string;
   /** Solo casos pendientes, Recibido o En revisión (Fase 5). */
@@ -205,6 +213,8 @@ export interface FiltrosBandeja extends FiltrosPanel {
 export interface NuevoReporte {
   municipioId: number; direccion: Direccion; grupos: GrupoMenores[]; actividad: string; actividadOtro?: string;
   situacionRiesgo: string; descripcion: string; avisoPrivacidadVersion: string;
+  /** Fase 6: peligro inmediato, categoría de cantidad y canal (`web`; con canal, el folio lleva clave municipal). */
+  peligroInmediato?: string; cantidad?: string; canal?: 'web';
 }
 
 /** Arma una cadena de consulta omitiendo valores vacíos (y los booleanos en `false`). */

@@ -66,18 +66,22 @@ class ReportesRepositorio(private val api: ApiService = ServicioRemoto.api) {
      *
      * @param estatus estatus vigente, o null
      * @param sinAtenderDias solo pendientes sin cambios en más de N días, o null
-     * @param riesgoAlto solo reportes en los que quien reportó percibió riesgo ("Sí")
+     * @param prioridadAlta solo reportes con prioridad Alta (peligro inmediato; Fase 6)
      * @param pendientes solo casos en Recibido o En revisión
      */
     suspend fun listarFiltrado(
         estatus: String?,
         sinAtenderDias: Int?,
-        riesgoAlto: Boolean,
+        prioridadAlta: Boolean,
         pendientes: Boolean,
         pagina: Int = 1,
         tamano: Int = 50
     ): Resultado<Pagina<ReporteResumen>> = ejecutar {
-        api.listarReportes(estatus, pagina, tamano, sinAtenderDias, riesgo = if (riesgoAlto) "Sí" else null, pendientes = if (pendientes) true else null)
+        // Fase 6: la bandeja de la app se ordena por prioridad (Alta primero).
+        api.listarReportes(
+            estatus, pagina, tamano, sinAtenderDias,
+            pendientes = if (pendientes) true else null, prioridad = if (prioridadAlta) "Alta" else null, orden = "prioridad"
+        )
     }
 
     /** Detalle de un reporte para el personal. */

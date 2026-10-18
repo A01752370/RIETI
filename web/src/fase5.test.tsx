@@ -14,13 +14,15 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const ATIZAPAN: Municipio = { id: 1, clave: '15013', nombre: 'Atizapán de Zaragoza' };
 const COMPLETO = {
   ...FORMULARIO_VACIO, municipio: ATIZAPAN, calle: 'Av. López Mateos', numero: '12', colonia: 'Centro', codigoPostal: '52900',
-  conteos: { '0-5': 2, '12-17': 1 }, actividad: 'Venta ambulante', riesgo: 'No sé', descripcion: 'Dos menores vendiendo',
+  peligro: 'No', cantidad: '3', edades: ['0-5', '12-14'],
+  conteos: { '0-5': 2, '12-14': 1 }, actividad: 'Venta ambulante', riesgo: 'No sé', descripcion: 'Dos menores vendiendo',
 };
 
 describe('asistente de reporte: validación por paso (Fase 5)', () => {
   it('cada paso valida solo sus campos, con los mismos mensajes de siempre', () => {
     expect(Object.keys(validarPaso('donde', FORMULARIO_VACIO)).sort()).toEqual(['calle', 'codigoPostal', 'colonia', 'municipio']);
-    expect(Object.keys(validarPaso('quienes', FORMULARIO_VACIO))).toEqual(['grupos']);
+    expect(Object.keys(validarPaso('quienes', FORMULARIO_VACIO))).toEqual(['peligro', 'cantidad', 'edades']);
+    expect(validarPaso('como', FORMULARIO_VACIO)).toEqual({});
     expect(Object.keys(validarPaso('que', FORMULARIO_VACIO)).sort()).toEqual(['actividad', 'descripcion', 'riesgo']);
     expect(validarPaso('revisar', FORMULARIO_VACIO)).toEqual(validarFormulario(FORMULARIO_VACIO));
     expect(validarPaso('donde', FORMULARIO_VACIO).municipio).toBe('Elige el municipio donde ocurre.');
@@ -49,7 +51,7 @@ describe('asistente de reporte: flujo completo en la página (Fase 5)', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string, op?: RequestInit) => {
       if (url === '/api/v1/reportes' && op?.method === 'POST') {
         cuerpo = JSON.parse(String(op.body));
-        return new Response(JSON.stringify({ folio: 'RIETI-2026-000099', claveConsulta: 'ABCD-EFGH-2345', estatus: 'Recibido', fechaCreacion: '2026-10-18T12:00:00Z' }), { status: 201 });
+        return new Response(JSON.stringify({ folio: 'RIETI-ATZ-2026-000099', claveConsulta: 'ABCD-EFGH-2345', estatus: 'Recibido', fechaCreacion: '2026-10-18T12:00:00Z' }), { status: 201 });
       }
       return new Response(JSON.stringify(respuestas[url] ?? {}), { status: 200 });
     }));
@@ -59,11 +61,15 @@ describe('asistente de reporte: flujo completo en la página (Fase 5)', () => {
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Leí y acepto el aviso de privacidad' }));
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Continuar' })); });
 
-    // Paso 1: el indicador marca el paso actual y la barra dice "Paso 1 de 4".
-    expect(await screen.findByRole('heading', { name: '¿Dónde ocurre?' })).toBeTruthy();
+    // Paso 1 (Fase 6): cómo reportar; anónimo por defecto y "con seguimiento" solo en la app.
+    expect(await screen.findByRole('heading', { name: '¿Cómo quieres realizar tu reporte?' })).toBeTruthy();
     const pasos = screen.getByRole('navigation', { name: 'Pasos del reporte' });
     expect(within(pasos).getAllByRole('listitem')[0].getAttribute('aria-current')).toBe('step');
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('1');
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuemax')).toBe('5');
+    expect((screen.getAllByRole('radio', { name: /Anónimo/ })[0] as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: /Continuar/ }));
+    await screen.findByRole('heading', { name: '¿Dónde ocurre?' });
 
     // Sin datos no avanza: resumen de errores y error junto al campo.
     fireEvent.click(screen.getByRole('button', { name: /Continuar/ }));
@@ -83,8 +89,14 @@ describe('asistente de reporte: flujo completo en la página (Fase 5)', () => {
     // Paso 2, y el foco va al título del paso.
     const titulo2 = await screen.findByRole('heading', { name: '¿A quiénes viste?' });
     expect(document.activeElement).toBe(titulo2);
-    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('2');
-    fireEvent.click(screen.getByRole('button', { name: 'Agregar uno: De 12 a 17 años' }));
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('3');
+    fireEvent.click(screen.getByRole('radio', { name: 'Sí' }));
+    expect(screen.getByRole('link', { name: 'Llamar al 911' }).getAttribute('href')).toBe('tel:911');
+    fireEvent.click(screen.getByRole('radio', { name: 'No' }));
+    fireEvent.click(screen.getByRole('radio', { name: '3' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '0–5' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '12–14' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar uno: De 12 a 14 años' }));
     fireEvent.click(screen.getByRole('button', { name: 'Agregar uno: De 0 a 5 años' }));
     fireEvent.click(screen.getByRole('button', { name: 'Agregar uno: De 0 a 5 años' }));
 
@@ -111,10 +123,11 @@ describe('asistente de reporte: flujo completo en la página (Fase 5)', () => {
     await screen.findByRole('heading', { name: 'Revisa y envía' });
 
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Enviar reporte/ })); });
-    expect(await screen.findByText('RIETI-2026-000099')).toBeTruthy();
-    expect(cuerpo).toEqual(aNuevoReporte({ ...COMPLETO, conteos: { '0-5': 2, '12-17': 1 } }, '2026-10-v3'));
+    expect(await screen.findByText('RIETI-ATZ-2026-000099')).toBeTruthy();
+    expect(cuerpo).toEqual(aNuevoReporte({ ...COMPLETO, conteos: { '0-5': 2, '12-14': 1 } }, '2026-10-v3'));
+    expect(cuerpo).toMatchObject({ canal: 'web', peligroInmediato: 'No', cantidad: '3' });
     // La pantalla de folio muestra la línea de avance en "Recibido".
-    expect(screen.getByRole('list', { name: 'Avance del reporte' }).querySelector('[aria-current="step"]')?.textContent).toContain('Recibido');
+    expect(screen.getByRole('list', { name: 'Avance del reporte' }).querySelector('[aria-current="step"]')?.textContent).toContain('Registrado');
 
     // Privacidad: nada del formulario se guardó en el navegador.
     expect(guardar).not.toHaveBeenCalled();
@@ -127,20 +140,20 @@ describe('línea de progreso del estatus (Fase 5)', () => {
     const l = calcularLinea('En atención', [{ estatus: 'Recibido', fecha: 'a' }, { estatus: 'En revisión', fecha: 'b' }, { estatus: 'En atención', fecha: 'c' }]);
     expect(l.pasos.map((p) => p.estado)).toEqual(['alcanzado', 'alcanzado', 'actual', 'pendiente', 'pendiente']);
     expect(l.pasos.map((p) => p.fecha)).toEqual(['a', 'b', 'c', null, null]);
-    expect(l.descartado).toBeNull();
+    expect(l.final).toBeNull();
   });
   it('omitidos, descartado como final distinto y reincidencia', () => {
     expect(calcularLinea('Concluido', [{ estatus: 'Recibido', fecha: 'a' }, { estatus: 'En revisión', fecha: 'b' }, { estatus: 'Canalizado', fecha: 'c' }, { estatus: 'Concluido', fecha: 'd' }])
       .pasos[2].estado).toBe('omitido');
     const d = calcularLinea('Descartado', [{ estatus: 'Recibido', fecha: 'a' }, { estatus: 'Descartado', fecha: 'b' }]);
     expect(d.pasos.map((p) => p.estatus)).toEqual(['Recibido']);
-    expect(d.descartado?.fecha).toBe('b');
+    expect(d.final?.fecha).toBe('b');
     const r = calcularLinea('En atención', [{ estatus: 'Recibido', fecha: 'a' }, { estatus: 'Concluido', fecha: 'b' }, { estatus: 'En atención', fecha: 'c' }]);
     expect(r.pasos[4].estado).toBe('pendiente');
   });
   it('se dibuja con aria-current y sin estilos en línea; el final descartado se anuncia aparte', () => {
     const { container } = render(<LineaProgreso linea={calcularLinea('Descartado', [{ estatus: 'Recibido', fecha: '2026-10-01T00:00:00Z' }, { estatus: 'Descartado', fecha: '2026-10-02T00:00:00Z' }])} />);
-    expect(screen.getByRole('note').textContent).toContain('Descartado');
+    expect(screen.getByRole('note').textContent).toContain('Cancelado');
     expect(screen.getByText(SIGNIFICADO.Descartado)).toBeTruthy();
     expect(container.innerHTML).not.toContain('style=');
   });
@@ -161,10 +174,11 @@ describe('línea de progreso del estatus (Fase 5)', () => {
 
 describe('detalle y bandeja del personal (Fase 5)', () => {
   it('los filtros viajan en la URL y regresan iguales', () => {
-    const f = filtrosDesdeUrl('?estatus=En+revisi%C3%B3n&riesgo=S%C3%AD&pendientes=true&municipioId=3&pagina=2&orden=antiguos');
-    expect(f).toMatchObject({ estatus: 'En revisión', riesgo: 'Sí', pendientes: true, municipioId: 3, pagina: 2, orden: 'antiguos' });
+    const f = filtrosDesdeUrl('?estatus=En+revisi%C3%B3n&riesgo=S%C3%AD&pendientes=true&municipioId=3&pagina=2&orden=antiguos&prioridad=Alta');
+    expect(f).toMatchObject({ estatus: 'En revisión', riesgo: 'Sí', pendientes: true, municipioId: 3, pagina: 2, orden: 'antiguos', prioridad: 'Alta' });
     expect(filtrosDesdeUrl(urlDeFiltros(f))).toEqual(f);
-    expect(urlDeFiltros({ orden: 'recientes', pagina: 1 })).toBe('');
+    expect(urlDeFiltros({ orden: 'prioridad', pagina: 1 })).toBe('');
+    expect(filtrosDesdeUrl('').orden).toBe('prioridad'); // Fase 6: Alta primero por omisión
   });
   it('anterior y siguiente dentro de la bandeja', () => {
     expect(vecinos([5, 9, 2], 9)).toEqual({ anterior: 5, siguiente: 2, posicion: 2, total: 3 });
@@ -190,7 +204,7 @@ describe('detalle y bandeja del personal (Fase 5)', () => {
 
   const DETALLE = {
     id: 7, folio: 'RIETI-2026-000007', estatus: 'En revisión', ubicacion: 'Calle 5', municipio: 'Atizapán de Zaragoza', actividad: 'Venta ambulante',
-    edadAproximada: '0-5', cantidadNinos: 3, situacionRiesgo: 'Sí', fechaCreacion: '2026-10-10T00:00:00Z', fechaActualizacion: '2026-10-11T00:00:00Z',
+    edadAproximada: '0-5', cantidadNinos: 3, situacionRiesgo: 'Sí', prioridad: 'Alta', peligroInmediato: 'Sí', fechaCreacion: '2026-10-10T00:00:00Z', fechaActualizacion: '2026-10-11T00:00:00Z',
     latitud: null, longitud: null, descripcion: 'Descripción ficticia', motivoDescarte: null, transicionesPermitidas: ['En atención', 'Canalizado', 'Descartado'],
     grupos: [{ rango: '0-5', cantidad: 2 }, { rango: '12-17', cantidad: 1 }], actividadOtro: null,
     direccion: { calle: 'Calle 5', numeroExterior: null, colonia: 'Centro', codigoPostal: '52900', referencias: null },
@@ -211,12 +225,13 @@ describe('detalle y bandeja del personal (Fase 5)', () => {
     await screen.findByRole('heading', { level: 1, name: 'RIETI-2026-000007' });
     expect(screen.getAllByText('Riesgo percibido').length).toBeGreaterThan(0);
     expect(screen.getByText(/En “En revisión” desde hace/)).toBeTruthy();
+    expect(screen.getAllByText('Prioridad alta').length).toBeGreaterThan(0);
     const grupo = screen.getByRole('group', { name: 'Cambios de estatus permitidos' });
-    expect(within(grupo).getAllByRole('button').map((b) => b.textContent)).toEqual(['En atención', 'Canalizado', 'Descartado']);
-    fireEvent.click(within(grupo).getByRole('button', { name: 'Descartado' }));
-    expect((screen.getByRole('button', { name: 'Cambiar a “Descartado”' }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText('Motivo del descarte (obligatorio)'), { target: { value: 'Duplicado' } });
-    expect((screen.getByRole('button', { name: 'Cambiar a “Descartado”' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(within(grupo).getAllByRole('button').map((b) => b.textContent)).toEqual(['En seguimiento', 'Canalizado', 'Cancelado']);
+    fireEvent.click(within(grupo).getByRole('button', { name: 'Cancelado' }));
+    expect((screen.getByRole('button', { name: 'Cambiar a “Cancelado”' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Motivo de la cancelación (obligatorio)'), { target: { value: 'Duplicado' } });
+    expect((screen.getByRole('button', { name: 'Cambiar a “Cancelado”' }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByText('Nota interna', { selector: 'strong' })).toBeTruthy();
     expect(screen.getByText('Cambio de estatus a “En revisión”')).toBeTruthy();
     expect(r.container.innerHTML).not.toContain('style=');

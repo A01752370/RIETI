@@ -24,7 +24,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.RadioButton
+import androidx.compose.material.icons.filled.Call
+import android.content.Intent
+import androidx.core.net.toUri
+import mx.sipinna.rieti.ui.theme.TintePrimario
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -41,7 +47,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -91,12 +96,14 @@ import org.osmdroid.util.GeoPoint
  * @param avisoVersion versión del aviso de privacidad aceptada en la pantalla anterior
  * @param alEnviar navega a la confirmación con el folio y la clave
  * @param alRegresar vuelve al aviso
+ * @param alCuenta abre el acceso a la cuenta opcional (reporte con seguimiento) y regresa aquí sin perder lo capturado
  */
 @Composable
 fun FormularioReporteScreen(
     avisoVersion: String,
     alEnviar: (ReporteCreado) -> Unit,
     alRegresar: () -> Unit,
+    alCuenta: () -> Unit = {},
     viewModel: FormularioReporteViewModel = viewModel()
 ) {
     val estado by viewModel.asistente.collectAsState()
@@ -141,7 +148,7 @@ fun FormularioReporteScreen(
                 alAtras = atras,
                 alContinuar = {
                     if (estado.paso == PasoReporte.REVISAR) viewModel.enviar(avisoVersion, haySesionCiudadano)
-                    else viewModel.avanzar()
+                    else viewModel.avanzar(haySesionCiudadano)
                 }
             )
         }
@@ -171,6 +178,7 @@ fun FormularioReporteScreen(
         ) { paso ->
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 when (paso) {
+                    PasoReporte.COMO -> PasoComo(estado, haySesionCiudadano, alCuenta, viewModel)
                     PasoReporte.DONDE -> PasoDonde(estado, viewModel)
                     PasoReporte.QUIENES -> PasoQuienes(estado, viewModel)
                     PasoReporte.QUE -> PasoQue(estado, viewModel)
@@ -198,6 +206,7 @@ fun FormularioReporteScreen(
 
 /** Título visible de cada paso (una pregunta corta). */
 private fun tituloPaso(paso: PasoReporte): String = when (paso) {
+    PasoReporte.COMO -> "¿Cómo quieres realizar tu reporte?"
     PasoReporte.DONDE -> "¿Dónde ocurre?"
     PasoReporte.QUIENES -> "¿A quiénes viste?"
     PasoReporte.QUE -> "¿Qué ocurre?"
@@ -219,7 +228,7 @@ private fun BarraAsistente(estado: EstadoAsistente, enviando: Boolean, alAtras: 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         BarraProgresoPasos(PasoReporte.entries.size, estado.paso.ordinal, estado.paso.titulo)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (estado.paso != PasoReporte.DONDE) {
+            if (estado.paso != PasoReporte.entries.first()) {
                 OutlinedButton(onClick = alAtras, modifier = Modifier.heightIn(min = 56.dp)) { Text("Atrás") }
             }
             val ultimo = estado.paso == PasoReporte.REVISAR
@@ -273,7 +282,6 @@ private fun PasoDonde(estado: EstadoAsistente, viewModel: FormularioReporteViewM
         }
     }
 
-    AvisoEmergencia()
     NotaCampo("Es la dirección del lugar de los hechos, no la tuya.")
     when (val c = catalogo) {
         is UiState.Exito -> SelectorMunicipio(
@@ -344,16 +352,138 @@ private fun PasoDonde(estado: EstadoAsistente, viewModel: FormularioReporteViewM
     }
 }
 
-// ---------- Paso 2: A quiénes ----------
+// ---------- Paso 1: Cómo reportar ----------
 
-/** Menores por grupo de edad. */
+/**
+ * Elegir cómo reportar (Fase 6): **anónimo** por defecto, o **con seguimiento** usando la
+ * cuenta opcional (correo y "Mi panel"). No se pide nombre, teléfono ni WhatsApp.
+ */
+@Composable
+private fun PasoComo(estado: EstadoAsistente, haySesion: Boolean, alCuenta: () -> Unit, viewModel: FormularioReporteViewModel) {
+    val d = estado.datos
+    AvisoEmergencia()
+    OpcionModo(
+        titulo = "Anónimo",
+        detalle = "No se solicita nombre, teléfono ni correo. Recibirás un folio y una clave para consultar el avance.",
+        elegido = !d.vincular,
+        alElegir = { viewModel.actualizar(CampoReporte.MODO) { it.copy(vincular = false) } }
+    )
+    OpcionModo(
+        titulo = "Con seguimiento",
+        detalle = "Usa tu cuenta opcional (solo correo) para ver el avance en \"Mi panel\". No pedimos teléfono.",
+        elegido = d.vincular,
+        alElegir = { viewModel.actualizar(CampoReporte.MODO) { it.copy(vincular = true) } }
+    )
+    if (d.vincular) {
+        if (haySesion) {
+            NotaCampo("Este reporte se vinculará a tu cuenta. El personal del SIPINNA no ve tu correo.")
+        } else {
+            NotaCampo("Necesitas iniciar sesión. Lo que captures aquí no se pierde.")
+            OutlinedButton(onClick = alCuenta, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text("Iniciar sesión o crear cuenta")
+            }
+        }
+    }
+    estado.errores[CampoReporte.MODO]?.let { ErrorCampo(it) }
+}
+
+/** Opción de modo de reporte: tarjeta seleccionable con radio, título y detalle. */
+@Composable
+private fun OpcionModo(titulo: String, detalle: String, elegido: Boolean, alElegir: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = if (elegido) TintePrimario else MaterialTheme.colorScheme.surfaceVariant),
+        border = if (elegido) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+        modifier = Modifier.fillMaxWidth().selectable(selected = elegido, role = Role.RadioButton, onClick = alElegir)
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            RadioButton(selected = elegido, onClick = null)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(titulo, style = MaterialTheme.typography.titleMedium)
+                Text(detalle, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+// ---------- Paso 3: A quiénes ----------
+
+/** Peligro inmediato, cantidad y edad aproximada (formulario del socio, Fase 6). */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PasoQuienes(estado: EstadoAsistente, viewModel: FormularioReporteViewModel) {
-    NotaCampo("Suma uno por cada niña, niño o adolescente en su grupo de edad. Si no estás seguro de la edad, usa la última opción.")
-    ContadorEdades(estado.datos.conteos) { rango, n ->
-        viewModel.actualizar(CampoReporte.GRUPOS) { it.copy(conteos = it.conteos + (rango to n.coerceAtLeast(0))) }
+    val contexto = LocalContext.current
+    val d = estado.datos
+    val e = estado.errores
+
+    Seccion("¿La niña, niño o adolescente está en peligro inmediato?")
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ValidadorReporte.PELIGRO.forEach { opcion ->
+            FilterChip(
+                selected = d.peligro == opcion,
+                onClick = { viewModel.actualizar(CampoReporte.PELIGRO) { it.copy(peligro = opcion) } },
+                label = { Text(opcion) },
+                modifier = Modifier.heightIn(min = 48.dp)
+            )
+        }
     }
-    estado.errores[CampoReporte.GRUPOS]?.let { ErrorCampo(it) }
+    e[CampoReporte.PELIGRO]?.let { ErrorCampo(it) }
+    if (d.peligro == "Sí") {
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Llama al 911 ahora", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.semantics { heading(); liveRegion = LiveRegionMode.Assertive })
+                Text("RIETI no sustituye los servicios de emergencia ni la denuncia formal. Puedes terminar el reporte después de llamar.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+                Button(
+                    onClick = { contexto.startActivity(Intent(Intent.ACTION_DIAL, "tel:911".toUri())) },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                ) {
+                    Icon(Icons.Filled.Call, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                    Text("Llamar al 911", modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+        }
+    }
+
+    Seccion("¿Cuántas niñas, niños o adolescentes viste?")
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        ValidadorReporte.CANTIDADES.forEach { opcion ->
+            FilterChip(
+                selected = d.cantidad == opcion,
+                onClick = { viewModel.actualizar(CampoReporte.CANTIDAD, CampoReporte.GRUPOS) { it.copy(cantidad = opcion) } },
+                label = { Text(ValidadorReporte.TEXTO_CANTIDAD[opcion] ?: opcion) },
+                modifier = Modifier.heightIn(min = 48.dp)
+            )
+        }
+    }
+    e[CampoReporte.CANTIDAD]?.let { ErrorCampo(it) }
+
+    Seccion("Edad aproximada")
+    NotaCampo("Puedes elegir más de una.")
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        ValidadorReporte.EDADES.forEach { rango ->
+            val elegida = rango in d.edades
+            FilterChip(
+                selected = elegida,
+                onClick = {
+                    viewModel.actualizar(CampoReporte.EDADES, CampoReporte.GRUPOS) {
+                        it.copy(edades = if (elegida) it.edades - rango else it.edades + rango)
+                    }
+                },
+                label = { Text(ValidadorReporte.CHIPS_EDAD.getValue(rango)) },
+                modifier = Modifier.heightIn(min = 48.dp)
+            )
+        }
+    }
+    e[CampoReporte.EDADES]?.let { ErrorCampo(it) }
+    if (d.edades.size > 1) {
+        Seccion("¿Cuántas en cada edad?")
+        ContadorEdades(d.conteos, rangos = ValidadorReporte.EDADES.filter { it in d.edades }) { rango, n ->
+            viewModel.actualizar(CampoReporte.GRUPOS) { it.copy(conteos = it.conteos + (rango to n.coerceAtLeast(0))) }
+        }
+    }
+    e[CampoReporte.GRUPOS]?.let { ErrorCampo(it) }
 }
 
 // ---------- Paso 3: Qué ocurre ----------
@@ -401,15 +531,18 @@ private fun PasoQue(estado: EstadoAsistente, viewModel: FormularioReporteViewMod
     )
 }
 
-// ---------- Paso 4: Revisar y enviar ----------
+// ---------- Paso 5: Revisar y enviar ----------
 
-/** Resumen de todo lo capturado, con "Editar" por bloque, y el interruptor de vincular (si hay sesión). */
+/** Resumen de todo lo capturado, con "Editar" por bloque (incluido el modo de reporte). */
 @Composable
 private fun PasoRevisar(estado: EstadoAsistente, haySesion: Boolean, viewModel: FormularioReporteViewModel) {
     val punto by viewModel.ubicacion.collectAsState()
     val d = estado.datos
     NotaCampo("Revisa que todo esté bien. Al enviar recibirás un folio y una clave para consultar el avance.")
 
+    BloqueRevision("Cómo reportar", alEditar = { viewModel.irA(PasoReporte.COMO) }) {
+        Dato("Modo", if (d.vincular && haySesion) "Con seguimiento (vinculado a tu cuenta)" else "Anónimo")
+    }
     BloqueRevision("Dónde", alEditar = { viewModel.irA(PasoReporte.DONDE) }) {
         Dato("Municipio", d.municipio?.nombre ?: "—")
         Dato("Dirección", listOf(
@@ -421,31 +554,20 @@ private fun PasoRevisar(estado: EstadoAsistente, haySesion: Boolean, viewModel: 
         Dato("Punto en el mapa", if (punto != null) "Marcado" else "Sin punto (opcional)")
     }
     BloqueRevision("A quiénes", alEditar = { viewModel.irA(PasoReporte.QUIENES) }) {
-        val grupos = ValidadorReporte.gruposParaEnviar(d.conteos)
-        Dato("Menores", if (grupos.isEmpty()) "—" else FormatoReporte.menores(grupos, 0, ""))
+        Dato("¿Peligro inmediato?", d.peligro)
+        Dato("¿Cuántas?", ValidadorReporte.TEXTO_CANTIDAD[d.cantidad] ?: d.cantidad)
+        Dato("Edad aproximada", ValidadorReporte.EDADES.filter { it in d.edades }.joinToString(", ") { ValidadorReporte.CHIPS_EDAD.getValue(it) })
+        if (d.edades.size > 1) {
+            val grupos = ValidadorReporte.gruposDesdeFormulario(d.cantidad, d.edades, d.conteos)
+            Dato("Por edad", FormatoReporte.menores(grupos, 0, ""))
+        }
     }
     BloqueRevision("Qué ocurre", alEditar = { viewModel.irA(PasoReporte.QUE) }) {
-        Dato("Actividad", FormatoReporte.actividad(d.actividad, d.actividadOtro.takeIf { d.actividad == ValidadorReporte.ACTIVIDAD_OTRO }))
+        Dato("Actividad", FormatoReporte.actividad(ValidadorReporte.textoActividad(d.actividad), d.actividadOtro.takeIf { d.actividad == ValidadorReporte.ACTIVIDAD_OTRO }))
         Dato("¿Riesgo percibido?", d.riesgo)
         Dato("Descripción", d.descripcion.trim())
     }
 
-    if (haySesion) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .toggleable(value = d.vincular, role = Role.Switch, onValueChange = { v -> viewModel.actualizar { it.copy(vincular = v) } })
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("Vincular este reporte a mi cuenta", style = MaterialTheme.typography.bodyLarge)
-                NotaCampo("Así lo verás en \"Mi panel\". Si lo dejas apagado, el reporte es anónimo.")
-            }
-            Switch(checked = d.vincular, onCheckedChange = null)
-        }
-    }
 }
 
 /** Tarjeta de un bloque de la revisión con su botón "Editar". */

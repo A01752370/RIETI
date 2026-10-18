@@ -60,7 +60,7 @@ private fun AppRieti() {
                 alConsultar = { nav.navigate(Rutas.CONSULTA) },
                 alEntrarPersonal = { nav.navigate(Rutas.LOGIN) },
                 haySesionCiudadano = haySesionCiudadano,
-                alCuenta = { nav.navigate(if (haySesionCiudadano) Rutas.MI_PANEL else Rutas.CUENTA) }
+                alCuenta = { nav.navigate(if (haySesionCiudadano) Rutas.MI_PANEL else Rutas.cuenta()) }
             )
         }
         composable(Rutas.AVISO) {
@@ -81,7 +81,8 @@ private fun AppRieti() {
                         popUpTo(Rutas.INICIO)
                     }
                 },
-                alRegresar = { nav.popBackStack() }
+                alRegresar = { nav.popBackStack() },
+                alCuenta = { nav.navigate(Rutas.cuenta(volver = true)) }
             )
         }
         composable(
@@ -104,9 +105,14 @@ private fun AppRieti() {
         }
 
         // --- Cuenta opcional de ciudadano (Fase 4) ---
-        composable(Rutas.CUENTA) {
+        composable(
+            route = Rutas.CUENTA,
+            arguments = listOf(navArgument("volver") { type = NavType.BoolType; defaultValue = false })
+        ) { entrada ->
+            // Desde el asistente ("con seguimiento") se regresa al formulario sin perder lo capturado.
+            val volver = entrada.arguments?.getBoolean("volver") == true
             AccesoCuentaScreen(
-                alEntrar = { nav.navigate(Rutas.MI_PANEL) { popUpTo(Rutas.INICIO) } },
+                alEntrar = { if (volver) nav.popBackStack() else nav.navigate(Rutas.MI_PANEL) { popUpTo(Rutas.INICIO) } },
                 alRegresar = { nav.popBackStack() }
             )
         }
@@ -114,7 +120,7 @@ private fun AppRieti() {
             MiPanelScreen(
                 alConfiguracion = { nav.navigate(Rutas.CUENTA_CONFIGURACION) },
                 alRegresar = { nav.popBackStack() },
-                alSesionExpirada = { nav.navigate(Rutas.CUENTA) { popUpTo(Rutas.INICIO) } }
+                alSesionExpirada = { nav.navigate(Rutas.cuenta()) { popUpTo(Rutas.INICIO) } }
             )
         }
         composable(Rutas.CUENTA_CONFIGURACION) {
@@ -136,7 +142,7 @@ private fun AppRieti() {
         composable(Rutas.INICIO_PERSONAL) {
             InicioPersonalScreen(
                 alAbrirBandeja = { estatus, sinAtender -> nav.navigate(Rutas.bandeja(estatus, sinAtender)) },
-                alAbrirRiesgoAlto = { nav.navigate(Rutas.bandeja(riesgoAlto = true)) },
+                alAbrirPrioridadAlta = { nav.navigate(Rutas.bandeja(prioridadAlta = true)) },
                 alAbrirPendientes = { nav.navigate(Rutas.bandeja(pendientes = true)) },
                 alCerrarSesion = { volverAlInicio(nav) },
                 alSesionExpirada = { irAlLogin(nav) }
@@ -147,7 +153,7 @@ private fun AppRieti() {
             arguments = listOf(
                 navArgument("estatus") { type = NavType.StringType; defaultValue = "" },
                 navArgument("sinAtender") { type = NavType.IntType; defaultValue = 0 },
-                navArgument("riesgoAlto") { type = NavType.BoolType; defaultValue = false },
+                navArgument("prioridadAlta") { type = NavType.BoolType; defaultValue = false },
                 navArgument("pendientes") { type = NavType.BoolType; defaultValue = false }
             )
         ) {

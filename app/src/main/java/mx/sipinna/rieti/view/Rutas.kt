@@ -22,8 +22,11 @@ object Rutas {
     /** Consulta ciudadana con folio + clave. */
     const val CONSULTA = "consulta"
 
-    /** Acceso a la cuenta opcional de ciudadano (Fase 4). */
-    const val CUENTA = "cuenta"
+    /** Acceso a la cuenta opcional de ciudadano (Fase 4); con `volver=true` regresa a la pantalla anterior (asistente). */
+    const val CUENTA = "cuenta?volver={volver}"
+
+    /** Ruta del acceso a la cuenta. */
+    fun cuenta(volver: Boolean = false) = "cuenta?volver=$volver"
 
     /** "Mi panel": reportes vinculados a la cuenta de ciudadano. */
     const val MI_PANEL = "mi-panel"
@@ -38,7 +41,7 @@ object Rutas {
     const val INICIO_PERSONAL = "inicio-personal"
 
     /** Bandeja del personal, con filtros iniciales opcionales. */
-    const val BANDEJA = "bandeja?estatus={estatus}&sinAtender={sinAtender}&riesgoAlto={riesgoAlto}&pendientes={pendientes}"
+    const val BANDEJA = "bandeja?estatus={estatus}&sinAtender={sinAtender}&prioridadAlta={prioridadAlta}&pendientes={pendientes}"
 
     /** Detalle y seguimiento de un reporte. */
     const val DETALLE = "detalle/{id}"
@@ -51,8 +54,8 @@ object Rutas {
         "confirmacion/${Uri.encode(folio)}/${Uri.encode(clave)}?fecha=${Uri.encode(fecha ?: "")}"
 
     /** Ruta de la bandeja, opcionalmente filtrada por estatus, casos sin atender, pendientes o pendientes de riesgo alto. */
-    fun bandeja(estatus: String? = null, sinAtender: Int? = null, riesgoAlto: Boolean = false, pendientes: Boolean = false): String =
-        "bandeja?estatus=${Uri.encode(estatus ?: "")}&sinAtender=${sinAtender ?: 0}&riesgoAlto=$riesgoAlto&pendientes=$pendientes"
+    fun bandeja(estatus: String? = null, sinAtender: Int? = null, prioridadAlta: Boolean = false, pendientes: Boolean = false): String =
+        "bandeja?estatus=${Uri.encode(estatus ?: "")}&sinAtender=${sinAtender ?: 0}&prioridadAlta=$prioridadAlta&pendientes=$pendientes"
 
     /** Ruta del detalle de un reporte. */
     fun detalle(id: Int) = "detalle/$id"

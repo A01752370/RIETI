@@ -1,4 +1,4 @@
-import { claseEstatus, formatearFecha, IconoEstatus, SIGNIFICADO } from './estatus';
+import { claseEstatus, etiquetaEstatus, formatearFecha, IconoEstatus, SIGNIFICADO } from './estatus';
 
 /**
  * Componentes de progreso (Fase 5): indicador de pasos del asistente, barra de
@@ -16,8 +16,11 @@ export type EstadoPaso = 'alcanzado' | 'actual' | 'pendiente' | 'omitido';
 /** Un paso de la línea de progreso. */
 export interface PasoLinea { estatus: string; estado: EstadoPaso; fecha: string | null }
 
-/** Línea calculada: pasos del avance normal, final "Descartado" (si aplica) y la frase de la etapa actual. */
-export interface Linea { pasos: PasoLinea[]; descartado: PasoLinea | null; significado: string }
+/** Estatus que se muestran aparte de la línea normal: Cancelado, Archivado y Reincidente (nombres internos). */
+export const FINALES = ['Descartado', 'Archivado', 'Reincidente'];
+
+/** Línea calculada: pasos del avance normal, final aparte (si aplica) y la frase de la etapa actual. */
+export interface Linea { pasos: PasoLinea[]; final: PasoLinea | null; significado: string }
 
 /**
  * Calcula la línea a partir del estatus vigente y del historial público (solo
@@ -33,10 +36,10 @@ export function calcularLinea(actual: string, historial: { estatus: string; fech
   const fechaDe = (e: string) => ultima(e) ?? (e === 'Recibido' ? fechaAlta ?? null : null);
   const significado = SIGNIFICADO[actual] ?? 'Tu reporte está en seguimiento.';
 
-  if (actual === 'Descartado') {
+  if (FINALES.includes(actual)) {
     return {
       pasos: FLUJO.filter((e) => alcanzados.has(e) || e === 'Recibido').map((e) => ({ estatus: e, estado: 'alcanzado', fecha: fechaDe(e) })),
-      descartado: { estatus: 'Descartado', estado: 'actual', fecha: ultima('Descartado') },
+      final: { estatus: actual, estado: 'actual', fecha: ultima(actual) },
       significado,
     };
   }
@@ -48,7 +51,7 @@ export function calcularLinea(actual: string, historial: { estatus: string; fech
       ? { estatus: e, estado: 'alcanzado', fecha: fechaDe(e) }
       : { estatus: e, estado: 'omitido', fecha: null };
   });
-  return { pasos, descartado: null, significado };
+  return { pasos, final: null, significado };
 }
 
 /** Palomita (icono Material, Apache 2.0). */
@@ -80,7 +83,7 @@ export function LineaProgreso({ linea, conSignificado = true, titulo = 'Avance d
               {p.estado === 'actual' && <IconoEstatus estatus={p.estatus} tamano={18} />}
             </span>
             <span className="paso-texto">
-              <strong>{p.estatus}</strong>
+              <strong>{etiquetaEstatus(p.estatus)}</strong>
               <span className="pequeno texto-secundario">
                 {p.estado === 'actual' && (p.fecha ? `Etapa actual · desde el ${formatearFecha(p.fecha)}` : 'Etapa actual')}
                 {p.estado === 'alcanzado' && (p.fecha ? formatearFecha(p.fecha) : 'Completada')}
@@ -91,11 +94,15 @@ export function LineaProgreso({ linea, conSignificado = true, titulo = 'Avance d
           </li>
         ))}
       </ol>
-      {linea.descartado && (
+      {linea.final && (
         <div className="final-descartado" role="note">
-          <span className="estatus estatus-descartado"><IconoEstatus estatus="Descartado" />Descartado</span>
-          {linea.descartado.fecha && <span className="pequeno"> {formatearFecha(linea.descartado.fecha)}</span>}
-          <p>El reporte se cerró sin continuar el avance normal.</p>
+          <span className={`estatus estatus-${claseEstatus(linea.final.estatus)}`}>
+            <IconoEstatus estatus={linea.final.estatus} />{etiquetaEstatus(linea.final.estatus)}
+          </span>
+          {linea.final.fecha && <span className="pequeno"> {formatearFecha(linea.final.fecha)}</span>}
+          <p>{linea.final.estatus === 'Archivado' ? 'El caso concluyó y se archivó.'
+            : linea.final.estatus === 'Reincidente' ? 'Etapa actual: el caso volvió a requerir atención.'
+            : 'El reporte se cerró sin continuar el avance normal.'}</p>
         </div>
       )}
       {conSignificado && <p className="significado">{linea.significado}</p>}

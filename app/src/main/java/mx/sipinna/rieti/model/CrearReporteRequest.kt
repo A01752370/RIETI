@@ -32,7 +32,10 @@ data class CrearReporteRequest(
     val situacionRiesgo: String,
     val descripcion: String,
     val avisoPrivacidadVersion: String,
-    val vincularCuenta: Boolean? = null
+    val vincularCuenta: Boolean? = null,
+    val peligroInmediato: String? = null,
+    val cantidad: String? = null,
+    val canal: String? = null
 )
 
 /**
