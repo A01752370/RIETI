@@ -243,7 +243,7 @@ describeBd('API RIETI (e2e)', () => {
         .send({ folio: folio.toLowerCase(), clave: clave.toLowerCase() }).expect(200);
       expect(r.body.estatus).toBe('Recibido');
       expect(r.body.historial).toEqual([{ estatus: 'Recibido', fecha: expect.any(String) }]);
-      expect(Object.keys(r.body).sort()).toEqual(['estatus', 'fechaActualizacion', 'fechaCreacion', 'folio', 'historial']);
+      expect(Object.keys(r.body).sort()).toEqual(['estatus', 'estatusEtiqueta', 'fechaActualizacion', 'fechaCreacion', 'folio', 'historial']);
     });
 
     it('A1: clave incorrecta y folio inexistente dan la misma respuesta', async () => {
@@ -364,7 +364,7 @@ describeBd('API RIETI (e2e)', () => {
       expect(r.body.descripcion).toContain('Dos menores');
       expect(r.body.latitud).toBeCloseTo(19.5594);
       expect(r.body.transicionesPermitidas).toEqual(['En revisión', 'Descartado']);
-      expect(r.body.historial).toEqual([{ tipo: 'registro', estatus: 'Recibido', comentario: null, autor: null, fecha: expect.any(String) }]);
+      expect(r.body.historial).toEqual([{ tipo: 'registro', estatus: 'Recibido', etiqueta: 'Registrado', comentario: null, autor: null, fecha: expect.any(String) }]);
       expect(r.body.fechaEstatusActual).toBe(r.body.historial[0].fecha);
     });
 

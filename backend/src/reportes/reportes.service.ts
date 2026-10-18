@@ -238,10 +238,11 @@ export class ReportesService {
     const params = this.parametrosBandeja(f);
     const direccion = f.orden === 'antiguos' ? 'ASC' : 'DESC';
     // Con orden por prioridad: Alta, Media, Normal y, dentro de cada una, lo más reciente primero.
-    const primero = f.orden === 'prioridad' ? "CASE r.prioridad WHEN 'Alta' THEN 0 WHEN 'Media' THEN 1 ELSE 2 END, " : '';
+    const primero = f.orden === 'prioridad' ? 'rango_prioridad, ' : '';
     const [{ total }] = await this.ds.query(`SELECT count(DISTINCT r.id_reporte)::int AS total ${desde}`, params);
     const filas: { id: number }[] = await this.ds.query(
-      `SELECT DISTINCT r.id_reporte AS id, r.fecha_creacion, r.prioridad ${desde}
+      `SELECT DISTINCT r.id_reporte AS id, r.fecha_creacion,
+              CASE r.prioridad WHEN 'Alta' THEN 0 WHEN 'Media' THEN 1 ELSE 2 END AS rango_prioridad ${desde}
        ORDER BY ${primero}r.fecha_creacion ${direccion}, r.id_reporte ${direccion}
        LIMIT $12 OFFSET $13`, [...params, tamano, (pagina - 1) * tamano]);
 
