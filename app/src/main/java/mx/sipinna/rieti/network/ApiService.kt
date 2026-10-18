@@ -132,13 +132,15 @@ interface ApiService {
     @POST("api/v1/auth/login")
     suspend fun login(@Body request: LoginRequest): LoginResponse
 
-    /** CU-09: bandeja del personal, con filtro opcional por estatus (requiere sesión). */
+    /** CU-09: bandeja del personal, con filtros opcionales: estatus, sin atender, riesgo y pendientes (requiere sesión). */
     @GET("api/v1/reportes")
     suspend fun listarReportes(
         @Query("estatus") estatus: String?,
         @Query("pagina") pagina: Int,
         @Query("tamano") tamano: Int,
-        @Query("sinAtenderDias") sinAtenderDias: Int? = null
+        @Query("sinAtenderDias") sinAtenderDias: Int? = null,
+        @Query("riesgo") riesgo: String? = null,
+        @Query("pendientes") pendientes: Boolean? = null
     ): Pagina<ReporteResumen>
 
     /** Resumen agregado para el inicio del personal (requiere sesión). */

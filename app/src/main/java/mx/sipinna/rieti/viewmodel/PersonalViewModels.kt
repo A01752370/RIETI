@@ -45,20 +45,35 @@ class BandejaViewModel @JvmOverloads constructor(
     /** Si no es null, solo se muestran pendientes sin cambios en más de esos días (enlace del inicio). */
     val sinAtenderDias: StateFlow<Int?> = _sinAtenderDias.asStateFlow()
 
-    /** Cambia el filtro de estatus (quita el de "sin atender") y recarga. */
+    private val _riesgoAlto = MutableStateFlow(estado.get<Boolean>("riesgoAlto") == true)
+
+    /** true: solo pendientes en los que quien reportó percibió riesgo (enlace del inicio, Fase 5). */
+    val riesgoAlto: StateFlow<Boolean> = _riesgoAlto.asStateFlow()
+
+    private val _pendientes = MutableStateFlow(estado.get<Boolean>("pendientes") == true)
+
+    /** true: solo casos pendientes de atender, Recibido o En revisión (enlace del inicio, Fase 5). */
+    val pendientes: StateFlow<Boolean> = _pendientes.asStateFlow()
+
+    /** Cambia el filtro de estatus (quita los filtros que vienen del inicio) y recarga. */
     fun filtrar(estatus: String?) {
         _filtro.value = estatus
         _sinAtenderDias.value = null
+        _riesgoAlto.value = false
+        _pendientes.value = false
         cargar()
     }
 
-    /** (Re)carga la primera página con el filtro actual. */
+    /** (Re)carga la primera página con los filtros actuales. */
     fun cargar() {
         _reportes.value = UiState.Cargando
         val estatus = _filtro.value
         val dias = _sinAtenderDias.value
+        val riesgo = _riesgoAlto.value
+        // "Riesgo alto" siempre se refiere a casos pendientes de atender.
+        val soloPendientes = _pendientes.value || riesgo
         viewModelScope.launch {
-            _reportes.value = (if (dias != null) repositorio.listarSinAtender(dias) else repositorio.listar(estatus)).aUiState()
+            _reportes.value = repositorio.listarFiltrado(estatus, dias, riesgo, soloPendientes).aUiState()
         }
     }
 
@@ -96,10 +111,26 @@ class DetalleReporteViewModel @JvmOverloads constructor(
         cargar()
     }
 
-    /** Descarga el detalle. */
+    private val _actualizando = MutableStateFlow(false)
+
+    /** true mientras se recarga con el gesto de deslizar (el detalle anterior sigue a la vista). */
+    val actualizando: StateFlow<Boolean> = _actualizando.asStateFlow()
+
+    /** Descarga el detalle (con indicador de carga a pantalla completa). */
     fun cargar() {
         _detalle.value = UiState.Cargando
         viewModelScope.launch { _detalle.value = repositorio.detalle(id).aUiState() }
+    }
+
+    /** Recarga sin ocultar el detalle actual (deslizar hacia abajo). */
+    fun actualizar() {
+        if (_actualizando.value) return
+        _actualizando.value = true
+        viewModelScope.launch {
+            val r = repositorio.detalle(id).aUiState()
+            if (r is UiState.Exito || _detalle.value !is UiState.Exito) _detalle.value = r
+            _actualizando.value = false
+        }
     }
 
     /**

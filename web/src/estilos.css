@@ -212,3 +212,166 @@ details summary { cursor: pointer; min-height: var(--objetivo-tactil); display: 
 .fila-busqueda { display: flex; gap: 0.5rem; }
 .fila-busqueda input { flex: 1; }
 .paginacion { display: flex; align-items: center; justify-content: center; gap: 1rem; margin: 1rem 0; }
+
+/* ---------- Fase 5: asistente por pasos ---------- */
+.asistente { display: grid; gap: var(--e4); }
+.titulo-paso { margin: 0; }
+.titulo-paso:focus { outline: none; }
+.titulo-paso:focus-visible { outline: 3px solid var(--color-texto); outline-offset: 4px; }
+
+.indicador-pasos ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); }
+.indicador-pasos .paso { position: relative; display: flex; justify-content: center; }
+/* Línea que conecta cada paso con el anterior (decorativa). */
+.indicador-pasos .paso + .paso::before {
+  content: ""; position: absolute; top: 22px; right: calc(50% + 24px); left: calc(-50% + 24px); height: 3px;
+  background: var(--color-borde); border-radius: 2px;
+}
+.indicador-pasos .paso-completo + .paso::before { background: var(--color-primario); }
+.indicador-pasos .paso-boton {
+  display: flex; flex-direction: column; align-items: center; gap: var(--e1); background: none; border: 0; padding: 0;
+  font: inherit; color: inherit; min-width: var(--objetivo-tactil); min-height: var(--objetivo-tactil);
+}
+button.paso-boton { cursor: pointer; }
+button.paso-boton:focus-visible { outline: 3px solid var(--color-texto); outline-offset: 2px; border-radius: var(--radio); }
+.indicador-pasos .circulo {
+  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-weight: 800;
+  border: 2px solid var(--color-primario); color: var(--color-primario); background: var(--color-fondo);
+}
+.indicador-pasos .paso-completo .circulo { background: var(--color-primario); color: #fff; }
+.indicador-pasos .paso-actual .circulo { background: var(--color-primario); color: #fff; box-shadow: 0 0 0 6px var(--color-tinte-primario); }
+.indicador-pasos .nombre { font-size: var(--texto-xs); color: var(--color-texto-secundario); text-align: center; }
+.indicador-pasos .paso-actual .nombre { color: var(--color-texto); font-weight: 700; }
+@media (max-width: 30rem) {
+  /* En pantallas angostas solo números; el nombre del paso actual queda en el título. */
+  .indicador-pasos .nombre { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+
+.rejilla-campos { display: grid; gap: 0 var(--e4); }
+@media (min-width: 48rem) {
+  .rejilla-campos { grid-template-columns: 1fr 1fr; }
+  .rejilla-campos .campo-ancho { grid-column: 1 / -1; }
+}
+
+.contenido-paso { animation: entrar-paso 200ms ease-out; }
+@keyframes entrar-paso { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .contenido-paso { animation: none; } }
+
+.barra-asistente {
+  position: sticky; bottom: 0; z-index: 2; display: grid; gap: var(--e3); padding: var(--e3) 0 var(--e4);
+  background: var(--color-fondo); border-top: 1px solid var(--color-borde);
+}
+.barra-progreso p { margin: 0 0 var(--e1); }
+.segmentos { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--e2); }
+.segmento { height: 6px; border-radius: 3px; background: var(--color-tinte-primario); }
+.segmento-lleno { background: var(--color-primario); }
+.acciones-asistente { display: flex; gap: var(--e3); }
+.acciones-asistente .boton-principal { flex: 1; }
+.boton-principal { border-radius: 999px; min-height: 3.5rem; font-size: var(--texto-m); display: inline-flex; align-items: center; justify-content: center; gap: var(--e2); }
+.boton-principal .flecha { font-size: 1.25em; }
+@media (min-width: 48rem) {
+  .acciones-asistente { justify-content: flex-end; }
+  .acciones-asistente .boton-principal { flex: 0 1 22rem; }
+}
+
+.bloque-revision h3 { margin: 0; }
+.bloque-revision dl { margin: var(--e2) 0 0; }
+.boton-texto {
+  background: none; border: 0; color: var(--color-primario); font: inherit; font-weight: 700; text-decoration: underline;
+  cursor: pointer; min-height: var(--objetivo-tactil); padding: 0 var(--e2);
+}
+.boton-texto:hover { color: var(--color-primario-oscuro); }
+.boton-texto:focus-visible { outline: 3px solid var(--color-texto); outline-offset: 2px; }
+.lista-simple { margin: 0; padding-left: var(--e4); }
+.texto-largo { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- Fase 5: línea de progreso del estatus ---------- */
+.linea-progreso ol { list-style: none; margin: 0; padding: 0; }
+.paso-linea { position: relative; display: grid; grid-template-columns: 40px 1fr; gap: var(--e3); padding-bottom: var(--e4); }
+.paso-linea:last-child { padding-bottom: 0; }
+/* Conector vertical entre pasos (decorativo). */
+.paso-linea:not(:last-child)::after {
+  content: ""; position: absolute; left: 19px; top: 40px; bottom: 0; width: 3px; background: var(--color-borde); border-radius: 2px;
+}
+.paso-alcanzado:not(:last-child)::after { background: var(--color-primario); }
+.marca { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
+.marca-alcanzado { background: var(--color-primario); transform: scale(0.8); }
+.marca-actual { box-shadow: 0 0 0 5px var(--color-tinte-primario); }
+.marca-pendiente, .marca-omitido { background: var(--color-fondo); border: 2px solid var(--color-borde); transform: scale(0.55); }
+.marca-omitido { border-style: dashed; }
+.paso-texto { display: grid; padding-top: var(--e2); }
+.paso-pendiente strong, .paso-omitido strong { color: var(--color-texto-secundario); font-weight: 400; }
+.paso-actual strong { font-size: var(--texto-m); }
+.relleno-fondo-recibido { background: var(--estatus-recibido); }
+.relleno-fondo-en-revision { background: var(--estatus-en-revision); }
+.relleno-fondo-en-atencion { background: var(--estatus-en-atencion); }
+.relleno-fondo-canalizado { background: var(--estatus-canalizado); }
+.relleno-fondo-concluido { background: var(--estatus-concluido); }
+.relleno-fondo-descartado { background: var(--estatus-descartado); }
+.final-descartado { margin-top: var(--e3); padding: var(--e3); border-radius: var(--radio); background: var(--color-superficie); border: 1px dashed var(--estatus-descartado); }
+.final-descartado p { margin: var(--e2) 0 0; }
+.significado { margin: var(--e4) 0 0; padding: var(--e3); border-radius: var(--radio); background: var(--color-fondo); border-left: 6px solid var(--color-primario); }
+
+/* ---------- Fase 5: detalle del personal ---------- */
+.insignias { display: flex; flex-wrap: wrap; gap: var(--e2); align-items: center; }
+.insignia-riesgo {
+  display: inline-flex; align-items: center; gap: var(--e1); padding: var(--e1) var(--e3); border-radius: 999px;
+  background: #fdecea; color: #8e1c1c; font-weight: 700; font-size: var(--texto-xs); border: 1px solid #f3b4ae;
+}
+.insignia-riesgo::before { content: "\26A0"; }
+.navegacion-detalle { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--e3); margin-bottom: var(--e3); }
+.acciones-navegacion { display: inline-flex; align-items: center; gap: var(--e3); }
+.boton.deshabilitado { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+.encabezado-detalle { display: grid; gap: var(--e1); margin-bottom: var(--e4); }
+.encabezado-detalle p { margin: 0; }
+.encabezado-detalle .folio { margin: 0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: var(--texto-xl); }
+.mensaje-guardado { color: var(--color-primario-oscuro); font-weight: 700; min-height: 1.5em; }
+.detalle-columnas { display: grid; gap: var(--e4); }
+.columna-datos, .columna-seguimiento { display: grid; gap: var(--e4); align-content: start; }
+@media (min-width: 64rem) {
+  .detalle-columnas { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+}
+.botones-transicion { display: flex; flex-wrap: wrap; gap: var(--e2); }
+.boton-transicion {
+  display: inline-flex; align-items: center; gap: var(--e1); min-height: var(--objetivo-tactil); padding: 0 var(--e4);
+  border-radius: 999px; border: 2px solid; background: var(--color-fondo); font: inherit; font-weight: 700; cursor: pointer;
+}
+.boton-transicion[aria-pressed="true"] { color: #fff; }
+.boton-transicion:focus-visible { outline: 3px solid var(--color-texto); outline-offset: 2px; }
+.borde-recibido { border-color: var(--estatus-recibido); color: var(--estatus-recibido); }
+.borde-en-revision { border-color: var(--estatus-en-revision); color: var(--estatus-en-revision); }
+.borde-en-atencion { border-color: var(--estatus-en-atencion); color: var(--estatus-en-atencion); }
+.borde-canalizado { border-color: var(--estatus-canalizado); color: var(--estatus-canalizado); }
+.borde-concluido { border-color: var(--estatus-concluido); color: var(--estatus-concluido); }
+.borde-descartado { border-color: var(--estatus-descartado); color: var(--estatus-descartado); }
+.borde-recibido[aria-pressed="true"] { background: var(--estatus-recibido); color: #fff; }
+.borde-en-revision[aria-pressed="true"] { background: var(--estatus-en-revision); color: #fff; }
+.borde-en-atencion[aria-pressed="true"] { background: var(--estatus-en-atencion); color: #fff; }
+.borde-canalizado[aria-pressed="true"] { background: var(--estatus-canalizado); color: #fff; }
+.borde-concluido[aria-pressed="true"] { background: var(--estatus-concluido); color: #fff; }
+.borde-descartado[aria-pressed="true"] { background: var(--estatus-descartado); color: #fff; }
+.formulario-transicion { margin-top: var(--e3); padding: var(--e3); border-radius: var(--radio); background: var(--color-superficie); }
+.formulario-nota { margin-top: var(--e4); }
+.bitacora { list-style: none; margin: 0; padding: 0; }
+.evento { position: relative; display: grid; grid-template-columns: 32px 1fr; gap: var(--e3); padding-bottom: var(--e4); }
+.evento:not(:last-child)::after { content: ""; position: absolute; left: 15px; top: 32px; bottom: 0; width: 2px; background: var(--color-borde); }
+.evento .marca { width: 32px; height: 32px; }
+.marca-nota { background: var(--color-texto-secundario); }
+.evento p { margin: var(--e1) 0 0; }
+.mini-mapa { height: 220px; width: 100%; border-radius: 12px; border: 1px solid var(--color-borde); margin-top: var(--e3); }
+kbd { font-family: ui-monospace, Consolas, monospace; border: 1px solid var(--color-borde); border-radius: 4px; padding: 0 var(--e1); background: var(--color-superficie); }
+
+/* ---------- Fase 5: panel ---------- */
+.tarjeta-cifra { display: grid; gap: var(--e1); align-content: start; }
+.tarjeta-cifra p { margin: 0; }
+.titulo-cifra { font-weight: 700; }
+.tarjeta-alerta { border: 2px solid var(--color-error); background: #fdecea; }
+.tarjeta-alerta .cifra { color: #8e1c1c; }
+.filtros-panel { margin-top: var(--e3); }
+.filtros .acciones, .filtros > .ayuda, .filtros > .opcion { grid-column: 1 / -1; }
+
+@media print {
+  .no-imprimir, .saltar-contenido, .encabezado .navegacion { display: none !important; }
+  .detalle-columnas { display: block; }
+  .tarjeta { break-inside: avoid; border-color: #999; }
+  .mini-mapa { display: none; }
+}

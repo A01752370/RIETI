@@ -77,7 +77,7 @@ private fun AppRieti() {
                 avisoVersion = entrada.arguments?.getString("avisoVersion").orEmpty(),
                 alEnviar = { creado ->
                     // Al confirmar no se puede volver al formulario ni reenviar el mismo reporte.
-                    nav.navigate(Rutas.confirmacion(creado.folio, creado.claveConsulta)) {
+                    nav.navigate(Rutas.confirmacion(creado.folio, creado.claveConsulta, creado.fechaCreacion)) {
                         popUpTo(Rutas.INICIO)
                     }
                 },
@@ -88,12 +88,14 @@ private fun AppRieti() {
             route = Rutas.CONFIRMACION,
             arguments = listOf(
                 navArgument("folio") { type = NavType.StringType },
-                navArgument("clave") { type = NavType.StringType }
+                navArgument("clave") { type = NavType.StringType },
+                navArgument("fecha") { type = NavType.StringType; defaultValue = "" }
             )
         ) { entrada ->
             ConfirmacionScreen(
                 folio = entrada.arguments?.getString("folio").orEmpty(),
                 clave = entrada.arguments?.getString("clave").orEmpty(),
+                fecha = entrada.arguments?.getString("fecha")?.takeIf { it.isNotBlank() },
                 alTerminar = { volverAlInicio(nav) }
             )
         }
@@ -134,6 +136,8 @@ private fun AppRieti() {
         composable(Rutas.INICIO_PERSONAL) {
             InicioPersonalScreen(
                 alAbrirBandeja = { estatus, sinAtender -> nav.navigate(Rutas.bandeja(estatus, sinAtender)) },
+                alAbrirRiesgoAlto = { nav.navigate(Rutas.bandeja(riesgoAlto = true)) },
+                alAbrirPendientes = { nav.navigate(Rutas.bandeja(pendientes = true)) },
                 alCerrarSesion = { volverAlInicio(nav) },
                 alSesionExpirada = { irAlLogin(nav) }
             )
@@ -142,7 +146,9 @@ private fun AppRieti() {
             route = Rutas.BANDEJA,
             arguments = listOf(
                 navArgument("estatus") { type = NavType.StringType; defaultValue = "" },
-                navArgument("sinAtender") { type = NavType.IntType; defaultValue = 0 }
+                navArgument("sinAtender") { type = NavType.IntType; defaultValue = 0 },
+                navArgument("riesgoAlto") { type = NavType.BoolType; defaultValue = false },
+                navArgument("pendientes") { type = NavType.BoolType; defaultValue = false }
             )
         ) {
             BandejaScreen(

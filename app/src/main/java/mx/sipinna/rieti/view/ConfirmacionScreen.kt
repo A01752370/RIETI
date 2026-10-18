@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import mx.sipinna.rieti.ui.theme.TextoSecundario
+import mx.sipinna.rieti.viewmodel.LineaEstatus
 
 /** Qué se copió por última vez, para confirmarlo en pantalla. */
 private enum class Copiado { NADA, FOLIO, CLAVE, AMBOS }
@@ -62,10 +63,11 @@ private enum class Copiado { NADA, FOLIO, CLAVE, AMBOS }
  *
  * @param folio folio asignado
  * @param clave clave de consulta
+ * @param fecha fecha de registro (ISO-8601) para la línea de avance, o null
  * @param alTerminar vuelve al inicio
  */
 @Composable
-fun ConfirmacionScreen(folio: String, clave: String, alTerminar: () -> Unit) {
+fun ConfirmacionScreen(folio: String, clave: String, fecha: String? = null, alTerminar: () -> Unit) {
     val contexto = LocalContext.current
     var copiado by rememberSaveable { mutableStateOf(Copiado.NADA) }
     val ambos = "Folio: $folio\nClave de consulta: $clave"
@@ -148,7 +150,15 @@ fun ConfirmacionScreen(folio: String, clave: String, alTerminar: () -> Unit) {
             )
         }
 
-        Button(onClick = alTerminar, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(top = 8.dp)) {
+        // Fase 5: la misma línea de avance que verá al consultar; hoy solo está en "Recibido".
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Avance de tu reporte", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+                LineaProgresoEstatus(LineaEstatus.calcular("Recibido", emptyList(), fecha))
+            }
+        }
+
+        Button(onClick = alTerminar, shape = MaterialTheme.shapes.extraLarge, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(top = 8.dp)) {
             Text("Ya los guardé, volver al inicio")
         }
     }

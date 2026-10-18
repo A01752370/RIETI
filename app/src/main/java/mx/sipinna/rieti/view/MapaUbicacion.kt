@@ -160,3 +160,64 @@ fun MapaUbicacion(punto: GeoPoint?, alMover: (Double, Double) -> Unit, modifier:
         Text(ATRIBUCION_OSM, style = MaterialTheme.typography.labelSmall, color = TextoSecundario)
     }
 }
+
+/**
+ * Mini mapa de solo lectura con el punto del lugar de los hechos (detalle del
+ * personal, Fase 5). No responde a toques, para no interferir con el
+ * desplazamiento de la pantalla; para explorar está "Abrir en el mapa".
+ * Usa las mismas teselas mediadas por el backend.
+ *
+ * @param punto lugar de los hechos
+ */
+@SuppressLint("ClickableViewAccessibility")
+@Composable
+fun MiniMapa(punto: GeoPoint, modifier: Modifier = Modifier) {
+    val contexto = LocalContext.current
+    val ciclo = LocalLifecycleOwner.current.lifecycle
+    val mapa = remember {
+        configurarOsmdroid(contexto)
+        MapView(contexto).apply {
+            setTileSource(FUENTE_TESELAS)
+            setMultiTouchControls(false)
+            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+            minZoomLevel = 8.0
+            maxZoomLevel = 18.0
+            isHorizontalMapRepetitionEnabled = false
+            isVerticalMapRepetitionEnabled = false
+            controller.setZoom(16.0)
+            controller.setCenter(punto)
+            setOnTouchListener { _, _ -> true }
+            overlays.add(Marker(this).apply {
+                position = punto
+                title = "Lugar de los hechos"
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                setOnMarkerClickListener { _, _ -> true }
+            })
+        }
+    }
+    DisposableEffect(ciclo) {
+        val observador = LifecycleEventObserver { _, evento ->
+            when (evento) {
+                Lifecycle.Event.ON_RESUME -> mapa.onResume()
+                Lifecycle.Event.ON_PAUSE -> mapa.onPause()
+                else -> Unit
+            }
+        }
+        ciclo.addObserver(observador)
+        onDispose {
+            ciclo.removeObserver(observador)
+            mapa.onDetach()
+        }
+    }
+    Column(modifier) {
+        AndroidView(
+            factory = { mapa },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .clip(MaterialTheme.shapes.medium)
+                .semantics { contentDescription = "Mapa con el punto del lugar de los hechos" }
+        )
+        Text(ATRIBUCION_OSM, style = MaterialTheme.typography.labelSmall, color = TextoSecundario)
+    }
+}

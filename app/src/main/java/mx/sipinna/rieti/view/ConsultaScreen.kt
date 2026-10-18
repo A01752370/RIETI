@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -38,6 +39,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import mx.sipinna.rieti.ui.theme.TextoSecundario
 import mx.sipinna.rieti.viewmodel.ConsultaViewModel
 import mx.sipinna.rieti.viewmodel.ExtractorFolioClave
+import mx.sipinna.rieti.viewmodel.LineaEstatus
 import mx.sipinna.rieti.viewmodel.UiState
 
 /**
@@ -132,10 +134,8 @@ fun ConsultaScreen(alRegresar: () -> Unit, viewModel: ConsultaViewModel = viewMo
                             EtiquetaEstatus(c.estatus)
                         }
                         Text("Registrado el ${formatearFecha(c.fechaCreacion)}", style = MaterialTheme.typography.bodySmall)
-                        Text("Historial", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
-                        c.historial.forEach { ev ->
-                            Text("• ${ev.estatus} — ${formatearFecha(ev.fecha)}", style = MaterialTheme.typography.bodyMedium)
-                        }
+                        Text("Avance", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp).semantics { heading() })
+                        LineaProgresoEstatus(LineaEstatus.calcular(c.estatus, c.historial.map { it.estatus to it.fecha }, c.fechaCreacion))
                     }
                 }
             }

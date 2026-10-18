@@ -1,48 +1,103 @@
 package mx.sipinna.rieti.view
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Create
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.util.Locale
+import mx.sipinna.rieti.model.EventoSeguimiento
 import mx.sipinna.rieti.model.ReporteDetalle
-import mx.sipinna.rieti.viewmodel.FormatoReporte
+import mx.sipinna.rieti.ui.theme.Primario
+import mx.sipinna.rieti.ui.theme.TextoSecundario
+import mx.sipinna.rieti.ui.theme.TintePrimario
 import mx.sipinna.rieti.viewmodel.DetalleReporteViewModel
+import mx.sipinna.rieti.viewmodel.FormatoReporte
+import mx.sipinna.rieti.viewmodel.LineaEstatus
 import mx.sipinna.rieti.viewmodel.UiState
+import mx.sipinna.rieti.viewmodel.ValidadorReporte
+import org.osmdroid.util.GeoPoint
+
+/** Largo a partir del cual la descripción se muestra recortada con "Ver todo". */
+private const val DESCRIPCION_CORTA = 280
 
 /**
- * Detalle y seguimiento de un reporte (CU-09/CU-10): datos del reporte,
- * bitácora, cambio de estatus y notas.
+ * Detalle y seguimiento de un reporte (CU-09/CU-10; rediseño de la Fase 5,
+ * "control rápido"): una sola columna con el encabezado y las acciones
+ * arriba, visibles sin desplazarse; después la línea de progreso, las tarjetas
+ * (resumen, ubicación con mini mapa, menores, actividad y riesgo, descripción)
+ * y la bitácora como línea de tiempo. Se actualiza deslizando hacia abajo.
  *
- * Las opciones de estatus son las que el servidor marca como válidas según la
- * máquina de estados de la Etapa 1; "Descartado" pide motivo.
+ * Las acciones son las transiciones que el servidor marca como válidas (máquina
+ * de estados de la Etapa 1); "Descartado" pide motivo y reabrir un caso
+ * concluido pide comentario. El personal nunca ve la cuenta ni el correo de
+ * quien reportó: el servidor no los envía.
  *
  * @param alRegresar vuelve a la bandeja
  * @param alSesionExpirada el servidor respondió 401: hay que volver a iniciar sesión
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetalleReporteScreen(
     alRegresar: () -> Unit,
@@ -51,150 +106,354 @@ fun DetalleReporteScreen(
 ) {
     val estado by viewModel.detalle.collectAsState()
     val guardado by viewModel.guardado.collectAsState()
+    val actualizando by viewModel.actualizando.collectAsState()
+    val deslizar = rememberPullToRefreshState()
 
     LaunchedEffect(estado, guardado) {
         val codigo = (estado as? UiState.Error)?.codigo ?: (guardado as? UiState.Error)?.codigo
         if (codigo == "NO_AUTENTICADO") alSesionExpirada()
     }
+    if (deslizar.isRefreshing) LaunchedEffect(Unit) { viewModel.actualizar() }
+    LaunchedEffect(actualizando) { if (!actualizando) deslizar.endRefresh() }
 
-    PantallaRieti(titulo = "Detalle del reporte", alRegresar = alRegresar) {
-        when (val e = estado) {
-            is UiState.Inactivo, is UiState.Cargando -> Cargando()
-            is UiState.Error -> {
-                MensajeError(e.mensaje)
-                OutlinedButton(onClick = viewModel::cargar, modifier = Modifier.fillMaxWidth()) { Text("Reintentar") }
+    PantallaRieti(titulo = "Detalle del reporte", alRegresar = alRegresar, desplazable = false) {
+        Box(Modifier.fillMaxSize().nestedScroll(deslizar.nestedScrollConnection)) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                when (val e = estado) {
+                    is UiState.Inactivo, is UiState.Cargando -> Cargando()
+                    is UiState.Error -> {
+                        MensajeError(e.mensaje)
+                        OutlinedButton(onClick = viewModel::cargar, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Reintentar") }
+                    }
+                    is UiState.Exito -> ContenidoDetalle(e.datos, guardado, viewModel)
+                }
             }
-            is UiState.Exito -> {
-                DatosReporte(e.datos)
-                Seguimiento(e.datos, guardado, viewModel)
-                Bitacora(e.datos)
+            if (deslizar.progress > 0f || deslizar.isRefreshing) {
+                PullToRefreshContainer(state = deslizar, modifier = Modifier.align(Alignment.TopCenter))
             }
         }
     }
 }
 
-/** Datos capturados por el ciudadano. */
+/** Detalle con datos: encabezado, acciones, línea de progreso, tarjetas y bitácora. */
 @Composable
-private fun DatosReporte(r: ReporteDetalle) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()) {
-                Text(r.folio, style = MaterialTheme.typography.titleMedium)
+private fun ContenidoDetalle(r: ReporteDetalle, guardado: UiState<Unit>, viewModel: DetalleReporteViewModel) {
+    var accion by remember { mutableStateOf<String?>(null) } // estatus destino o NOTA
+    var mensaje by remember { mutableStateOf<String?>(null) }
+    val ocupado = guardado is UiState.Cargando
+
+    // Al guardar con éxito se cierra el diálogo y se avisa sin recargar la pantalla.
+    LaunchedEffect(guardado) {
+        if (guardado is UiState.Exito && accion != null) {
+            mensaje = if (accion == NOTA) "Nota agregada." else "Estatus cambiado a \"$accion\"."
+            accion = null
+            viewModel.consumirGuardado()
+        }
+    }
+
+    Encabezado(r, mensaje)
+    Acciones(r, enabled = !ocupado) { mensaje = null; viewModel.consumirGuardado(); accion = it }
+
+    Tarjeta("Avance") { LineaProgresoEstatus(lineaPersonal(r), mostrarSignificado = false) }
+    Tarjeta("Resumen") {
+        Dato("Qué", FormatoReporte.actividad(r.actividad, r.actividadOtro))
+        Dato("Dónde", listOfNotNull(r.municipio ?: "Municipio no indicado", r.direccion?.colonia?.takeIf { it.isNotBlank() }?.let { "Col. $it" }).joinToString(" · "))
+        Dato("Cuándo", "Reportado el ${formatearFecha(r.fechaCreacion)}")
+    }
+    TarjetaUbicacion(r)
+    TarjetaMenores(r)
+    Tarjeta("Actividad y riesgo") {
+        Dato("Actividad", FormatoReporte.actividad(r.actividad, r.actividadOtro))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Dato("¿Riesgo percibido?", r.situacionRiesgo)
+            if (r.situacionRiesgo == "Sí") IndicadorRiesgo()
+        }
+        r.motivoDescarte?.let { Dato("Motivo de descarte", it) }
+    }
+    TarjetaDescripcion(r.descripcion)
+    Bitacora(r)
+
+    accion?.let { destino ->
+        DialogoAccion(
+            r = r,
+            destino = destino,
+            ocupado = ocupado,
+            error = (guardado as? UiState.Error)?.mensaje,
+            alCancelar = { accion = null; viewModel.consumirGuardado() },
+            alConfirmar = { comentario, motivo ->
+                if (destino == NOTA) viewModel.agregarNota(comentario) else viewModel.cambiarEstatus(destino, comentario, motivo)
+            }
+        )
+    }
+}
+
+/** Marca de la acción "agregar nota" (no es un estatus). */
+private const val NOTA = "__nota__"
+
+/** Línea de progreso del personal: solo los cambios de estatus (las notas no avanzan el caso). */
+private fun lineaPersonal(r: ReporteDetalle): LineaEstatus {
+    val cambios = r.historial.filterIndexed { i, e -> tipoEvento(r.historial, i) != "nota" || i == 0 }.map { it.estatus to it.fecha }
+    return LineaEstatus.calcular(r.estatus, cambios, r.fechaCreacion)
+}
+
+/** Clase del evento; si el servidor es anterior a la Fase 5 se calcula con la misma regla que el servidor. */
+private fun tipoEvento(historial: List<EventoSeguimiento>, i: Int): String =
+    historial[i].tipo ?: when {
+        i == 0 -> "registro"
+        historial[i].estatus != historial[i - 1].estatus -> "cambio"
+        else -> "nota"
+    }
+
+/** Fecha en que el caso entró a su estatus vigente (del servidor o calculada con la bitácora). */
+private fun fechaEstatus(r: ReporteDetalle): String =
+    r.fechaEstatusActual ?: r.historial.indices.reversed().firstOrNull { tipoEvento(r.historial, it) != "nota" }
+        ?.let { r.historial[it].fecha } ?: r.fechaCreacion
+
+/** Folio con copiar, estatus, riesgo, municipio y tiempos medidos. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Encabezado(r: ReporteDetalle, mensaje: String?) {
+    val portapapeles = LocalClipboardManager.current
+    var copiado by remember(r.folio) { mutableStateOf(false) }
+    Card(colors = CardDefaults.cardColors(containerColor = TintePrimario), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SelectionContainer(Modifier.weight(1f)) {
+                    Text(r.folio, style = MaterialTheme.typography.titleLarge, fontFamily = FontFamily.Monospace, modifier = Modifier.semantics { heading() })
+                }
+                TextButton(
+                    onClick = { portapapeles.setText(AnnotatedString(r.folio)); copiado = true },
+                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = if (copiado) "Folio copiado" else "Copiar folio" }
+                ) { Text(if (copiado) "Copiado" else "Copiar") }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 EtiquetaEstatus(r.estatus)
+                if (r.situacionRiesgo == "Sí") IndicadorRiesgo()
             }
-            Campo("Registrado", formatearFecha(r.fechaCreacion))
-            Campo("Municipio", r.municipio ?: "No indicado")
-            val direccion = FormatoReporte.direccion(r.direccion)
-            if (direccion != null) {
-                Campo("Dirección", direccion)
-                r.direccion?.referencias?.takeIf { it.isNotBlank() }?.let { Campo("Referencias", it) }
-            } else {
-                Campo("Lugar", r.ubicacion)
+            Text(r.municipio ?: "Municipio no indicado", style = MaterialTheme.typography.titleSmall)
+            val desdeAlta = FormatoReporte.transcurrido(r.fechaCreacion)
+            val enEstatus = FormatoReporte.transcurrido(fechaEstatus(r))
+            Text("Alta: ${formatearFecha(r.fechaCreacion)}${desdeAlta?.let { " · hace $it" } ?: ""}", style = MaterialTheme.typography.bodyMedium)
+            enEstatus?.let { Text("En \"${r.estatus}\" desde hace $it", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold) }
+            if (copiado) Text("Folio copiado.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+            mensaje?.let {
+                Text(it, color = Primario, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             }
-            if (r.latitud != null && r.longitud != null) {
-                Campo("Coordenadas", String.format(Locale.US, "%.5f, %.5f", r.latitud, r.longitud))
+        }
+    }
+}
+
+/** Botones de las transiciones válidas y de "Agregar nota". */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Acciones(r: ReporteDetalle, enabled: Boolean, alElegir: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            if (r.transicionesPermitidas.isEmpty()) "Este caso está en un estatus final y ya no puede cambiar." else "Cambiar estatus a:",
+            style = MaterialTheme.typography.labelLarge
+        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            r.transicionesPermitidas.forEach { destino ->
+                OutlinedButton(
+                    onClick = { alElegir(destino) },
+                    enabled = enabled,
+                    border = BorderStroke(1.dp, colorEstatus(destino)),
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
+                    Icon(iconoEstatus(destino), contentDescription = null, tint = colorEstatus(destino), modifier = Modifier.size(ButtonDefaults.IconSize))
+                    Text(destino, color = colorEstatus(destino), modifier = Modifier.padding(start = 6.dp))
+                }
             }
-            Campo("Actividad", FormatoReporte.actividad(r.actividad, r.actividadOtro))
-            Campo("Menores", FormatoReporte.menores(r.grupos, r.cantidadNinos, r.edadAproximada))
-            Campo("¿Riesgo percibido?", r.situacionRiesgo)
-            Campo("Descripción", r.descripcion)
-            r.motivoDescarte?.let { Campo("Motivo de descarte", it) }
+            OutlinedButton(onClick = { alElegir(NOTA) }, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp)) {
+                Icon(Icons.Filled.Create, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                Text("Agregar nota", modifier = Modifier.padding(start = 6.dp))
+            }
+        }
+    }
+}
+
+/** Diálogo de la acción: comentario (y motivo al descartar), con las reglas de la máquina de estados. */
+@Composable
+private fun DialogoAccion(
+    r: ReporteDetalle,
+    destino: String,
+    ocupado: Boolean,
+    error: String?,
+    alCancelar: () -> Unit,
+    alConfirmar: (comentario: String, motivo: String) -> Unit
+) {
+    var comentario by rememberSaveable(destino) { mutableStateOf("") }
+    var motivo by rememberSaveable(destino) { mutableStateOf("") }
+    val esNota = destino == NOTA
+    val descartar = destino == "Descartado"
+    val reabrir = r.estatus == "Concluido" && !esNota
+    val listo = when {
+        esNota -> comentario.isNotBlank()
+        descartar -> motivo.isNotBlank()
+        reabrir -> comentario.isNotBlank()
+        else -> true
+    }
+    AlertDialog(
+        onDismissRequest = { if (!ocupado) alCancelar() },
+        title = { Text(if (esNota) "Agregar nota interna" else "Cambiar a \"$destino\"") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!esNota) Text("Estatus actual: ${r.estatus}", style = MaterialTheme.typography.bodyMedium)
+                if (descartar) {
+                    OutlinedTextField(
+                        value = motivo, onValueChange = { motivo = it.take(500) },
+                        label = { Text("Motivo del descarte (obligatorio)") }, modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                OutlinedTextField(
+                    value = comentario, onValueChange = { comentario = it.take(2000) },
+                    label = {
+                        Text(when {
+                            esNota -> "Nota (solo la ve el personal)"
+                            reabrir -> "Comentario de reincidencia (obligatorio)"
+                            else -> "Comentario (opcional)"
+                        })
+                    },
+                    minLines = 3, modifier = Modifier.fillMaxWidth()
+                )
+                error?.let { MensajeError(it) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { alConfirmar(comentario, motivo) }, enabled = listo && !ocupado, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(if (ocupado) "Guardando…" else if (esNota) "Guardar nota" else "Cambiar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = alCancelar, enabled = !ocupado, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancelar") }
+        }
+    )
+}
+
+/** Dirección, referencias, mini mapa y botón para abrirlo en el mapa del teléfono. */
+@Composable
+private fun TarjetaUbicacion(r: ReporteDetalle) {
+    val contexto = LocalContext.current
+    Tarjeta("Ubicación") {
+        val direccion = FormatoReporte.direccion(r.direccion)
+        Dato(if (direccion != null) "Dirección" else "Lugar", direccion ?: r.ubicacion)
+        r.direccion?.referencias?.takeIf { it.isNotBlank() }?.let { Dato("Referencias", it) }
+        if (r.latitud != null && r.longitud != null) {
+            MiniMapa(GeoPoint(r.latitud, r.longitud))
+            Text(String.format(Locale.US, "%.5f, %.5f", r.latitud, r.longitud), style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+            OutlinedButton(
+                onClick = {
+                    val geo = String.format(Locale.US, "geo:%.5f,%.5f?q=%.5f,%.5f", r.latitud, r.longitud, r.latitud, r.longitud)
+                    try {
+                        contexto.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(geo)))
+                    } catch (e: ActivityNotFoundException) {
+                        // Sin app de mapas: el punto ya se ve en el mini mapa y en las coordenadas.
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            ) {
+                Icon(Icons.Filled.LocationOn, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                Text("Abrir en el mapa del teléfono", modifier = Modifier.padding(start = 8.dp))
+            }
+            Text("Se abrirá en la app de mapas que elijas; esa app recibirá el punto.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+        } else {
+            Text("El reporte no trae punto en el mapa.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+        }
+    }
+}
+
+/** Menores por grupo de edad con barras proporcionales y el total. */
+@Composable
+private fun TarjetaMenores(r: ReporteDetalle) {
+    val grupos = r.grupos?.takeIf { it.isNotEmpty() } ?: listOf(mx.sipinna.rieti.model.GrupoMenores(r.edadAproximada, r.cantidadNinos))
+    val total = grupos.sumOf { it.cantidad }
+    Tarjeta("Menores · $total en total") {
+        FormatoReporte.proporciones(grupos).forEach { (g, p) ->
+            val etiqueta = ValidadorReporte.ETIQUETAS_EDAD[g.rango]?.replace("No estoy seguro/a de la edad", "Edad sin determinar") ?: g.rango
+            Column(Modifier.semantics(mergeDescendants = true) { contentDescription = "$etiqueta: ${g.cantidad}" }) {
+                Row(Modifier.fillMaxWidth()) {
+                    Text(etiqueta, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text("${g.cantidad}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                }
+                Box(Modifier.fillMaxWidth().height(10.dp).background(TintePrimario, RoundedCornerShape(5.dp))) {
+                    Box(Modifier.fillMaxWidth(p.coerceAtLeast(0.02f)).height(10.dp).background(Primario, RoundedCornerShape(5.dp)))
+                }
+            }
+        }
+    }
+}
+
+/** Descripción; si es larga se muestra recortada con "Ver todo". */
+@Composable
+private fun TarjetaDescripcion(texto: String) {
+    var completa by rememberSaveable { mutableStateOf(false) }
+    val larga = texto.length > DESCRIPCION_CORTA
+    Tarjeta("Descripción") {
+        SelectionContainer {
+            Text(if (larga && !completa) texto.take(DESCRIPCION_CORTA).trimEnd() + "…" else texto, style = MaterialTheme.typography.bodyLarge)
+        }
+        if (larga) {
+            TextButton(onClick = { completa = !completa }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(if (completa) "Ver menos" else "Ver todo")
+            }
+        }
+    }
+}
+
+/** Bitácora como línea de tiempo vertical, lo más reciente arriba. */
+@Composable
+private fun Bitacora(r: ReporteDetalle) {
+    Text("Bitácora", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp).semantics { heading() })
+    val eventos = r.historial.indices.reversed().toList()
+    eventos.forEachIndexed { posicion, i ->
+        EventoBitacora(r.historial[i], tipoEvento(r.historial, i), conector = posicion < eventos.lastIndex)
+    }
+}
+
+/** Un evento: icono según su clase (registro, cambio de estatus o nota), autor, fecha y comentario. */
+@Composable
+private fun EventoBitacora(ev: EventoSeguimiento, tipo: String, conector: Boolean) {
+    val (color, titulo) = when (tipo) {
+        "registro" -> colorEstatus("Recibido") to "Reporte recibido"
+        "cambio" -> colorEstatus(ev.estatus) to "Cambio de estatus a \"${ev.estatus}\""
+        else -> TextoSecundario to "Nota interna"
+    }
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(36.dp).fillMaxHeight()) {
+            Surface(color = color, shape = CircleShape, modifier = Modifier.size(32.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(if (tipo == "nota") Icons.Filled.Create else iconoEstatus(ev.estatus), contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                }
+            }
+            if (conector) Box(Modifier.width(2.dp).weight(1f).background(TintePrimario))
+        }
+        Column(Modifier.weight(1f).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(titulo, style = MaterialTheme.typography.titleSmall)
+            Text("${formatearFecha(ev.fecha)} · ${ev.autor ?: "Registro automático"}", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+            ev.comentario?.takeIf { it.isNotBlank() }?.let {
+                SelectionContainer { Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp)) }
+            }
+        }
+    }
+}
+
+/** Tarjeta con título de sección. */
+@Composable
+private fun Tarjeta(titulo: String, contenido: @Composable () -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(titulo, style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+            contenido()
         }
     }
 }
 
 /** Etiqueta y valor. */
 @Composable
-private fun Campo(etiqueta: String, valor: String) {
-    Column {
+private fun Dato(etiqueta: String, valor: String) {
+    Column(Modifier.semantics(mergeDescendants = true) {}) {
         Text(etiqueta, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(valor, style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
-/** Cambio de estatus y notas. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun Seguimiento(r: ReporteDetalle, guardado: UiState<Unit>, viewModel: DetalleReporteViewModel) {
-    var nuevoEstatus by rememberSaveable(r.estatus) { mutableStateOf<String?>(null) }
-    var comentario by rememberSaveable(r.estatus, r.historial.size) { mutableStateOf("") }
-    var motivo by rememberSaveable(r.estatus) { mutableStateOf("") }
-    val ocupado = guardado is UiState.Cargando
-
-    Text("Seguimiento", style = MaterialTheme.typography.titleMedium)
-    if (r.transicionesPermitidas.isEmpty()) {
-        Text("Este caso está en un estatus final y ya no puede cambiar.", style = MaterialTheme.typography.bodyMedium)
-    } else {
-        Text("Cambiar estatus a:", style = MaterialTheme.typography.labelLarge)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            r.transicionesPermitidas.forEach { e ->
-                FilterChip(
-                    selected = nuevoEstatus == e,
-                    onClick = { nuevoEstatus = if (nuevoEstatus == e) null else e },
-                    label = { Text(e) },
-                    modifier = Modifier.heightIn(min = 48.dp)
-                )
-            }
-        }
-    }
-    if (nuevoEstatus == "Descartado") {
-        OutlinedTextField(
-            value = motivo,
-            onValueChange = { motivo = it.take(500) },
-            label = { Text("Motivo del descarte (obligatorio)") },
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
-    OutlinedTextField(
-        value = comentario,
-        onValueChange = { comentario = it.take(2000) },
-        label = { Text(if (nuevoEstatus == null) "Nota de seguimiento" else "Comentario del cambio (opcional)") },
-        minLines = 2,
-        modifier = Modifier.fillMaxWidth()
-    )
-
-    when (guardado) {
-        is UiState.Error -> MensajeError(guardado.mensaje)
-        is UiState.Exito -> Text("Guardado.", color = MaterialTheme.colorScheme.primary)
-        else -> Unit
-    }
-
-    val destino = nuevoEstatus
-    Button(
-        onClick = {
-            if (destino != null) viewModel.cambiarEstatus(destino, comentario, motivo) else viewModel.agregarNota(comentario)
-        },
-        enabled = !ocupado && (destino != null || comentario.isNotBlank()),
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-    ) {
-        Text(
-            when {
-                ocupado -> "Guardando…"
-                destino != null -> "Cambiar a \"$destino\""
-                else -> "Agregar nota"
-            }
-        )
-    }
-}
-
-/** Bitácora del caso, del evento más reciente al más antiguo. */
-@Composable
-private fun Bitacora(r: ReporteDetalle) {
-    Text("Bitácora", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
-    r.historial.asReversed().forEach { ev ->
-        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                EtiquetaEstatus(ev.estatus)
-                Text(formatearFecha(ev.fecha), style = MaterialTheme.typography.bodySmall)
-            }
-            ev.comentario?.let { Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp)) }
-            Text(
-                ev.autor ?: "Registro automático",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        HorizontalDivider()
     }
 }

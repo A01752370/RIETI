@@ -17,16 +17,17 @@ const ICONOS: Record<string, string> = {
 };
 
 /**
- * Qué significa cada estatus para quien reportó, en lenguaje sencillo.
- * No promete tiempos de atención.
+ * Catálogo único de qué significa cada estatus para quien reportó, en lenguaje
+ * sencillo y **sin prometer tiempos** (no hay un plazo oficial). Los textos son
+ * idénticos a `CatalogoEstatus.SIGNIFICADO` de la app Android.
  */
 export const SIGNIFICADO: Record<string, string> = {
-  Recibido: 'Tu reporte llegó y está en espera de que el personal lo revise.',
+  Recibido: 'Tu reporte fue recibido y está en fila para que el personal del SIPINNA lo revise.',
   'En revisión': 'El personal del SIPINNA está revisando la información que enviaste.',
   'En atención': 'El SIPINNA está realizando acciones de atención relacionadas con tu reporte.',
   Canalizado: 'El caso se turnó a la institución que corresponde para que lo atienda.',
-  Concluido: 'El SIPINNA terminó su intervención en este caso.',
-  Descartado: 'Después de revisarlo, el reporte no pudo atenderse; por ejemplo, porque la información no alcanzó o estaba repetida.',
+  Concluido: 'El SIPINNA terminó su intervención en este caso. Gracias por reportar.',
+  Descartado: 'Después de revisarlo, el reporte no pudo atenderse; por ejemplo, porque la información no alcanzó o ya había otro reporte del mismo caso. Si la situación continúa, puedes enviar un reporte nuevo.',
 };
 
 /** Clase CSS del estatus (`estatus-en-revision`, …). */

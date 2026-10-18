@@ -21,6 +21,17 @@ data class DatosDireccion(
     val referencias: String = ""
 )
 
+/** Campo del formulario al que se refiere un problema (para mostrar el error junto a él). */
+enum class CampoReporte { MUNICIPIO, CALLE, COLONIA, CODIGO_POSTAL, DIRECCION, GRUPOS, ACTIVIDAD, ACTIVIDAD_OTRO, RIESGO, DESCRIPCION }
+
+/**
+ * Problema de validación.
+ *
+ * @property campo campo que lo causa
+ * @property mensaje texto para la persona (los mismos mensajes de siempre)
+ */
+data class Problema(val campo: CampoReporte, val mensaje: String)
+
 /**
  * Reglas del formulario de reporte que se revisan en el teléfono antes de enviar.
  * El servidor vuelve a validar todo; esto solo evita viajes inútiles y da
@@ -94,6 +105,7 @@ object ValidadorReporte {
 
     /**
      * Revisa los campos y devuelve la lista de problemas (vacía si todo está bien).
+     * Es la unión, en orden, de [problemasDonde], [problemasQuienes] y [problemasQue].
      *
      * @param municipio municipio elegido en el selector (D-16), o null
      * @param direccion campos de la dirección
@@ -113,28 +125,55 @@ object ValidadorReporte {
         actividades: List<String>,
         riesgo: String,
         descripcion: String
-    ): List<String> = buildList {
-        if (municipio == null) add("Elige el municipio donde ocurre")
-        if (direccion.calle.isBlank()) add("Escribe la calle")
-        if (direccion.colonia.isBlank()) add("Escribe la colonia")
+    ): List<String> = (
+        problemasDonde(municipio, direccion) + problemasQuienes(conteos) +
+            problemasQue(actividad, actividadOtro, actividades, riesgo, descripcion)
+        ).map { it.mensaje }
+
+    /** Paso "Dónde" del asistente: municipio y dirección. */
+    fun problemasDonde(municipio: Municipio?, direccion: DatosDireccion): List<Problema> = buildList {
+        if (municipio == null) add(Problema(CampoReporte.MUNICIPIO, "Elige el municipio donde ocurre"))
+        if (direccion.calle.isBlank()) add(Problema(CampoReporte.CALLE, "Escribe la calle"))
+        if (direccion.colonia.isBlank()) add(Problema(CampoReporte.COLONIA, "Escribe la colonia"))
         val cp = direccion.codigoPostal.trim()
         when {
-            cp.isEmpty() -> add("Escribe el código postal")
-            !Regex("^\\d{5}$").matches(cp) -> add("El código postal debe tener 5 dígitos")
-            !esCodigoPostalEdomex(cp) -> add("El código postal no es del Estado de México (empieza con 50 a 57)")
+            cp.isEmpty() -> add(Problema(CampoReporte.CODIGO_POSTAL, "Escribe el código postal"))
+            !Regex("^\\d{5}$").matches(cp) -> add(Problema(CampoReporte.CODIGO_POSTAL, "El código postal debe tener 5 dígitos"))
+            !esCodigoPostalEdomex(cp) ->
+                add(Problema(CampoReporte.CODIGO_POSTAL, "El código postal no es del Estado de México (empieza con 50 a 57)"))
         }
         if (direccion.calle.length > MAX_CALLE || direccion.colonia.length > MAX_COLONIA ||
             direccion.numero.length > MAX_NUMERO || direccion.referencias.length > MAX_REFERENCIAS
-        ) add("Algún dato de la dirección es demasiado largo")
+        ) add(Problema(CampoReporte.DIRECCION, "Algún dato de la dirección es demasiado largo"))
+    }
+
+    /** Paso "A quiénes" del asistente: menores por grupo de edad. */
+    fun problemasQuienes(conteos: Map<String, Int>): List<Problema> = buildList {
         val suma = total(conteos)
-        if (suma < 1) add("Indica cuántas niñas, niños o adolescentes viste")
-        if (suma > TOTAL_MAXIMO) add("El total no puede pasar de $TOTAL_MAXIMO")
-        if (actividad !in actividades) add("Elige la actividad que observaste")
-        if (actividad == ACTIVIDAD_OTRO && actividadOtro.isBlank()) add("Describe la actividad que observaste")
-        if (actividadOtro.length > MAX_ACTIVIDAD_OTRO) add("La descripción de la actividad es demasiado larga")
-        if (riesgo !in RIESGOS) add("Indica si percibes una situación de riesgo")
-        if (descripcion.isBlank()) add("Describe brevemente lo que observaste")
-        if (descripcion.length > MAX_DESCRIPCION) add("La descripción no debe pasar de $MAX_DESCRIPCION caracteres")
+        if (suma < 1) add(Problema(CampoReporte.GRUPOS, "Indica cuántas niñas, niños o adolescentes viste"))
+        if (suma > TOTAL_MAXIMO) add(Problema(CampoReporte.GRUPOS, "El total no puede pasar de $TOTAL_MAXIMO"))
+    }
+
+    /** Paso "Qué ocurre" del asistente: actividad, riesgo y descripción. */
+    fun problemasQue(
+        actividad: String,
+        actividadOtro: String,
+        actividades: List<String>,
+        riesgo: String,
+        descripcion: String
+    ): List<Problema> = buildList {
+        if (actividad !in actividades) add(Problema(CampoReporte.ACTIVIDAD, "Elige la actividad que observaste"))
+        if (actividad == ACTIVIDAD_OTRO && actividadOtro.isBlank()) {
+            add(Problema(CampoReporte.ACTIVIDAD_OTRO, "Describe la actividad que observaste"))
+        }
+        if (actividadOtro.length > MAX_ACTIVIDAD_OTRO) {
+            add(Problema(CampoReporte.ACTIVIDAD_OTRO, "La descripción de la actividad es demasiado larga"))
+        }
+        if (riesgo !in RIESGOS) add(Problema(CampoReporte.RIESGO, "Indica si percibes una situación de riesgo"))
+        if (descripcion.isBlank()) add(Problema(CampoReporte.DESCRIPCION, "Describe brevemente lo que observaste"))
+        if (descripcion.length > MAX_DESCRIPCION) {
+            add(Problema(CampoReporte.DESCRIPCION, "La descripción no debe pasar de $MAX_DESCRIPCION caracteres"))
+        }
     }
 
     /** Quita acentos y mayúsculas para buscar ("atizapan" encuentra "Atizapán"). */

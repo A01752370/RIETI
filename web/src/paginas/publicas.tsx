@@ -3,6 +3,7 @@ import { api, ConsultaPublica, ErrorApi } from '../api';
 import { ALT, Esqueleto, LOGOS, Marco, MensajeError, useCarga, Vacio, TextoAviso } from '../componentes';
 import { Enlace, useTitulo } from '../enrutador';
 import { ESTATUS, EtiquetaEstatus, formatearFecha, SIGNIFICADO } from '../estatus';
+import { calcularLinea, LineaProgreso } from '../progreso';
 
 /** Inicio: qué es RIETI y las dos acciones principales. */
 export function Inicio() {
@@ -68,8 +69,8 @@ export function ComoFunciona() {
         ))}
       </ul>
       <p className="texto-secundario">
-        El orden normal es Recibido → En revisión → En atención → Canalizado → Concluido. Un reporte puede terminar como
-        Descartado si, después de revisarlo, no puede atenderse.
+        El orden normal es Recibido → En revisión → En atención → Canalizado → Concluido; algunos casos no pasan por todas
+        las etapas. Un reporte puede terminar como Descartado si, después de revisarlo, no puede atenderse.
       </p>
       <div className="acciones"><Enlace a="/reportar" className="boton">Reportar una situación</Enlace></div>
     </Marco>
@@ -145,14 +146,9 @@ export function Seguimiento() {
         <section className="tarjeta tarjeta-tinte" aria-live="polite">
           <h2>{resultado.folio}</h2>
           <p>Estado actual: <EtiquetaEstatus estatus={resultado.estatus} /></p>
-          <p>{SIGNIFICADO[resultado.estatus]}</p>
           <p className="pequeno">Registrado el {formatearFecha(resultado.fechaCreacion)}.</p>
-          <h3>Historial</h3>
-          <ol className="proceso">
-            {resultado.historial.map((h, i) => (
-              <li key={i}><EtiquetaEstatus estatus={h.estatus} /><span>{formatearFecha(h.fecha)}</span></li>
-            ))}
-          </ol>
+          <h3>Avance</h3>
+          <LineaProgreso linea={calcularLinea(resultado.estatus, resultado.historial, resultado.fechaCreacion)} />
         </section>
       )}
     </Marco>

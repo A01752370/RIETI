@@ -58,6 +58,7 @@ data class Pagina<T>(
  * @property historial bitácora del caso, del evento más antiguo al más reciente
  * @property transicionesPermitidas estatus a los que se puede cambiar desde el actual;
  *   los calcula el servidor con la máquina de estados, la app solo los muestra
+ * @property fechaEstatusActual cuándo entró el caso a su estatus vigente (Fase 5); null si el servidor es anterior
  */
 data class ReporteDetalle(
     val id: Int,
@@ -79,7 +80,8 @@ data class ReporteDetalle(
     val transicionesPermitidas: List<String>,
     val grupos: List<GrupoMenores>? = null,
     val actividadOtro: String? = null,
-    val direccion: DireccionRespuesta? = null
+    val direccion: DireccionRespuesta? = null,
+    val fechaEstatusActual: String? = null
 )
 
 /** Dirección de un reporte tal como la devuelve el servidor (cualquier campo puede faltar). */
@@ -98,12 +100,14 @@ data class DireccionRespuesta(
  * @property comentario nota registrada, o null
  * @property autor correo de quien la registró; null para el registro automático
  * @property fecha fecha del evento (ISO-8601)
+ * @property tipo "registro", "cambio" (de estatus) o "nota" (interna); null si el servidor es anterior
  */
 data class EventoSeguimiento(
     val estatus: String,
     val comentario: String?,
     val autor: String?,
-    val fecha: String
+    val fecha: String,
+    val tipo: String? = null
 )
 
 /**
@@ -135,11 +139,13 @@ data class AgregarSeguimientoRequest(
  * @property nuevosUltimos7Dias reportes de los últimos 7 días
  * @property pendientes casos en Recibido o En revisión
  * @property porEstatus conteo por estatus, en el orden del proceso
+ * @property riesgoAltoPendientes pendientes en los que quien reportó percibió riesgo (Fase 5)
  */
 data class ResumenPersonal(
     val total: Int,
     val nuevosUltimos7Dias: Int,
     val pendientes: Int = 0,
+    val riesgoAltoPendientes: Int = 0,
     val porEstatus: List<ConteoEstatus>
 )
 

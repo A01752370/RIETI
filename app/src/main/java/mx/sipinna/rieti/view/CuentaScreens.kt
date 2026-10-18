@@ -39,6 +39,7 @@ import mx.sipinna.rieti.model.MiReporte
 import mx.sipinna.rieti.ui.theme.TextoSecundario
 import mx.sipinna.rieti.viewmodel.AccesoCuentaViewModel
 import mx.sipinna.rieti.viewmodel.ConfiguracionCuentaViewModel
+import mx.sipinna.rieti.viewmodel.LineaEstatus
 import mx.sipinna.rieti.viewmodel.MiPanelViewModel
 import mx.sipinna.rieti.viewmodel.UiState
 import mx.sipinna.rieti.viewmodel.ValidadorCuenta
@@ -175,7 +176,7 @@ private fun TarjetaMiReporte(r: MiReporte) {
             }
             Text("${r.actividad} · ${r.municipio ?: "Municipio no indicado"}", style = MaterialTheme.typography.bodyMedium)
             Text("Enviado el ${formatearFecha(r.fechaCreacion)}", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
-            r.historial.forEach { ev -> Text("• ${ev.estatus} — ${formatearFecha(ev.fecha)}", style = MaterialTheme.typography.bodySmall) }
+            LineaProgresoEstatus(LineaEstatus.calcular(r.estatus, r.historial.map { it.estatus to it.fecha }, r.fechaCreacion))
         }
     }
 }

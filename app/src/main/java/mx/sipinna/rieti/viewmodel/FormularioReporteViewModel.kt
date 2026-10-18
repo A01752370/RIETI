@@ -6,11 +6,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import mx.sipinna.rieti.model.CrearReporteRequest
-import mx.sipinna.rieti.model.DireccionReporte
 import mx.sipinna.rieti.model.GeoReversa
 import mx.sipinna.rieti.model.Municipio
+import mx.sipinna.rieti.model.MunicipioSugerido
 import mx.sipinna.rieti.model.ReporteCreado
 import mx.sipinna.rieti.repository.ReportesRepositorio
 import mx.sipinna.rieti.repository.Resultado
@@ -29,15 +29,12 @@ data class UbicacionCapturada(val latitud: Double, val longitud: Double, val pre
 }
 
 /**
- * Sugerencia del servidor para el punto actual del mapa.
+ * ViewModel del asistente de reporte anónimo (CU-04; Fases 2 y 5).
  *
- * @property id cambia con cada sugerencia nueva (para que la pantalla la aplique una sola vez)
- * @property datos dirección sugerida y municipio donde cae el punto
- */
-data class SugerenciaGeo(val id: Long, val datos: GeoReversa)
-
-/**
- * ViewModel del formulario de reporte anónimo (CU-04, Fase 2).
+ * El estado del asistente ([asistente]) vive **solo en memoria**: sobrevive a la
+ * rotación de pantalla porque el ViewModel sobrevive, pero no se escribe en disco
+ * ni en el estado guardado de la Activity, así que desaparece con el proceso.
+ * No hay borradores.
  *
  * El punto del mapa (o del GPS, si la persona lo pide) es la ubicación **del
  * lugar de los hechos**; no se guarda en el teléfono (RNF-28). La dirección y
@@ -49,6 +46,11 @@ data class SugerenciaGeo(val id: Long, val datos: GeoReversa)
 class FormularioReporteViewModel(
     private val repositorio: ReportesRepositorio = ReportesRepositorio()
 ) : ViewModel() {
+
+    private val _asistente = MutableStateFlow(EstadoAsistente())
+
+    /** Paso visible, lo capturado y los errores del paso. */
+    val asistente: StateFlow<EstadoAsistente> = _asistente.asStateFlow()
 
     private val _envio = MutableStateFlow<UiState<ReporteCreado>>(UiState.Inactivo)
 
@@ -70,10 +72,10 @@ class FormularioReporteViewModel(
     /** Punto del lugar de los hechos, o null si no se ha marcado. */
     val ubicacion: StateFlow<UbicacionCapturada?> = _ubicacion.asStateFlow()
 
-    private val _sugerencia = MutableStateFlow<SugerenciaGeo?>(null)
+    private val _municipioPropuesto = MutableStateFlow<MunicipioSugerido?>(null)
 
-    /** Última dirección y municipio sugeridos para el punto. */
-    val sugerencia: StateFlow<SugerenciaGeo?> = _sugerencia.asStateFlow()
+    /** Municipio donde cae el punto del mapa cuando no coincide con el elegido (se ofrece cambiarlo). */
+    val municipioPropuesto: StateFlow<MunicipioSugerido?> = _municipioPropuesto.asStateFlow()
 
     private val _buscandoDireccion = MutableStateFlow(false)
 
@@ -86,7 +88,6 @@ class FormularioReporteViewModel(
     val avisoGeo: StateFlow<String?> = _avisoGeo.asStateFlow()
 
     private var consultaGeo: Job? = null
-    private var siguienteSugerencia = 1L
 
     /** Descarga el catálogo de municipios si aún no se tiene. */
     fun cargarMunicipios() {
@@ -102,6 +103,45 @@ class FormularioReporteViewModel(
             if (r is Resultado.Exito && r.datos.isNotEmpty()) _actividades.value = r.datos.map { it.nombre }
         }
     }
+
+    // ---------- Asistente ----------
+
+    /**
+     * Cambia lo capturado y quita el error de los campos indicados.
+     *
+     * @param campos campos que la persona acaba de corregir
+     * @param cambio transformación de los datos
+     */
+    fun actualizar(vararg campos: CampoReporte, cambio: (DatosFormulario) -> DatosFormulario) {
+        _asistente.update { AsistenteReporte.limpiarError(it.copy(datos = cambio(it.datos)), *campos) }
+    }
+
+    /** Elige el municipio (y descarta la propuesta del mapa). */
+    fun elegirMunicipio(m: Municipio?) {
+        _municipioPropuesto.value = null
+        actualizar(CampoReporte.MUNICIPIO) { it.copy(municipio = m) }
+    }
+
+    /** Acepta el municipio donde cae el punto del mapa. */
+    fun aceptarMunicipioPropuesto() {
+        val propuesto = _municipioPropuesto.value ?: return
+        elegirMunicipio((_municipios.value as? UiState.Exito)?.datos?.find { it.id == propuesto.id })
+    }
+
+    /** Valida el paso actual y, si todo está bien, pasa al siguiente. */
+    fun avanzar() = _asistente.update { AsistenteReporte.avanzar(it, _actividades.value) }
+
+    /** Regresa un paso; devuelve false si ya estaba en el primero (la pantalla decide si sale). */
+    fun retroceder(): Boolean {
+        val anterior = AsistenteReporte.retroceder(_asistente.value) ?: return false
+        _asistente.value = anterior
+        return true
+    }
+
+    /** "Editar" desde la revisión: vuelve a un paso ya visitado. */
+    fun irA(paso: PasoReporte) = _asistente.update { AsistenteReporte.irA(it, paso) }
+
+    // ---------- Mapa ----------
 
     /** Llamada por [mx.sipinna.rieti.model.GestorUbicacion] cuando el GPS entrega una lectura. */
     fun actualizarUbicacionCapturada(lat: Double, lng: Double, precisionMetros: Float? = null) {
@@ -127,7 +167,7 @@ class FormularioReporteViewModel(
         consultaGeo = viewModelScope.launch {
             when (val r = repositorio.reversa(lat, lng)) {
                 is Resultado.Exito -> {
-                    _sugerencia.value = SugerenciaGeo(siguienteSugerencia++, r.datos)
+                    aplicarSugerencia(r.datos)
                     if (!r.datos.direccionDisponible) _avisoGeo.value = "No pudimos obtener la dirección. Escríbela a mano."
                 }
                 is Resultado.Error -> _avisoGeo.value = r.mensaje
@@ -136,68 +176,62 @@ class FormularioReporteViewModel(
         }
     }
 
+    /** Rellena solo lo que la persona no escribió a mano y propone el municipio del punto. */
+    private fun aplicarSugerencia(s: GeoReversa) {
+        val lista = (_municipios.value as? UiState.Exito)?.datos.orEmpty()
+        val sugerido = s.municipioSugerido
+        _asistente.update { e ->
+            val d = e.datos
+            val direccion = ValidadorReporte.aplicarSugerencia(
+                d.direccion, d.editados, s.direccion.calle, s.direccion.numeroExterior, s.direccion.colonia, s.direccion.codigoPostal
+            )
+            val municipio = if (d.municipio == null && sugerido != null) lista.find { it.id == sugerido.id } else d.municipio
+            val corregidos = listOfNotNull(
+                CampoReporte.CALLE.takeIf { direccion.calle.isNotBlank() },
+                CampoReporte.COLONIA.takeIf { direccion.colonia.isNotBlank() },
+                CampoReporte.CODIGO_POSTAL.takeIf { direccion.codigoPostal.isNotBlank() },
+                CampoReporte.MUNICIPIO.takeIf { municipio != null }
+            )
+            AsistenteReporte.limpiarError(e.copy(datos = d.copy(direccion = direccion, municipio = municipio)), *corregidos.toTypedArray())
+        }
+        val elegido = _asistente.value.datos.municipio
+        _municipioPropuesto.value = sugerido?.takeIf { elegido != null && it.id != elegido.id }
+    }
+
+    // ---------- Envío ----------
+
     /**
-     * Valida y envía el reporte con el formato de la Fase 2.
+     * Valida todo y envía el reporte con el formato de la Fase 2 (el mismo cuerpo
+     * que el formulario de una sola pantalla; ver [AsistenteReporte.solicitud]).
      *
-     * @param municipio municipio elegido (obligatorio en la app)
-     * @param direccion campos de la dirección
-     * @param conteos menores por rango de edad
      * @param avisoVersion versión del aviso de privacidad que la persona aceptó
-     * @param vincularCuenta true solo si la persona activó el interruptor (Fase 4; desactivado por defecto)
+     * @param haySesion true si hay sesión de ciudadano (sin ella, el interruptor no cuenta)
      */
-    fun enviar(
-        municipio: Municipio?,
-        direccion: DatosDireccion,
-        conteos: Map<String, Int>,
-        actividad: String,
-        actividadOtro: String,
-        riesgo: String,
-        descripcion: String,
-        avisoVersion: String,
-        vincularCuenta: Boolean = false
-    ) {
+    fun enviar(avisoVersion: String, haySesion: Boolean) {
         if (_envio.value is UiState.Cargando) return
-        val problemas = ValidadorReporte.validar(
-            municipio, direccion, conteos, actividad, actividadOtro, _actividades.value, riesgo, descripcion
-        )
-        if (problemas.isNotEmpty()) {
-            _envio.value = UiState.Error(problemas.joinToString("\n"))
+        val estado = _asistente.value
+        val pendiente = PasoReporte.entries.firstOrNull {
+            it != PasoReporte.REVISAR && AsistenteReporte.problemas(it, estado.datos, _actividades.value).isNotEmpty()
+        }
+        if (pendiente != null) {
+            // No debería pasar (cada paso se valida al avanzar); si pasa, se lleva a la persona al paso con el problema.
+            _asistente.value = AsistenteReporte.avanzar(estado.copy(paso = pendiente), _actividades.value)
             return
         }
+        val vincular = haySesion && estado.datos.vincular
         _envio.value = UiState.Cargando
         val punto = _ubicacion.value
         viewModelScope.launch {
-            val token = if (vincularCuenta) SesionCiudadanoRepositorio.tokenVigente() else null
-            if (vincularCuenta && token == null) {
+            val token = if (vincular) SesionCiudadanoRepositorio.tokenVigente() else null
+            if (vincular && token == null) {
                 _envio.value = UiState.Error("Tu sesión venció. Vuelve a iniciar sesión o envía el reporte sin vincular.")
                 return@launch
             }
-            _envio.value = repositorio.crear(
-                CrearReporteRequest(
-                    municipioId = municipio?.id,
-                    direccion = DireccionReporte(
-                        calle = direccion.calle.trim(),
-                        numeroExterior = direccion.numero.trim().ifEmpty { null },
-                        colonia = direccion.colonia.trim(),
-                        codigoPostal = direccion.codigoPostal.trim(),
-                        referencias = direccion.referencias.trim().ifEmpty { null }
-                    ),
-                    latitud = punto?.latitud,
-                    longitud = punto?.longitud,
-                    grupos = ValidadorReporte.gruposParaEnviar(conteos),
-                    actividad = actividad,
-                    actividadOtro = actividadOtro.trim().takeIf { actividad == ValidadorReporte.ACTIVIDAD_OTRO && it.isNotEmpty() },
-                    situacionRiesgo = riesgo,
-                    descripcion = descripcion.trim(),
-                    avisoPrivacidadVersion = avisoVersion,
-                    vincularCuenta = if (vincularCuenta) true else null
-                ),
-                token
-            ).aUiState()
+            _envio.value = repositorio.crear(AsistenteReporte.solicitud(estado.datos, avisoVersion, punto, vincular), token).aUiState()
         }
     }
 
-    /** Regresa al estado inicial (tras navegar a la confirmación). */
+    /** Regresa al estado inicial del envío (tras navegar a la confirmación). */
     fun reiniciarEnvio() {
         _envio.value = UiState.Inactivo
     }
