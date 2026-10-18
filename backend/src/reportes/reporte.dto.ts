@@ -6,6 +6,9 @@ import {
 import { AVISO_PRIVACIDAD_VERSION } from '../avisos/aviso-privacidad';
 import { ESTATUS_ORDENADOS } from './estatus';
 
+/** Respuestas del catálogo `riesgo`, en su orden. */
+export const RIESGOS = ['Sí', 'No', 'No sé'] as const;
+
 /** Quita espacios al inicio y al final de los textos recibidos. */
 const recortar = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
@@ -259,6 +262,17 @@ export class FiltrosBandejaDto {
   @Max(365)
   sinAtenderDias?: number;
 
+  /** Filtra por riesgo percibido (Fase 5: "Sí" para los casos de riesgo alto). */
+  @IsOptional()
+  @IsIn(RIESGOS)
+  riesgo?: string;
+
+  /** Solo casos pendientes de atender (Recibido o En revisión), sin importar su antigüedad (Fase 5). */
+  @IsOptional()
+  @Transform(({ value }) => (value === 'true' || value === true ? true : value === 'false' || value === false ? false : value))
+  @IsBoolean()
+  pendientes?: boolean;
+
   /** Orden por fecha de creación. */
   @IsOptional()
   @IsIn(['recientes', 'antiguos'])
@@ -324,12 +338,20 @@ export interface PaginaDto<T> {
 
 /** Evento de la bitácora de seguimiento, visible solo para el personal. */
 export interface EventoSeguimientoDto {
+  /**
+   * Clase del evento (Fase 5): `registro` (alta automática), `cambio` (cambio de
+   * estatus, con su comentario si lo hubo) o `nota` (nota interna sin cambio de estatus).
+   */
+  tipo: TipoEventoSeguimiento;
   estatus: string;
   comentario: string | null;
   /** Correo de quien registró el evento; null para el registro automático inicial. */
   autor: string | null;
   fecha: string;
 }
+
+/** Clase de un evento de la bitácora. */
+export type TipoEventoSeguimiento = 'registro' | 'cambio' | 'nota';
 
 /** Detalle de un reporte para el personal (`GET /api/v1/reportes/:id`). */
 export interface ReporteDetalleDto extends ReporteResumenDto {
@@ -347,6 +369,8 @@ export interface ReporteDetalleDto extends ReporteResumenDto {
   historial: EventoSeguimientoDto[];
   /** Estatus a los que se puede cambiar desde el actual (máquina de estados). */
   transicionesPermitidas: string[];
+  /** Fecha en que el caso entró a su estatus vigente (ISO-8601; Fase 5). Las notas no la cambian. */
+  fechaEstatusActual: string;
 }
 
 /** Cuerpo de `PATCH /api/v1/reportes/:id/estatus`. */

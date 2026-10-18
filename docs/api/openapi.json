@@ -616,6 +616,27 @@
             }
           },
           {
+            "name": "riesgo",
+            "in": "query",
+            "description": "Riesgo percibido (\"Sí\" = riesgo alto). Fase 5.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sí",
+                "No",
+                "No sé"
+              ]
+            }
+          },
+          {
+            "name": "pendientes",
+            "in": "query",
+            "description": "true: solo casos pendientes de atender (Recibido o En revisión). Fase 5.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "orden",
             "in": "query",
             "schema": {
@@ -1696,6 +1717,27 @@
             }
           },
           {
+            "name": "riesgo",
+            "in": "query",
+            "description": "Riesgo percibido (\"Sí\" = riesgo alto). Fase 5.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sí",
+                "No",
+                "No sé"
+              ]
+            }
+          },
+          {
+            "name": "pendientes",
+            "in": "query",
+            "description": "true: solo casos pendientes de atender (Recibido o En revisión). Fase 5.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "orden",
             "in": "query",
             "schema": {
@@ -2486,7 +2528,8 @@
           "porEstatus",
           "porMes",
           "sinMunicipio",
-          "total"
+          "total",
+          "riesgoAltoPendientes"
         ],
         "properties": {
           "total": {
@@ -2548,6 +2591,10 @@
           "pendientes": {
             "type": "integer",
             "description": "Casos en Recibido o En revisión."
+          },
+          "riesgoAltoPendientes": {
+            "type": "integer",
+            "description": "Pendientes (Recibido o En revisión) en los que quien reportó percibió riesgo (\"Sí\"). Fase 5."
           }
         },
         "additionalProperties": false
@@ -3013,12 +3060,22 @@
       "EventoSeguimiento": {
         "type": "object",
         "required": [
+          "tipo",
           "estatus",
           "comentario",
           "autor",
           "fecha"
         ],
         "properties": {
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "registro",
+              "cambio",
+              "nota"
+            ],
+            "description": "registro = alta automática; cambio = cambio de estatus (con su comentario, si lo hubo); nota = nota interna sin cambio de estatus (Fase 5)."
+          },
           "estatus": {
             "type": "string",
             "enum": [
@@ -3062,7 +3119,8 @@
               "transicionesPermitidas",
               "grupos",
               "actividadOtro",
-              "direccion"
+              "direccion",
+              "fechaEstatusActual"
             ],
             "properties": {
               "latitud": {
@@ -3117,6 +3175,11 @@
                   }
                 ],
                 "nullable": true
+              },
+              "fechaEstatusActual": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Fecha en que el caso entró a su estatus vigente (las notas no la cambian; Fase 5)."
               }
             }
           }
@@ -3442,7 +3505,9 @@
         "type": "object",
         "required": [
           "umbral",
-          "porEstatus"
+          "porEstatus",
+          "hastaPrimeraRevision",
+          "hastaConclusion"
         ],
         "additionalProperties": false,
         "properties": {
@@ -3471,6 +3536,22 @@
                 }
               }
             }
+          },
+          "hastaPrimeraRevision": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TiempoHito"
+              }
+            ],
+            "description": "Del alta al primer cambio de estatus (Fase 5)."
+          },
+          "hastaConclusion": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TiempoHito"
+              }
+            ],
+            "description": "Del alta a la primera vez que el caso llegó a Concluido (Fase 5)."
           }
         }
       },
@@ -3767,6 +3848,36 @@
                 }
               }
             }
+          }
+        }
+      },
+      "TiempoHito": {
+        "type": "object",
+        "required": [
+          "horasPromedio",
+          "horasMediana",
+          "casos",
+          "minimoCasos"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "horasPromedio": {
+            "type": "number",
+            "nullable": true,
+            "description": "Promedio en horas; null si hay menos de minimoCasos (datos insuficientes)."
+          },
+          "horasMediana": {
+            "type": "number",
+            "nullable": true,
+            "description": "Mediana en horas; null en el mismo caso."
+          },
+          "casos": {
+            "type": "integer",
+            "description": "Casos que ya alcanzaron el hito."
+          },
+          "minimoCasos": {
+            "type": "integer",
+            "description": "Casos necesarios para publicar el promedio."
           }
         }
       }
