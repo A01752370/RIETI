@@ -208,6 +208,9 @@ export class TerritorioController {
     const columnas = ['clave_inegi', 'municipio', 'celda_lat', 'celda_lng', 'trimestre', 'reportes', 'prioridad_alta', 'verificados',
       'casos_confirmados', 'nna_canalizados', 'actividad_frecuente', 'franja_frecuente'];
     await registrarAcceso(this.ds, alcance.idUsuario, 'exportar', null, `base regional: ${filas.length} celda(s)`);
-    return [columnas.join(','), ...filas.map((x) => columnas.map((c) => celdaCsv(x[c] as string | number | null)).join(','))].join('\r\n') + '\r\n';
+    // PostgreSQL devuelve `numeric` como texto: las coordenadas se convierten a número.
+    const numericas = new Set(['celda_lat', 'celda_lng']);
+    const valor = (x: Record<string, string | number | null>, c: string) => (numericas.has(c) && x[c] !== null ? Number(x[c]) : x[c]);
+    return [columnas.join(','), ...filas.map((x) => columnas.map((c) => celdaCsv(valor(x, c))).join(','))].join('\r\n') + '\r\n';
   }
 }

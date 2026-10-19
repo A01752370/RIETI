@@ -157,6 +157,8 @@ export function celdasDeCalor(puntos: { lat: number; lng: number }[], umbral: nu
  */
 export function celdaCsv(valor: string | number | null | undefined): string {
   if (valor === null || valor === undefined) return '';
+  // Un número (también negativo) no es una fórmula: se escribe tal cual.
+  if (typeof valor === 'number' && Number.isFinite(valor)) return String(valor);
   let t = String(valor);
   if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
   return /[",\n\r;]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
