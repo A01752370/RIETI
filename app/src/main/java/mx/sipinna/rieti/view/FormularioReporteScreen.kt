@@ -671,10 +671,17 @@ private fun SeccionFotos(viewModel: FormularioReporteViewModel) {
 private fun PasoRevisar(estado: EstadoAsistente, haySesion: Boolean, viewModel: FormularioReporteViewModel) {
     val punto by viewModel.ubicacion.collectAsState()
     val d = estado.datos
-    NotaCampo("Revisa que todo esté bien. Al enviar recibirás un folio y una clave para consultar el avance.")
+    NotaCampo(
+        if (viewModel.institucional) "Revisa que todo esté bien. El registro institucional queda a tu nombre y entra a la bandeja y a los indicadores."
+        else "Revisa que todo esté bien. Al enviar recibirás un folio y una clave para consultar el avance."
+    )
 
     BloqueRevision("Cómo reportar", alEditar = { viewModel.irA(PasoReporte.COMO) }) {
-        Dato("Modo", if (d.vincular && haySesion) "Con seguimiento (vinculado a tu cuenta)" else "Anónimo")
+        Dato("Modo", when {
+            viewModel.institucional -> "Registro institucional (detección en recorrido)"
+            d.vincular && haySesion -> "Con seguimiento (vinculado a tu cuenta)"
+            else -> "Anónimo"
+        })
     }
     BloqueRevision("Dónde", alEditar = { viewModel.irA(PasoReporte.DONDE) }) {
         Dato("Municipio", d.municipio?.nombre ?: "—")
@@ -700,7 +707,7 @@ private fun PasoRevisar(estado: EstadoAsistente, haySesion: Boolean, viewModel: 
         Dato("¿Riesgo percibido?", d.riesgo)
         Dato("Descripción", d.descripcion.trim())
         val fotos by viewModel.fotos.collectAsState()
-        Dato("Fotos", if (fotos.isEmpty()) "Sin fotos" else "${fotos.size} (se adjuntan al enviar)")
+        if (!viewModel.institucional) Dato("Fotos", if (fotos.isEmpty()) "Sin fotos" else "${fotos.size} (se adjuntan al enviar)")
     }
 
 }
