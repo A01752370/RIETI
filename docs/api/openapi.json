@@ -355,6 +355,85 @@
                 "Normal"
               ]
             }
+          },
+          {
+            "name": "rangoEdad",
+            "in": "query",
+            "description": "Rango de edad (Fase 9).",
+            "schema": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "riesgo",
+            "in": "query",
+            "description": "Riesgo percibido (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sí",
+                "No",
+                "No sé"
+              ]
+            }
+          },
+          {
+            "name": "franja",
+            "in": "query",
+            "description": "Franja horaria del registro: madrugada 0–5, mañana 6–11, tarde 12–17, noche 18–23 (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "madrugada",
+                "mañana",
+                "tarde",
+                "noche"
+              ]
+            }
+          },
+          {
+            "name": "dependenciaId",
+            "in": "query",
+            "description": "Dependencia de canalización (Fase 9).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "verificacion",
+            "in": "query",
+            "description": "Verificación del expediente (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sin verificar",
+                "Verificado",
+                "Caso confirmado",
+                "No procede"
+              ]
+            }
+          },
+          {
+            "name": "reincidente",
+            "in": "query",
+            "description": "Solo reportes en puntos recurrentes (Fase 9).",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "origen",
+            "in": "query",
+            "description": "ciudadano o institucional (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ciudadano",
+                "institucional"
+              ]
+            }
           }
         ],
         "responses": {
@@ -694,6 +773,18 @@
                 "Verificado",
                 "Caso confirmado",
                 "No procede"
+              ]
+            }
+          },
+          {
+            "name": "origen",
+            "in": "query",
+            "description": "ciudadano o institucional (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ciudadano",
+                "institucional"
               ]
             }
           }
@@ -1356,6 +1447,85 @@
                 "Normal"
               ]
             }
+          },
+          {
+            "name": "rangoEdad",
+            "in": "query",
+            "description": "Rango de edad (Fase 9).",
+            "schema": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "riesgo",
+            "in": "query",
+            "description": "Riesgo percibido (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sí",
+                "No",
+                "No sé"
+              ]
+            }
+          },
+          {
+            "name": "franja",
+            "in": "query",
+            "description": "Franja horaria del registro: madrugada 0–5, mañana 6–11, tarde 12–17, noche 18–23 (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "madrugada",
+                "mañana",
+                "tarde",
+                "noche"
+              ]
+            }
+          },
+          {
+            "name": "dependenciaId",
+            "in": "query",
+            "description": "Dependencia de canalización (Fase 9).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "verificacion",
+            "in": "query",
+            "description": "Verificación del expediente (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sin verificar",
+                "Verificado",
+                "Caso confirmado",
+                "No procede"
+              ]
+            }
+          },
+          {
+            "name": "reincidente",
+            "in": "query",
+            "description": "Solo reportes en puntos recurrentes (Fase 9).",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "origen",
+            "in": "query",
+            "description": "ciudadano o institucional (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ciudadano",
+                "institucional"
+              ]
+            }
           }
         ],
         "responses": {
@@ -1463,6 +1633,85 @@
                 "Alta",
                 "Media",
                 "Normal"
+              ]
+            }
+          },
+          {
+            "name": "rangoEdad",
+            "in": "query",
+            "description": "Rango de edad (Fase 9).",
+            "schema": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "riesgo",
+            "in": "query",
+            "description": "Riesgo percibido (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sí",
+                "No",
+                "No sé"
+              ]
+            }
+          },
+          {
+            "name": "franja",
+            "in": "query",
+            "description": "Franja horaria del registro: madrugada 0–5, mañana 6–11, tarde 12–17, noche 18–23 (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "madrugada",
+                "mañana",
+                "tarde",
+                "noche"
+              ]
+            }
+          },
+          {
+            "name": "dependenciaId",
+            "in": "query",
+            "description": "Dependencia de canalización (Fase 9).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "verificacion",
+            "in": "query",
+            "description": "Verificación del expediente (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sin verificar",
+                "Verificado",
+                "Caso confirmado",
+                "No procede"
+              ]
+            }
+          },
+          {
+            "name": "reincidente",
+            "in": "query",
+            "description": "Solo reportes en puntos recurrentes (Fase 9).",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "origen",
+            "in": "query",
+            "description": "ciudadano o institucional (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ciudadano",
+                "institucional"
               ]
             }
           }
@@ -1584,6 +1833,85 @@
                 "Normal"
               ]
             }
+          },
+          {
+            "name": "rangoEdad",
+            "in": "query",
+            "description": "Rango de edad (Fase 9).",
+            "schema": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "riesgo",
+            "in": "query",
+            "description": "Riesgo percibido (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sí",
+                "No",
+                "No sé"
+              ]
+            }
+          },
+          {
+            "name": "franja",
+            "in": "query",
+            "description": "Franja horaria del registro: madrugada 0–5, mañana 6–11, tarde 12–17, noche 18–23 (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "madrugada",
+                "mañana",
+                "tarde",
+                "noche"
+              ]
+            }
+          },
+          {
+            "name": "dependenciaId",
+            "in": "query",
+            "description": "Dependencia de canalización (Fase 9).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "verificacion",
+            "in": "query",
+            "description": "Verificación del expediente (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sin verificar",
+                "Verificado",
+                "Caso confirmado",
+                "No procede"
+              ]
+            }
+          },
+          {
+            "name": "reincidente",
+            "in": "query",
+            "description": "Solo reportes en puntos recurrentes (Fase 9).",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "origen",
+            "in": "query",
+            "description": "ciudadano o institucional (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ciudadano",
+                "institucional"
+              ]
+            }
           }
         ],
         "responses": {
@@ -1691,6 +2019,85 @@
                 "Alta",
                 "Media",
                 "Normal"
+              ]
+            }
+          },
+          {
+            "name": "rangoEdad",
+            "in": "query",
+            "description": "Rango de edad (Fase 9).",
+            "schema": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "riesgo",
+            "in": "query",
+            "description": "Riesgo percibido (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sí",
+                "No",
+                "No sé"
+              ]
+            }
+          },
+          {
+            "name": "franja",
+            "in": "query",
+            "description": "Franja horaria del registro: madrugada 0–5, mañana 6–11, tarde 12–17, noche 18–23 (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "madrugada",
+                "mañana",
+                "tarde",
+                "noche"
+              ]
+            }
+          },
+          {
+            "name": "dependenciaId",
+            "in": "query",
+            "description": "Dependencia de canalización (Fase 9).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "verificacion",
+            "in": "query",
+            "description": "Verificación del expediente (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sin verificar",
+                "Verificado",
+                "Caso confirmado",
+                "No procede"
+              ]
+            }
+          },
+          {
+            "name": "reincidente",
+            "in": "query",
+            "description": "Solo reportes en puntos recurrentes (Fase 9).",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "origen",
+            "in": "query",
+            "description": "ciudadano o institucional (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ciudadano",
+                "institucional"
               ]
             }
           }
@@ -1883,6 +2290,18 @@
                 "Verificado",
                 "Caso confirmado",
                 "No procede"
+              ]
+            }
+          },
+          {
+            "name": "origen",
+            "in": "query",
+            "description": "ciudadano o institucional (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ciudadano",
+                "institucional"
               ]
             }
           }
@@ -3074,6 +3493,85 @@
                 "Normal"
               ]
             }
+          },
+          {
+            "name": "rangoEdad",
+            "in": "query",
+            "description": "Rango de edad (Fase 9).",
+            "schema": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "riesgo",
+            "in": "query",
+            "description": "Riesgo percibido (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sí",
+                "No",
+                "No sé"
+              ]
+            }
+          },
+          {
+            "name": "franja",
+            "in": "query",
+            "description": "Franja horaria del registro: madrugada 0–5, mañana 6–11, tarde 12–17, noche 18–23 (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "madrugada",
+                "mañana",
+                "tarde",
+                "noche"
+              ]
+            }
+          },
+          {
+            "name": "dependenciaId",
+            "in": "query",
+            "description": "Dependencia de canalización (Fase 9).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "verificacion",
+            "in": "query",
+            "description": "Verificación del expediente (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sin verificar",
+                "Verificado",
+                "Caso confirmado",
+                "No procede"
+              ]
+            }
+          },
+          {
+            "name": "reincidente",
+            "in": "query",
+            "description": "Solo reportes en puntos recurrentes (Fase 9).",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "origen",
+            "in": "query",
+            "description": "ciudadano o institucional (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ciudadano",
+                "institucional"
+              ]
+            }
           }
         ],
         "responses": {
@@ -4181,6 +4679,668 @@
           }
         }
       }
+    },
+    "/api/v1/estadisticas/territorio": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Mapa territorial por niveles: región (polígonos), colonia o punto, con los filtros comunes y el alcance por municipio (estadisticas.ver; Fase 9).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "nivel",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "region",
+                "colonia",
+                "punto"
+              ]
+            }
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "municipioId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "estatus",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actividad",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          },
+          {
+            "name": "prioridad",
+            "in": "query",
+            "description": "Prioridad (Alta, Media, Normal; Fase 6).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Alta",
+                "Media",
+                "Normal"
+              ]
+            }
+          },
+          {
+            "name": "rangoEdad",
+            "in": "query",
+            "description": "Rango de edad (Fase 9).",
+            "schema": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "riesgo",
+            "in": "query",
+            "description": "Riesgo percibido (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sí",
+                "No",
+                "No sé"
+              ]
+            }
+          },
+          {
+            "name": "franja",
+            "in": "query",
+            "description": "Franja horaria del registro: madrugada 0–5, mañana 6–11, tarde 12–17, noche 18–23 (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "madrugada",
+                "mañana",
+                "tarde",
+                "noche"
+              ]
+            }
+          },
+          {
+            "name": "dependenciaId",
+            "in": "query",
+            "description": "Dependencia de canalización (Fase 9).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "verificacion",
+            "in": "query",
+            "description": "Verificación del expediente (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sin verificar",
+                "Verificado",
+                "Caso confirmado",
+                "No procede"
+              ]
+            }
+          },
+          {
+            "name": "reincidente",
+            "in": "query",
+            "description": "Solo reportes en puntos recurrentes (Fase 9).",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "origen",
+            "in": "query",
+            "description": "ciudadano o institucional (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ciudadano",
+                "institucional"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Territorio"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDACION o VALOR_NO_VALIDO (colonia y punto requieren municipio)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "NO_AUTENTICADO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "PROHIBIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/estadisticas/hallazgos": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Hallazgos automáticos redactados con los datos reales, solo con datos suficientes (estadisticas.ver; Fase 9).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meses",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12,
+              "default": 3
+            }
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "municipioId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "estatus",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actividad",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          },
+          {
+            "name": "prioridad",
+            "in": "query",
+            "description": "Prioridad (Alta, Media, Normal; Fase 6).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Alta",
+                "Media",
+                "Normal"
+              ]
+            }
+          },
+          {
+            "name": "rangoEdad",
+            "in": "query",
+            "description": "Rango de edad (Fase 9).",
+            "schema": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "riesgo",
+            "in": "query",
+            "description": "Riesgo percibido (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sí",
+                "No",
+                "No sé"
+              ]
+            }
+          },
+          {
+            "name": "franja",
+            "in": "query",
+            "description": "Franja horaria del registro: madrugada 0–5, mañana 6–11, tarde 12–17, noche 18–23 (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "madrugada",
+                "mañana",
+                "tarde",
+                "noche"
+              ]
+            }
+          },
+          {
+            "name": "dependenciaId",
+            "in": "query",
+            "description": "Dependencia de canalización (Fase 9).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "verificacion",
+            "in": "query",
+            "description": "Verificación del expediente (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sin verificar",
+                "Verificado",
+                "Caso confirmado",
+                "No procede"
+              ]
+            }
+          },
+          {
+            "name": "reincidente",
+            "in": "query",
+            "description": "Solo reportes en puntos recurrentes (Fase 9).",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "origen",
+            "in": "query",
+            "description": "ciudadano o institucional (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ciudadano",
+                "institucional"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Hallazgos"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDACION",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "NO_AUTENTICADO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "PROHIBIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/estadisticas/base-regional.csv": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Base regional anonimizada (CSV): celdas de ≈ 110 m por municipio y trimestre, solo conteos, celdas pequeñas omitidas; 5/min (base.exportar; Fase 9).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "desde",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "municipioId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "estatus",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actividad",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          },
+          {
+            "name": "prioridad",
+            "in": "query",
+            "description": "Prioridad (Alta, Media, Normal; Fase 6).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Alta",
+                "Media",
+                "Normal"
+              ]
+            }
+          },
+          {
+            "name": "rangoEdad",
+            "in": "query",
+            "description": "Rango de edad (Fase 9).",
+            "schema": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "riesgo",
+            "in": "query",
+            "description": "Riesgo percibido (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sí",
+                "No",
+                "No sé"
+              ]
+            }
+          },
+          {
+            "name": "franja",
+            "in": "query",
+            "description": "Franja horaria del registro: madrugada 0–5, mañana 6–11, tarde 12–17, noche 18–23 (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "madrugada",
+                "mañana",
+                "tarde",
+                "noche"
+              ]
+            }
+          },
+          {
+            "name": "dependenciaId",
+            "in": "query",
+            "description": "Dependencia de canalización (Fase 9).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "verificacion",
+            "in": "query",
+            "description": "Verificación del expediente (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sin verificar",
+                "Verificado",
+                "Caso confirmado",
+                "No procede"
+              ]
+            }
+          },
+          {
+            "name": "reincidente",
+            "in": "query",
+            "description": "Solo reportes en puntos recurrentes (Fase 9).",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "origen",
+            "in": "query",
+            "description": "ciudadano o institucional (Fase 9).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ciudadano",
+                "institucional"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "NO_AUTENTICADO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "PROHIBIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "DEMASIADOS_INTENTOS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reportes/institucional": {
+      "post": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Registro institucional (detección en recorridos) en sus municipios: mismo formulario, origen institucional, sin clave; 20/min (reportes.registrar; Fase 9).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearReporte"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReporteInstitucional"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDACION o VALOR_NO_VALIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "NO_AUTENTICADO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "PROHIBIDO o FUERA_DE_ALCANCE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "DEMASIADOS_INTENTOS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4451,7 +5611,9 @@
                     "alertas.gestionar",
                     "personal.administrar",
                     "configuracion.editar",
-                    "accesos.ver"
+                    "accesos.ver",
+                    "reportes.registrar",
+                    "base.exportar"
                   ]
                 },
                 "descripcion": {
@@ -4889,7 +6051,8 @@
           "peligroInmediato",
           "verificacion",
           "esDuplicado",
-          "seguimientoVencido"
+          "seguimientoVencido",
+          "origen"
         ],
         "properties": {
           "id": {
@@ -4974,6 +6137,13 @@
           },
           "seguimientoVencido": {
             "type": "boolean"
+          },
+          "origen": {
+            "type": "string",
+            "enum": [
+              "ciudadano",
+              "institucional"
+            ]
           }
         },
         "additionalProperties": false
@@ -5530,6 +6700,27 @@
               "$ref": "#/components/schemas/ConteoProtegido"
             },
             "description": "Menores por grupo de edad."
+          },
+          "porSexo": {
+            "type": "array",
+            "description": "Niñas y niños capturados por el personal, solo agregado con umbral (Fase 9)",
+            "items": {
+              "$ref": "#/components/schemas/ConteoProtegido"
+            }
+          },
+          "porFranja": {
+            "type": "array",
+            "description": "Por franja horaria de registro (Fase 9)",
+            "items": {
+              "$ref": "#/components/schemas/ConteoProtegido"
+            }
+          },
+          "porDependencia": {
+            "type": "array",
+            "description": "Por dependencia de canalización (Fase 9)",
+            "items": {
+              "$ref": "#/components/schemas/ConteoProtegido"
+            }
           }
         }
       },
@@ -6706,6 +7897,197 @@
             "type": "integer"
           },
           "fecha": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Territorio": {
+        "type": "object",
+        "required": [
+          "nivel",
+          "umbral"
+        ],
+        "properties": {
+          "nivel": {
+            "type": "string",
+            "enum": [
+              "region",
+              "colonia",
+              "punto"
+            ]
+          },
+          "umbral": {
+            "type": "integer"
+          },
+          "municipios": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "clave",
+                "nombre",
+                "total",
+                "geometria"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "clave": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "nombre": {
+                  "type": "string"
+                },
+                "total": {
+                  "type": "integer",
+                  "nullable": true,
+                  "description": "null si es menor que el umbral"
+                },
+                "geometria": {
+                  "type": "object",
+                  "description": "Polígono simplificado (GeoJSON)"
+                }
+              }
+            }
+          },
+          "colonias": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "colonia",
+                "total",
+                "lat",
+                "lng"
+              ],
+              "properties": {
+                "colonia": {
+                  "type": "string"
+                },
+                "total": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "lat": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "lng": {
+                  "type": "number",
+                  "nullable": true
+                }
+              }
+            }
+          },
+          "sinColonia": {
+            "type": "integer",
+            "nullable": true
+          },
+          "puntos": {
+            "type": "array",
+            "description": "Solo personal con alcance; sin texto; 4 decimales; máximo 1000",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "lat",
+                "lng",
+                "prioridad",
+                "estatus"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "lat": {
+                  "type": "number"
+                },
+                "lng": {
+                  "type": "number"
+                },
+                "prioridad": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "estatus": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "sinUbicacion": {
+            "type": "integer"
+          }
+        }
+      },
+      "Hallazgos": {
+        "type": "object",
+        "required": [
+          "meses",
+          "minimo",
+          "hallazgos"
+        ],
+        "properties": {
+          "meses": {
+            "type": "integer"
+          },
+          "minimo": {
+            "type": "integer",
+            "description": "Reportes mínimos en una zona para redactar un hallazgo"
+          },
+          "hallazgos": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "texto",
+                "reportes",
+                "lat",
+                "lng"
+              ],
+              "properties": {
+                "texto": {
+                  "type": "string"
+                },
+                "reportes": {
+                  "type": "integer"
+                },
+                "lat": {
+                  "type": "number",
+                  "description": "Centro de la zona, no la coordenada de un reporte"
+                },
+                "lng": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ReporteInstitucional": {
+        "type": "object",
+        "required": [
+          "id",
+          "folio",
+          "estatus",
+          "fechaCreacion"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "folio": {
+            "type": "string"
+          },
+          "estatus": {
+            "type": "string"
+          },
+          "fechaCreacion": {
             "type": "string",
             "format": "date-time"
           }

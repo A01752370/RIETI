@@ -39,7 +39,7 @@ src/
 ├── health/                 /health y /health/ready
 ├── config/                 TypeORM y contraseña desde Secrets Manager
 ├── database/migrations/    Esquema versionado
-└── scripts/                borrar-reporte.ts y depurar-accesos.ts (tareas únicas de ECS)
+└── scripts/                borrar-reporte.ts, depurar-accesos.ts y limpiar-pruebas.ts (tareas únicas de ECS)
 ```
 
 ## Rutas
@@ -75,6 +75,12 @@ src/
 
 | POST | `/api/v1/reportes/fotos/solicitud`, `/fotos/confirmar` | Público con folio + clave, 10/min | Fotos opcionales (Fase 8, D-42) |
 | GET | `/api/v1/reportes/:id/fotos` | Personal (`reportes.ver`), 30/min | Fotos con URL prefirmada de 60 s (Fase 8) |
+| GET | `/api/v1/estadisticas/territorio?nivel=region\|colonia\|punto` | Personal (`estadisticas.ver`) | Mapa territorial por niveles (Fase 9, D-43) |
+| GET | `/api/v1/estadisticas/hallazgos` | Personal (`estadisticas.ver`) | Hallazgos automáticos (Fase 9, D-44) |
+| GET | `/api/v1/estadisticas/base-regional.csv` | Coordinación y administración (`base.exportar`), 5/min | Base regional anonimizada (Fase 9, D-45) |
+| POST | `/api/v1/reportes/institucional` | Personal (`reportes.registrar`), 20/min | Registro institucional (Fase 9, D-46) |
+
+Todas las estadísticas aceptan los filtros comunes de la Fase 9: `rangoEdad`, `riesgo`, `franja`, `dependenciaId`, `verificacion`, `reincidente` y `origen`, además de los anteriores.
 
 Todas las rutas del personal se limitan al **alcance territorial** de quien consulta (D-36): fuera de él, 404 uniforme.
 

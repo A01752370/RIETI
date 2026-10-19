@@ -1,5 +1,8 @@
 package mx.sipinna.rieti.view
 
+import mx.sipinna.rieti.repository.Resultado
+import mx.sipinna.rieti.repository.ReportesRepositorio
+import androidx.compose.runtime.produceState
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -147,6 +150,7 @@ private fun AppRieti() {
                 alAbrirPrioridadAlta = { nav.navigate(Rutas.bandeja(prioridadAlta = true)) },
                 alAbrirPendientes = { nav.navigate(Rutas.bandeja(pendientes = true)) },
                 alAbrirVencidos = { nav.navigate(Rutas.bandeja(vencidos = true)) },
+                alRegistrar = { nav.navigate(Rutas.FORMULARIO_INSTITUCIONAL) },
                 alCerrarSesion = { volverAlInicio(nav) },
                 alSesionExpirada = { irAlLogin(nav) }
             )
@@ -167,6 +171,25 @@ private fun AppRieti() {
                 alCerrarSesion = { volverAlInicio(nav) },
                 alSesionExpirada = { irAlLogin(nav) }
             )
+        }
+        composable(Rutas.FORMULARIO_INSTITUCIONAL) {
+            // El personal no ve el aviso: se usa la versión vigente para el registro.
+            val aviso by produceState<String?>(initialValue = null) {
+                value = (ReportesRepositorio().avisoPrivacidad() as? Resultado.Exito)?.datos?.version ?: ""
+            }
+            when (val v = aviso) {
+                null -> PantallaRieti(titulo = "Registro institucional", alRegresar = { nav.popBackStack() }) { Cargando() }
+                "" -> PantallaRieti(titulo = "Registro institucional", alRegresar = { nav.popBackStack() }) {
+                    MensajeError("No pudimos conectar con el servidor. Regresa e inténtalo de nuevo.")
+                }
+                else -> FormularioReporteScreen(
+                    avisoVersion = v,
+                    alEnviar = { _, _ -> },
+                    alRegresar = { nav.popBackStack() },
+                    institucional = true,
+                    alRegistrado = { id -> nav.navigate(Rutas.detalle(id)) { popUpTo(Rutas.INICIO_PERSONAL) } }
+                )
+            }
         }
         composable(
             route = Rutas.DETALLE,

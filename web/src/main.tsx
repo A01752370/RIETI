@@ -2,7 +2,7 @@ import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { coincide, useRuta } from './enrutador';
 import { AvisoPrivacidad, ComoFunciona, Inicio, NoEncontrada, RedDeMunicipios, Seguimiento } from './paginas/publicas';
-import { Reportar } from './paginas/Reportar';
+import { RegistroInstitucional, Reportar } from './paginas/Reportar';
 import { Bandeja, Detalle, Panel, Perfil } from './paginas/personal';
 import './estilos.css';
 
@@ -25,6 +25,7 @@ export function App() {
     case '/personal': return <Bandeja />;
     case '/personal/panel': return <Panel />;
     case '/personal/perfil': return <Perfil />;
+    case '/personal/registrar': return <RegistroInstitucional />;
     case '/personal/alertas': return <Suspense fallback={null}><Alertas /></Suspense>;
     case '/personal/administracion': return <Suspense fallback={null}><Administracion /></Suspense>;
     default: return <NoEncontrada />;

@@ -39,7 +39,9 @@ export type Permiso =
   | 'alertas.gestionar'
   | 'personal.administrar'
   | 'configuracion.editar'
-  | 'accesos.ver';
+  | 'accesos.ver'
+  | 'reportes.registrar'
+  | 'base.exportar';
 
 /**
  * Matriz de permisos (D-18): qué grupos de Cognito pueden ejecutar cada acción.
@@ -59,6 +61,8 @@ export const MATRIZ_PERMISOS: Readonly<Record<Permiso, readonly string[]>> = {
   'personal.administrar': ['Administrador'],
   'configuracion.editar': ['Administrador'],
   'accesos.ver': ['Administrador'],
+  'reportes.registrar': ['Administrador', 'CoordinadorRegional', 'PersonalSIPINNA'],
+  'base.exportar': ['Administrador', 'CoordinadorRegional'],
 };
 
 /** Descripción en español de cada permiso, para mostrarla en la web del personal. */
@@ -75,6 +79,8 @@ export const DESCRIPCION_PERMISO: Readonly<Record<Permiso, string>> = {
   'personal.administrar': 'Asignar municipios a cada persona del personal',
   'configuracion.editar': 'Editar los parámetros de duplicados, alertas y conservación',
   'accesos.ver': 'Consultar la bitácora de accesos a expedientes',
+  'reportes.registrar': 'Registrar reportes institucionales (detección en recorridos) en sus municipios',
+  'base.exportar': 'Descargar la base regional anonimizada (celdas de ≈ 110 m, solo conteos)',
 };
 
 /** Permisos que otorgan los grupos indicados. */

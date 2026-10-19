@@ -1,5 +1,5 @@
 import {
-  BadRequestException, HttpException, HttpStatus, Injectable, NotFoundException, UnprocessableEntityException,
+  BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable, NotFoundException, UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In } from 'typeorm';
@@ -16,7 +16,7 @@ import {
 } from './reporte.dto';
 import { generarClave, hashearClave, verificarClave } from './clave-consulta';
 import { ESTATUS, ESTATUS_CERRADOS, ESTATUS_INICIAL, ESTATUS_PENDIENTES, etiquetaEstatus, transicionesPermitidas, validarTransicion } from './estatus';
-import { Alcance, exigirAlcance, parametroAlcance, registrarAcceso } from '../auth/alcance';
+import { Alcance, exigirAlcance, parametroAlcance, puedeVer, registrarAcceso } from '../auth/alcance';
 import { configuracion } from '../config/configuracion';
 import { calcularPrioridad, categoriaCantidad, formatearFolio } from './clasificacion';
 import { LimitadorIntentos } from './limitador-intentos';
@@ -86,9 +86,11 @@ export class ReportesService {
    * @param idCuenta cuenta de ciudadano a la que se vincula (solo si la persona lo pidió), o null
    * @returns folio y clave de consulta (la clave en claro solo existe en esta respuesta)
    */
-  async crear(dto: CrearReporteDto, idCuenta: number | null = null): Promise<ReporteCreadoDto> {
-    const claveConsulta = generarClave();
-    const claveConsultaHash = await hashearClave(claveConsulta);
+  async crear(dto: CrearReporteDto, idCuenta: number | null = null, institucional: Alcance | null = null): Promise<ReporteCreadoDto & { id: number }> {
+    // Fase 9: el registro institucional (detección en recorridos) no lleva clave de consulta:
+    // no hay ciudadano que consulte; el seguimiento es del personal.
+    const claveConsulta = institucional ? '' : generarClave();
+    const claveConsultaHash = institucional ? null : await hashearClave(claveConsulta);
 
     // Formato nuevo (grupos + dirección) o anterior (APK instaladas); ver CrearReporteDto.
     const grupos = normalizarGrupos(dto);
@@ -102,7 +104,7 @@ export class ReportesService {
     const longitud = redondearCoordenada(dto.longitud);
     const descripcionUbicacion = dto.ubicacion ?? componerUbicacion(dto.direccion!);
 
-    const { codigo, fecha } = await this.ds.transaction(async (m) => {
+    const { codigo, fecha, id: idNuevo } = await this.ds.transaction(async (m) => {
       const [actividad, riesgo, estatus, ...rangos] = await Promise.all([
         this.catalogo(m, Actividad, dto.actividad, 'actividad'),
         this.catalogo(m, Riesgo, dto.situacionRiesgo, 'situacionRiesgo'),
@@ -111,6 +113,9 @@ export class ReportesService {
       ]) as [Actividad, Riesgo, EstatusReporte, ...RangoEdad[]];
       const rangoPorNombre = new Map(rangos.map((r) => [r.nombre, r]));
       const municipio = await this.municipioValido(m, dto.municipioId);
+      if (institucional && !puedeVer(institucional, municipio.id)) {
+        throw new ForbiddenException({ codigo: 'FUERA_DE_ALCANCE', mensaje: 'Solo puedes registrar reportes de tus municipios asignados' });
+      }
       if (latitud !== null && longitud !== null) await this.validarPuntoEnMunicipio(m, municipio, latitud, longitud);
       if (dto.direccion) await this.validarCodigoPostal(m, municipio, dto.direccion.codigoPostal);
 
@@ -137,8 +142,8 @@ export class ReportesService {
         peligroInmediato: dto.peligroInmediato ?? null,
         prioridad,
         cantidadCategoria,
-        canal: dto.canal ?? null,
-        origen: 'ciudadano',
+        canal: institucional ? 'institucional' : dto.canal ?? null,
+        origen: institucional ? 'institucional' : 'ciudadano',
       }));
       await m.save(grupos.map((g) => m.create(GrupoMenores, {
         idReporte: reporte.id, idRangoEdad: rangoPorNombre.get(g.rango)!.id, cantidad: g.cantidad,
@@ -151,7 +156,7 @@ export class ReportesService {
          ON CONFLICT (anio) DO UPDATE SET ultimo = folio_contador.ultimo + 1
          RETURNING ultimo`, [anio]);
       // Clave municipal solo para clientes que declaran su canal (los anteriores solo saben consultar el formato heredado).
-      const folio = formatearFolio(anio, ultimo, dto.canal ? municipio.claveFolio : null);
+      const folio = formatearFolio(anio, ultimo, dto.canal || institucional ? municipio.claveFolio : null);
       await m.save(m.create(Folio, { reporte, anio, consecutivo: ultimo, codigo: folio }));
 
       // Fase 7: alerta de punto recurrente (varios reportes cerca en poco tiempo).
@@ -159,11 +164,14 @@ export class ReportesService {
 
       const caso = await m.save(m.create(Caso, { estatus }));
       await m.save(m.create(ReporteCaso, { idReporte: reporte.id, idCaso: caso.id }));
-      await m.save(m.create(Seguimiento, { caso, estatus, comentario: null, usuario: null }));
-      return { codigo: folio, fecha: reporte.fechaCreacion };
+      await m.save(m.create(Seguimiento, {
+        caso, estatus, usuario: institucional ? ({ id: institucional.idUsuario } as Usuario) : null,
+        comentario: institucional ? 'Registro institucional (detección en recorrido)' : null,
+      }));
+      return { codigo: folio, fecha: reporte.fechaCreacion, id: reporte.id };
     });
 
-    return { folio: codigo, claveConsulta, estatus: ESTATUS_INICIAL, fechaCreacion: fecha.toISOString() };
+    return { folio: codigo, claveConsulta, estatus: ESTATUS_INICIAL, fechaCreacion: fecha.toISOString(), id: idNuevo };
   }
 
   /**
@@ -222,7 +230,7 @@ export class ReportesService {
   }
 
   /**
-   * FROM/WHERE parametrizado de la bandeja y la exportación ($1…$15; $12 es el alcance territorial). El orden de
+   * FROM/WHERE parametrizado de la bandeja y la exportación ($1…$16; $12 es el alcance territorial, $16 el origen). El orden de
    * los parámetros lo fija {@link parametrosBandeja}.
    */
   private static readonly DESDE_BANDEJA = `
@@ -246,13 +254,14 @@ export class ReportesService {
         AND ($12::int[] IS NULL OR r.id_municipio = ANY($12::int[]))
         AND ($13::boolean IS NOT TRUE OR (c.fecha_seguimiento < (now() AT TIME ZONE 'America/Mexico_City')::date
              AND e.nombre <> ALL($14::text[])))
-        AND ($15::text IS NULL OR c.verificacion = $15::text)`;
+        AND ($15::text IS NULL OR c.verificacion = $15::text)
+        AND ($16::text IS NULL OR r.origen = $16::text)`;
 
   private parametrosBandeja(f: FiltrosBandejaDto, alcance: Alcance): unknown[] {
     // El folio ya viene validado (solo letras, dígitos y guiones), así que LIKE no recibe comodines.
     return [f.estatus ?? null, f.municipioId ?? null, f.actividad ?? null, f.desde ?? null, f.hasta ?? null,
       f.folio ?? null, f.sinAtenderDias ?? null, f.riesgo ?? null, f.pendientes ?? null, f.prioridad ?? null, [...ESTATUS_PENDIENTES],
-      parametroAlcance(alcance), f.vencidos ?? null, [...ESTATUS_CERRADOS], f.verificacion ?? null];
+      parametroAlcance(alcance), f.vencidos ?? null, [...ESTATUS_CERRADOS], f.verificacion ?? null, f.origen ?? null];
   }
 
   /** CU-09: bandeja del personal con filtros, búsqueda por folio, orden y paginación. */
@@ -268,7 +277,7 @@ export class ReportesService {
       `SELECT DISTINCT r.id_reporte AS id, r.fecha_creacion,
               CASE r.prioridad WHEN 'Alta' THEN 0 WHEN 'Media' THEN 1 ELSE 2 END AS rango_prioridad ${desde}
        ORDER BY ${primero}r.fecha_creacion ${direccion}, r.id_reporte ${direccion}
-       LIMIT $16 OFFSET $17`, [...params, tamano, (pagina - 1) * tamano]);
+       LIMIT $17 OFFSET $18`, [...params, tamano, (pagina - 1) * tamano]);
 
     const ids = filas.map((f) => Number(f.id));
     const reportes = ids.length === 0 ? [] : await this.ds.getRepository(Reporte).findBy({ id: In(ids) });
@@ -298,7 +307,7 @@ export class ReportesService {
          JOIN riesgo ri ON ri.id_riesgo = r.id_riesgo
          LEFT JOIN municipio m ON m.id_municipio = r.id_municipio WHERE`)}
        ORDER BY r.fecha_creacion ${direccion}, r.id_reporte ${direccion}
-       LIMIT $16`, [...this.parametrosBandeja(f, alcance), MAX_EXPORTACION]);
+       LIMIT $17`, [...this.parametrosBandeja(f, alcance), MAX_EXPORTACION]);
     // Bitácora de accesos (Fase 7): una entrada por exportación, con los filtros (sin datos personales).
     const filtros = Object.entries(f).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => `${k}=${v}`).join('&');
     await registrarAcceso(this.ds, alcance.idUsuario, 'exportar', null, `${filas.length} fila(s); ${filtros}`);
@@ -763,6 +772,7 @@ export class ReportesService {
       peligroInmediato: r.peligroInmediato,
       verificacion: casoPor.get(r.id)?.verificacion ?? 'Sin verificar',
       esDuplicado: r.duplicadoDe !== null && r.duplicadoDe !== undefined,
+      origen: r.origen,
       seguimientoVencido: vencido(casoPor.get(r.id)),
       ubicacion: r.ubicacion.descripcion,
       municipio: r.municipio?.nombre ?? null,

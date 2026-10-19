@@ -140,6 +140,8 @@ export interface ReporteResumen {
   id: number; folio: string; estatus: string; ubicacion: string; municipio: string | null; actividad: string;
   /** Fase 6: prioridad calculada por el servidor y peligro inmediato (servidores anteriores no los envían). */
   prioridad?: 'Alta' | 'Media' | 'Normal'; peligroInmediato?: string | null;
+  /** `ciudadano` o `institucional` (Fase 9). */
+  origen?: string;
   /** Fase 7 (servidores anteriores no los envían). */
   verificacion?: string; esDuplicado?: boolean; seguimientoVencido?: boolean;
   edadAproximada: string; cantidadNinos: number; situacionRiesgo: string; fechaCreacion: string; fechaActualizacion: string;
@@ -242,7 +244,22 @@ export interface ResumenEstadisticas {
 /** Conteo que el servidor oculta (`null`) si es menor que el umbral. */
 export interface ConteoProtegido { etiqueta: string; total: number | null }
 /** Distribuciones del panel (Fase 3). */
-export interface Distribuciones { umbral: number; porMunicipio: ConteoProtegido[]; porActividad: ConteoProtegido[]; porGrupoEdad: ConteoProtegido[] }
+export interface Distribuciones {
+  umbral: number; porMunicipio: ConteoProtegido[]; porActividad: ConteoProtegido[]; porGrupoEdad: ConteoProtegido[];
+  /** Fase 9 (servidores anteriores no las envían). */
+  porSexo?: ConteoProtegido[]; porFranja?: ConteoProtegido[]; porDependencia?: ConteoProtegido[];
+}
+/** Mapa territorial por niveles (Fase 9). */
+export interface Territorio {
+  nivel: 'region' | 'colonia' | 'punto'; umbral: number;
+  municipios?: { id: number; clave: string | null; nombre: string; total: number | null; geometria: unknown }[];
+  colonias?: { colonia: string; total: number | null; lat: number | null; lng: number | null }[];
+  sinColonia?: number | null;
+  puntos?: { id: number; lat: number; lng: number; prioridad: string | null; estatus: string }[];
+  sinUbicacion?: number;
+}
+/** Hallazgos automáticos (Fase 9). */
+export interface Hallazgos { meses: number; minimo: number; hallazgos: { texto: string; reportes: number; lat: number; lng: number }[] }
 /** Tiempo promedio en cada estatus. */
 export interface Tiempos {
   umbral: number; porEstatus: { estatus: string; horasPromedio: number | null; casos: number }[];
@@ -259,8 +276,11 @@ export interface SinAtender { dias: number; total: number; umbral: number; porMu
 export interface CeldaCalor { lat: number; lng: number; total: number }
 /** Mapa de calor agregado. */
 export interface MapaCalor { umbral: number; tamanoCelda: number; celdas: CeldaCalor[]; ocultas: number; sinUbicacion: number }
-/** Filtros comunes del panel. */
-export interface FiltrosPanel { desde?: string; hasta?: string; municipioId?: number; estatus?: string; actividad?: string; prioridad?: string }
+/** Filtros comunes del panel, el mapa y la exportación (Fase 9 agrega edad, riesgo, franja, dependencia, verificación, reincidencia y origen). */
+export interface FiltrosPanel {
+  desde?: string; hasta?: string; municipioId?: number; estatus?: string; actividad?: string; prioridad?: string;
+  rangoEdad?: string; riesgo?: string; franja?: string; dependenciaId?: number; verificacion?: string; reincidente?: boolean; origen?: string;
+}
 /** Filtros de la bandeja y la exportación. */
 export interface FiltrosBandeja extends FiltrosPanel {
   folio?: string; sinAtenderDias?: number; orden?: 'recientes' | 'antiguos' | 'prioridad';
@@ -268,9 +288,8 @@ export interface FiltrosBandeja extends FiltrosPanel {
   riesgo?: string;
   /** Solo casos pendientes, Recibido o En revisión (Fase 5). */
   pendientes?: boolean;
-  /** Solo casos abiertos con seguimiento vencido y por verificación (Fase 7). */
+  /** Solo casos abiertos con seguimiento vencido (Fase 7). */
   vencidos?: boolean;
-  verificacion?: string;
 }
 
 /** Datos del formulario de reporte (formato de la Fase 2: grupos de edad y dirección). */
@@ -325,6 +344,11 @@ export const api = {
     llamar<ReporteDetalle>(`/reportes/${id}/duplicado`, { metodo: 'POST', cuerpo: { idPrincipal } }),
   desvincularDuplicado: (id: number) => llamar<ReporteDetalle>(`/reportes/${id}/duplicado`, { metodo: 'DELETE' }),
   embudo: (f: FiltrosPanel) => llamar<Embudo>(`/estadisticas/embudo${consulta({ ...f })}`),
+  // Fase 9: territorio, hallazgos y registro institucional.
+  territorio: (nivel: 'region' | 'colonia' | 'punto', f: FiltrosPanel) => llamar<Territorio>(`/estadisticas/territorio${consulta({ ...f, nivel })}`),
+  hallazgos: (f: FiltrosPanel) => llamar<Hallazgos>(`/estadisticas/hallazgos${consulta({ ...f })}`),
+  registrarInstitucional: (r: NuevoReporte) =>
+    llamar<{ id: number; folio: string; estatus: string; fechaCreacion: string }>('/reportes/institucional', { metodo: 'POST', cuerpo: r }),
   alertas: (estatus: 'abierta' | 'atendida' | 'todas' = 'abierta') => llamar<Alerta[]>(`/alertas${consulta({ estatus })}`),
   atenderAlerta: (id: number, estatus: 'atendida' | 'abierta', comentario?: string) =>
     llamar<{ id: number; estatus: string }>(`/alertas/${id}`, { metodo: 'PATCH', cuerpo: { estatus, comentario: comentario || undefined } }),
@@ -351,13 +375,13 @@ export const api = {
  * Descarga la bandeja filtrada en CSV. Se pide con el token de la sesión y se
  * entrega como archivo local (Blob), sin abrir otra página ni tocar la CSP.
  */
-export async function descargarCsv(f: FiltrosBandeja): Promise<void> {
+export async function descargarCsv(f: FiltrosBandeja, ruta = '/reportes/exportar.csv', nombre = 'reportes-rieti'): Promise<void> {
   const cabeceras: Record<string, string> = { Accept: 'text/csv' };
   const s = obtenerSesion();
   if (s) cabeceras.Authorization = `Bearer ${s.token}`;
   let r: Response;
   try {
-    r = await fetch(`/api/v1/reportes/exportar.csv${consulta({ ...f })}`, { headers: cabeceras, credentials: 'omit', cache: 'no-store' });
+    r = await fetch(`/api/v1${ruta}${consulta({ ...f })}`, { headers: cabeceras, credentials: 'omit', cache: 'no-store' });
   } catch {
     throw new ErrorApi('SIN_CONEXION', MENSAJES.SIN_CONEXION, 0);
   }
@@ -370,7 +394,7 @@ export async function descargarCsv(f: FiltrosBandeja): Promise<void> {
   const url = URL.createObjectURL(await r.blob());
   const a = document.createElement('a');
   a.href = url;
-  a.download = `reportes-rieti-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${nombre}-${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(a);
   a.click();
   a.remove();

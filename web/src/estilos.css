@@ -441,3 +441,7 @@ kbd { font-family: ui-monospace, Consolas, monospace; border: 1px solid var(--co
 .boton-archivo:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
 .rejilla-fotos { display: grid; gap: var(--e3); grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); margin: var(--e3) 0; }
 .foto-evidencia { width: 100%; height: auto; aspect-ratio: auto; border-radius: var(--radio); border: 1px solid var(--color-borde); background: var(--color-superficie); }
+
+/* ---------- Fase 9: hallazgos ---------- */
+.lista-hallazgos { margin: var(--e2) 0; padding-left: var(--e4); display: grid; gap: var(--e2); }
+.lista-hallazgos li { font-weight: 600; }

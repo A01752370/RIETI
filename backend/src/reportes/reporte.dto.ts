@@ -303,6 +303,11 @@ export class FiltrosBandejaDto {
   @IsBoolean()
   vencidos?: boolean;
 
+  /** Filtra por origen: `ciudadano` o `institucional` (Fase 9). */
+  @IsOptional()
+  @IsIn(['ciudadano', 'institucional'])
+  origen?: string;
+
   /** Filtra por verificación (Fase 7). */
   @IsOptional()
   @IsIn(VERIFICACIONES)
@@ -373,6 +378,8 @@ export interface ReporteResumenDto {
   verificacion: string;
   /** true si es un posible duplicado de otro reporte (Fase 7). */
   esDuplicado: boolean;
+  /** `ciudadano` o `institucional` (Fase 9). */
+  origen: string;
   /** true si la fecha de seguimiento ya pasó y el caso sigue abierto (Fase 7). */
   seguimientoVencido: boolean;
   ubicacion: string;

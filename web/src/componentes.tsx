@@ -67,6 +67,7 @@ function Encabezado({ personal }: { personal: boolean }) {
                 <li><Enlace a="/personal">Bandeja</Enlace></li>
                 <li><Enlace a="/personal/panel">Panel</Enlace></li>
                 <li><Enlace a="/personal/alertas">Alertas</Enlace></li>
+                <li><Enlace a="/personal/registrar">Registrar</Enlace></li>
                 {sesion?.esAdministrador && <li><Enlace a="/personal/administracion">Administración</Enlace></li>}
                 <li><Enlace a="/personal/perfil">Mi perfil</Enlace></li>
                 {sesion && (

@@ -35,11 +35,26 @@ export class ReportesController {
   @CiudadanoOpcional()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post()
-  crear(@Body() dto: CrearReporteDto, @Req() req: RequestAutenticado): Promise<ReporteCreadoDto> {
+  async crear(@Body() dto: CrearReporteDto, @Req() req: RequestAutenticado): Promise<ReporteCreadoDto> {
     if (dto.vincularCuenta && !req.ciudadano) {
       throw new BadRequestException({ codigo: 'SESION_REQUERIDA', mensaje: 'Inicia sesión para vincular el reporte a tu cuenta' });
     }
-    return this.reportes.crear(dto, dto.vincularCuenta ? req.ciudadano!.idCuenta : null);
+    // El id interno no se expone al ciudadano.
+    const { id: _id, ...publico } = await this.reportes.crear(dto, dto.vincularCuenta ? req.ciudadano!.idCuenta : null);
+    return publico;
+  }
+
+  /**
+   * Fase 9: registro institucional (detección en recorridos) por el personal, en sus municipios.
+   * Mismo formulario y validaciones; `origen = institucional`, sin clave de consulta. 20 por minuto.
+   */
+  @Requiere('reportes.registrar')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Post('institucional')
+  async registrarInstitucional(@Body() dto: CrearReporteDto, @Req() req: RequestAutenticado): Promise<{ id: number; folio: string; estatus: string; fechaCreacion: string }> {
+    if (dto.vincularCuenta) throw new BadRequestException({ codigo: 'VALOR_NO_VALIDO', mensaje: 'Un registro institucional no se vincula a una cuenta' });
+    const { id, folio, estatus, fechaCreacion } = await this.reportes.crear(dto, null, await this.alcance(req));
+    return { id, folio, estatus, fechaCreacion };
   }
 
   /**

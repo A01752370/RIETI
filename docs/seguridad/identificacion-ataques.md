@@ -1,6 +1,6 @@
 # Identificación de ataques — RIETI
 
-> Etapa 3 · Fecha de corte: 10-oct-2026, actualizado al cierre de la Fase 8 (A3, A7, A8 y A14 mitigados; A38–A41).
+> Etapa 3 · Fecha de corte: 10-oct-2026, actualizado al cierre de la Fase 9 (A3, A7, A8 y A14 mitigados; A38–A43).
 > Complemento: [métodos de protección](metodos-proteccion.md) (qué control mitiga cada ataque, dónde está en el código y cómo se probó).
 
 RIETI recibe reportes sobre **niñas, niños y adolescentes en posible situación de trabajo infantil**. Un incidente no solo expone datos: puede poner en riesgo a un menor o a la persona que reporta. Por eso el análisis prioriza la confidencialidad del reporte y el anonimato del denunciante por encima de la disponibilidad.
@@ -81,6 +81,8 @@ Estado: **Mitigado (probado)** = hay control y prueba automatizada · **Mitigado
 | A39 | Fusión o borrado indebido por "duplicado" | Marcar como duplicado para ocultar o borrar un reporte | Pérdida de un caso real | Mitigado (probado; Fase 7): el vínculo no borra ni fusiona, es reversible, se limita al mismo municipio y queda en la bitácora de ambos reportes |
 | A40 | Manipulación de parámetros de alertas y duplicados | Poner un radio enorme o un mínimo de 1 para inundar de alertas, o 0 para ocultarlas | Ruido o ceguera operativa | Mitigado (probado; Fase 7): solo el Administrador, claves cerradas y límites validados en el servidor (p. ej. radio 25–1000 m, mínimo 2–50) |
 | A41 | Abuso del almacenamiento de fotos | Pedir formularios de subida en masa o subir archivos de relleno para generar costo | Costo, ruido | Mitigado (probado; Fase 8): requiere folio + clave válidos (bloqueo tras 5 fallos), 10 solicitudes/min por IP, máximo 3 fotos por reporte en 24 h, 5 MB por formulario (lo impone S3) y las subidas sin confirmar expiran en 1 día |
+| A42 | Reidentificación con el mapa o la base regional | Cruzar puntos, colonias o celdas pequeñas para ubicar un caso o a quien reportó | Exponer a un menor o a quien reporta | Mitigado (probado; Fase 9): región y colonia con umbral; puntos solo para el personal con alcance, sin texto y con acceso registrado al abrir el detalle; base regional solo para coordinación y administración, con celdas de ≈ 110 m, sin texto ni fotos y celdas pequeñas omitidas; sexo solo agregado con umbral |
+| A43 | Registro institucional falso o en otro municipio | Una cuenta del personal registra reportes fuera de sus municipios o se hace pasar por ciudadano | Datos falsos, indicadores inflados | Mitigado (probado; Fase 9): permiso propio, solo municipios asignados (403), queda a su nombre en la bitácora y con origen institucional; el ciudadano no puede declarar el canal institucional |
 | A24 | Reconocimiento con la documentación pública | Leer en el repo público el ID de la cuenta de AWS, alias de llaves o la postura de IAM para preparar ataques dirigidos (phishing, *bucket squatting*, abuso de llaves filtradas) | Facilitar otros ataques | Mitigado (revisión del árbol): el ID de cuenta salió de `versions.tf` (va en `backend.hcl`, ignorado por git) y la auditoría de cuenta ya no publica alias de llaves ni detalles de IAM. El historial anterior conserva el nombre del bucket de estado |
 
 ## 4. Detalle de los ataques principales

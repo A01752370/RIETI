@@ -1,6 +1,6 @@
 # Roles y permisos (D-18)
 
-> Estado al 18-oct-2026 (Fase 7). Solo se afirma lo que el código hace; lo demás está en [Planeado](#planeado).
+> Estado al cierre de la Fase 9. Solo se afirma lo que el código hace; lo demás está en [Planeado](#planeado).
 
 ## Cómo se aplica en el código
 
@@ -64,6 +64,9 @@ Las columnas del personal aplican **dentro de su alcance territorial**. El Coord
 | Asignar municipios al personal (`personal.administrar`) | `GET /admin/personal`, `PUT /admin/personal/:id/municipios` | — | — | ✅ |
 | Parámetros y dependencias (`configuracion.editar`) | `GET`/`PUT /admin/configuracion`, `GET`/`POST /admin/dependencias`, `PATCH /admin/dependencias/:id` | — | — | ✅ |
 | Bitácora de accesos (`accesos.ver`) | `GET /admin/accesos` | — | — | ✅ |
+| Mapa territorial y hallazgos (`estadisticas.ver`; Fase 9) | `GET /estadisticas/territorio`, `GET /estadisticas/hallazgos` | ✅ (sus municipios) | ✅ | ✅ |
+| Registro institucional (`reportes.registrar`; Fase 9) | `POST /reportes/institucional` | ✅ (sus municipios) | ✅ | ✅ |
+| Base regional anonimizada (`base.exportar`; Fase 9) | `GET /estadisticas/base-regional.csv` | — | ✅ | ✅ |
 
 Reglas que aplican a todos los perfiles:
 - Los cambios de estatus siguen la máquina de estados (D-30). Cancelar exige motivo; marcar Reincidente exige comentario; concluir exige el resultado (Fase 7).

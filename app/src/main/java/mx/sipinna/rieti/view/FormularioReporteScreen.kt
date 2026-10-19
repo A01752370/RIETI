@@ -109,6 +109,8 @@ import org.osmdroid.util.GeoPoint
  * @param alEnviar navega a la confirmación con el folio, la clave y cuántas fotos se adjuntaron (-1 si falló la subida)
  * @param alRegresar vuelve al aviso
  * @param alCuenta abre el acceso a la cuenta opcional (reporte con seguimiento) y regresa aquí sin perder lo capturado
+ * @param institucional Fase 9: registro institucional del personal (sin clave, fotos ni cuenta)
+ * @param alRegistrado registro institucional guardado: id del reporte para abrir su detalle
  */
 @Composable
 fun FormularioReporteScreen(
@@ -116,8 +118,11 @@ fun FormularioReporteScreen(
     alEnviar: (ReporteCreado, Int) -> Unit,
     alRegresar: () -> Unit,
     alCuenta: () -> Unit = {},
+    institucional: Boolean = false,
+    alRegistrado: (Int) -> Unit = {},
     viewModel: FormularioReporteViewModel = viewModel()
 ) {
+    viewModel.institucional = institucional
     val estado by viewModel.asistente.collectAsState()
     val envio by viewModel.envio.collectAsState()
     val haySesionCiudadano by SesionCiudadanoRepositorio.haySesion.collectAsState()
@@ -133,7 +138,7 @@ fun FormularioReporteScreen(
         val e = envio
         if (e is UiState.Exito) {
             viewModel.reiniciarEnvio()
-            alEnviar(e.datos, viewModel.fotosAdjuntadas)
+            if (institucional) alRegistrado(viewModel.idInstitucional) else alEnviar(e.datos, viewModel.fotosAdjuntadas)
         }
     }
     // Cada paso empieza arriba; si un intento de avanzar falla, también se sube para ver el resumen.
@@ -150,7 +155,7 @@ fun FormularioReporteScreen(
     BackHandler(onBack = atras)
 
     PantallaRieti(
-        titulo = "Reportar una situación",
+        titulo = if (institucional) "Registro institucional" else "Reportar una situación",
         alRegresar = atras,
         desplazamiento = desplazamiento,
         barraInferior = {
@@ -159,8 +164,9 @@ fun FormularioReporteScreen(
                 enviando = envio is UiState.Cargando,
                 alAtras = atras,
                 alContinuar = {
-                    if (estado.paso == PasoReporte.REVISAR) viewModel.enviar(avisoVersion, haySesionCiudadano)
-                    else viewModel.avanzar(haySesionCiudadano)
+                    val sesion = haySesionCiudadano && !institucional
+                    if (estado.paso == PasoReporte.REVISAR) viewModel.enviar(avisoVersion, sesion)
+                    else viewModel.avanzar(sesion)
                 }
             )
         }
@@ -190,7 +196,7 @@ fun FormularioReporteScreen(
         ) { paso ->
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 when (paso) {
-                    PasoReporte.COMO -> PasoComo(estado, haySesionCiudadano, alCuenta, viewModel)
+                    PasoReporte.COMO -> if (institucional) AvisoInstitucional() else PasoComo(estado, haySesionCiudadano, alCuenta, viewModel)
                     PasoReporte.DONDE -> PasoDonde(estado, viewModel)
                     PasoReporte.QUIENES -> PasoQuienes(estado, viewModel)
                     PasoReporte.QUE -> PasoQue(estado, viewModel)
@@ -542,7 +548,19 @@ private fun PasoQue(estado: EstadoAsistente, viewModel: FormularioReporteViewMod
         modifier = Modifier.fillMaxWidth()
     )
 
-    SeccionFotos(viewModel)
+    if (!viewModel.institucional) SeccionFotos(viewModel)
+}
+
+/** Fase 9: en el registro institucional no hay modo anónimo ni cuenta: queda a nombre del personal. */
+@Composable
+private fun AvisoInstitucional() {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Registro institucional (detección en recorrido)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text("Queda a tu nombre en la bitácora, con origen institucional y sin clave de consulta. Solo puedes registrar reportes de tus municipios asignados.",
+                style = MaterialTheme.typography.bodyMedium)
+        }
+    }
 }
 
 /**

@@ -10,6 +10,7 @@ import mx.sipinna.rieti.model.ConfirmarFotosRequest
 import mx.sipinna.rieti.model.Embudo
 import mx.sipinna.rieti.model.FotoPersonal
 import mx.sipinna.rieti.model.FotosConfirmadas
+import mx.sipinna.rieti.model.ReporteInstitucional
 import mx.sipinna.rieti.model.SolicitarFotosRequest
 import mx.sipinna.rieti.model.SolicitudFotos
 import mx.sipinna.rieti.model.Responsable
@@ -152,6 +153,10 @@ interface ApiService {
         @Query("orden") orden: String? = null,
         @Query("vencidos") vencidos: Boolean? = null
     ): Pagina<ReporteResumen>
+
+    /** Fase 9: registro institucional (detección en recorridos) con la sesión del personal. */
+    @POST("api/v1/reportes/institucional")
+    suspend fun registrarInstitucional(@Body request: CrearReporteRequest): ReporteInstitucional
 
     /** Fase 8: formularios de subida directa de fotos para un reporte recién creado (público, con folio + clave). */
     @POST("api/v1/reportes/fotos/solicitud")

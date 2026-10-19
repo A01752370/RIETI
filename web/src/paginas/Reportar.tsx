@@ -4,6 +4,7 @@ import { Esqueleto, Marco, MensajeError, useCarga, TextoAviso } from '../compone
 import { Enlace, useTitulo } from '../enrutador';
 import { BarraProgreso, calcularLinea, IndicadorPasos, LineaProgreso } from '../progreso';
 import { SelectorMunicipio } from '../SelectorMunicipio';
+import { ConSesion } from './personal';
 import { ADVERTENCIA_FOTOS, MAX_FOTOS, subirFotos, TIPOS_FOTO, validarFotos } from '../fotos';
 
 export const MAX_DESCRIPCION = 2000;
@@ -350,7 +351,11 @@ function BloqueRevision({ titulo, alEditar, children }: { titulo: string; alEdit
 }
 
 /** Contenido del asistente: indicador de pasos, el paso visible y la barra inferior. */
-function Asistente({ version, alCrear }: { version: string; alCrear: (c: ReporteCreado, fotos: File[]) => void }) {
+function Asistente({ version, alCrear, institucional = false }: {
+  version: string; alCrear: (c: ReporteCreado & { id?: number }, fotos: File[]) => void;
+  /** Fase 9: registro institucional del personal (detección en recorridos): sin clave ni fotos. */
+  institucional?: boolean;
+}) {
   const catalogos = useCarga(() => Promise.all([api.catalogos(), api.municipios()]), []);
   const [f, setF] = useState<Formulario>(FORMULARIO_VACIO);
   const [paso, setPaso] = useState(0);
@@ -401,7 +406,12 @@ function Asistente({ version, alCrear }: { version: string; alCrear: (c: Reporte
       return;
     }
     setEnviando(true); setErrorEnvio(null);
-    try { alCrear(await api.crearReporte(aNuevoReporte(f, version)), f.fotos); }
+    try {
+      if (institucional) {
+        const r = await api.registrarInstitucional(aNuevoReporte(f, version));
+        alCrear({ ...r, claveConsulta: '' }, []);
+      } else alCrear(await api.crearReporte(aNuevoReporte(f, version)), f.fotos);
+    }
     catch (err) { setErrorEnvio(err); } finally { setEnviando(false); }
   };
 
@@ -422,7 +432,13 @@ function Asistente({ version, alCrear }: { version: string; alCrear: (c: Reporte
       )}
 
       <div className="contenido-paso" key={clave}>
-        {clave === 'como' && (
+        {clave === 'como' && institucional && (
+          <div className="aviso aviso-atencion" role="note">
+            <strong>Registro institucional (detección en recorrido).</strong> Queda a tu nombre en la bitácora, con origen “institucional”
+            y sin clave de consulta. Solo puedes registrar reportes de tus municipios asignados.
+          </div>
+        )}
+        {clave === 'como' && !institucional && (
           <>
             <div className="aviso aviso-atencion" role="note">Si una niña, niño o adolescente está en peligro inmediato, llama al <a href="tel:911">911</a>.</div>
             <fieldset className="campo opciones-modo">
@@ -515,7 +531,7 @@ function Asistente({ version, alCrear }: { version: string; alCrear: (c: Reporte
               <span className="ayuda">{f.descripcion.length}/{MAX_DESCRIPCION}</span>
               {errores.descripcion && <span id="error-descripcion" className="error-campo">{errores.descripcion}</span>}
             </div>
-            <fieldset className="campo bloque-fotos">
+            {!institucional && <fieldset className="campo bloque-fotos">
               <legend>Fotografía (opcional)</legend>
               <div className="aviso aviso-atencion" role="note" id="advertencia-fotos"><strong>Antes de adjuntar:</strong> {ADVERTENCIA_FOTOS}</div>
               <label className="opcion">
@@ -553,13 +569,15 @@ function Asistente({ version, alCrear }: { version: string; alCrear: (c: Reporte
                   {errores.fotos && <span id="error-fotos" className="error-campo">{errores.fotos}</span>}
                 </>
               )}
-            </fieldset>
+            </fieldset>}
           </>
         )}
 
         {clave === 'revisar' && (
           <>
-            <p className="texto-secundario">Revisa que todo esté bien. Tu reporte se enviará de forma anónima y recibirás un folio y una clave para consultar el avance.</p>
+            <p className="texto-secundario">{institucional
+              ? 'Revisa que todo esté bien. El registro institucional queda a tu nombre y entra a la bandeja y a los indicadores.'
+              : 'Revisa que todo esté bien. Tu reporte se enviará de forma anónima y recibirás un folio y una clave para consultar el avance.'}</p>
             <div className="rejilla rejilla-2">
               <BloqueRevision titulo="Dónde" alEditar={() => irA(1)}>
                 <dt>Municipio</dt><dd>{f.municipio?.nombre ?? '—'}</dd>
@@ -577,7 +595,7 @@ function Asistente({ version, alCrear }: { version: string; alCrear: (c: Reporte
               <dt>Actividad</dt><dd>{f.actividad === 'Otro' && f.actividadOtro.trim() ? `Otra actividad: ${f.actividadOtro.trim()}` : f.actividad ? textoActividad(f.actividad) : '—'}</dd>
               <dt>¿Riesgo percibido?</dt><dd>{f.riesgo || '—'}</dd>
               <dt>Descripción</dt><dd className="texto-largo">{f.descripcion.trim() || '—'}</dd>
-              <dt>Fotos</dt><dd>{f.fotos.length === 0 ? 'Sin fotos' : `${f.fotos.length} (se adjuntan al enviar)`}</dd>
+              {!institucional && <><dt>Fotos</dt><dd>{f.fotos.length === 0 ? 'Sin fotos' : `${f.fotos.length} (se adjuntan al enviar)`}</dd></>}
             </BloqueRevision>
           </>
         )}
@@ -615,5 +633,42 @@ export function Reportar() {
       {!creado && <p className="texto-secundario">Si hay peligro inmediato, llama al <a href="tel:911">911</a>.</p>}
       {contenido}
     </Marco>
+  );
+}
+
+/**
+ * Fase 9: registro institucional (detección en recorridos) para el personal. Mismo asistente y
+ * validaciones; el servidor fija `origen = institucional`, no genera clave y solo acepta los
+ * municipios asignados. El aviso de privacidad no se muestra: el registro lo hace el personal.
+ */
+function ContenidoRegistroInstitucional() {
+  const aviso = useCarga(api.aviso, []);
+  const [creado, setCreado] = useState<(ReporteCreado & { id?: number }) | null>(null);
+  if (aviso.cargando) return <Esqueleto filas={4} />;
+  if (aviso.error || !aviso.datos) return <MensajeError error={aviso.error} alReintentar={aviso.recargar} />;
+  if (creado) {
+    return (
+      <section className="tarjeta tarjeta-tinte" aria-labelledby="t-registrado">
+        <h2 id="t-registrado">Registro institucional guardado</h2>
+        <div className="credencial"><span>Folio</span><output>{creado.folio}</output></div>
+        <p>Ya aparece en la bandeja con origen “Institucional” y cuenta en los indicadores.</p>
+        <div className="acciones">
+          {creado.id && <Enlace a={`/personal/reportes/${creado.id}`} className="boton">Abrir el reporte</Enlace>}
+          <button type="button" className="boton boton-secundario" onClick={() => setCreado(null)}>Registrar otro</button>
+        </div>
+      </section>
+    );
+  }
+  return <Asistente version={aviso.datos.version} institucional alCrear={(r) => { setCreado(r); window.scrollTo(0, 0); }} />;
+}
+
+/** Página de registro institucional del personal (Fase 9). */
+export function RegistroInstitucional() {
+  return (
+    <ConSesion titulo="Registro institucional">
+      <h1>Registro institucional</h1>
+      <p className="texto-secundario">Para detecciones durante recorridos del personal. Si hay peligro inmediato, llama al <a href="tel:911">911</a>.</p>
+      <ContenidoRegistroInstitucional />
+    </ConSesion>
   );
 }

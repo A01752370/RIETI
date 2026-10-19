@@ -1,7 +1,7 @@
 import { FormEvent, lazy, ReactNode, RefObject, Suspense, useEffect, useRef, useState } from 'react';
 import {
   api, CambiosExpediente, ConteoProtegido, descargarCsv, DireccionRespuesta, Embudo, EventoBitacora, Expediente, fijarSesion, FiltrosBandeja,
-  FiltrosPanel, GrupoMenores, Municipio, obtenerSesion, ReporteDetalle, ReporteRelacionado, TiempoHito, TipoEvento,
+  FiltrosPanel, GrupoMenores, Municipio, obtenerSesion, ReporteDetalle, ReporteRelacionado, Territorio, TiempoHito, TipoEvento,
 } from '../api';
 import { Esqueleto, Marco, MensajeError, useCarga, useSesion, Vacio } from '../componentes';
 import { Enlace, navegar, useTitulo } from '../enrutador';
@@ -68,7 +68,7 @@ export function filtrosDesdeUrl(search: string): FiltrosUrl {
     estatus: texto('estatus'), municipioId: entero('municipioId'), actividad: texto('actividad'),
     desde: texto('desde'), hasta: texto('hasta'), folio: texto('folio'), sinAtenderDias: entero('sinAtenderDias'),
     riesgo: texto('riesgo'), pendientes: q.get('pendientes') === 'true' || undefined, prioridad: texto('prioridad'),
-    vencidos: q.get('vencidos') === 'true' || undefined, verificacion: texto('verificacion'),
+    vencidos: q.get('vencidos') === 'true' || undefined, verificacion: texto('verificacion'), origen: texto('origen'),
     // Fase 6: por omisión la bandeja se ordena por prioridad (Alta primero).
     orden: q.get('orden') === 'antiguos' ? 'antiguos' : q.get('orden') === 'recientes' ? 'recientes' : 'prioridad', pagina: entero('pagina') ?? 1,
   };
@@ -81,7 +81,7 @@ export function urlDeFiltros(f: FiltrosUrl): string {
   poner('estatus', f.estatus); poner('municipioId', f.municipioId); poner('actividad', f.actividad);
   poner('desde', f.desde); poner('hasta', f.hasta); poner('folio', f.folio); poner('sinAtenderDias', f.sinAtenderDias);
   poner('riesgo', f.riesgo); poner('pendientes', f.pendientes); poner('prioridad', f.prioridad);
-  poner('vencidos', f.vencidos); poner('verificacion', f.verificacion);
+  poner('vencidos', f.vencidos); poner('verificacion', f.verificacion); poner('origen', f.origen);
   if (f.orden && f.orden !== 'prioridad') poner('orden', f.orden);
   if (f.pagina > 1) poner('pagina', f.pagina);
   const s = p.toString();
@@ -205,7 +205,7 @@ function ContenidoBandeja() {
   const fijar = (cambio: Partial<FiltrosUrl>) => setF((x) => ({ ...x, ...cambio, pagina: cambio.pagina ?? 1 }));
   const municipio = municipios.datos?.find((m) => m.id === f.municipioId) ?? null;
   const hayFiltros = Boolean(f.estatus || f.municipioId || f.actividad || f.desde || f.hasta || f.folio || f.sinAtenderDias || f.riesgo
-    || f.pendientes || f.prioridad || f.vencidos || f.verificacion);
+    || f.pendientes || f.prioridad || f.vencidos || f.verificacion || f.origen);
 
   const exportar = async () => {
     setExportando(true); setErrorExportar(null);
@@ -286,6 +286,14 @@ function ContenidoBandeja() {
             {VERIFICACIONES.map((v) => <option key={v} value={v}>{v}</option>)}
           </select>
         </div>
+        <div className="campo">
+          <label htmlFor="filtro-origen">Origen</label>
+          <select id="filtro-origen" value={f.origen ?? ''} onChange={(e) => fijar({ origen: e.target.value || undefined })}>
+            <option value="">Todos</option>
+            <option value="ciudadano">Ciudadano</option>
+            <option value="institucional">Institucional (recorridos)</option>
+          </select>
+        </div>
         <label className="opcion">
           <input type="checkbox" checked={Boolean(f.pendientes)} onChange={(e) => fijar({ pendientes: e.target.checked || undefined })} />
           <span>Solo pendientes (registrados, en revisión o reincidentes)</span>
@@ -326,6 +334,7 @@ function ContenidoBandeja() {
                           {r.situacionRiesgo === 'Sí' && <span className="insignia-riesgo">Riesgo percibido</span>}
                           {r.seguimientoVencido && <span className="insignia-vencido">Seguimiento vencido</span>}
                           {r.esDuplicado && <span className="insignia-neutra">Posible duplicado</span>}
+                          {r.origen === 'institucional' && <span className="insignia-neutra">Institucional</span>}
                           {r.verificacion && r.verificacion !== 'Sin verificar' && <span className="insignia-neutra">{r.verificacion}</span>}
                         </span>
                       </div>
@@ -1011,6 +1020,48 @@ function Cifra({ valor, titulo, ayuda, enlace, destacada = false, children }: {
 
 /** Mapa de calor cargado bajo demanda (Leaflet solo se descarga para el personal que abre el panel). */
 const MapaCalorDiferido = lazy(() => import('../MapaCalor'));
+/** Mapa territorial por niveles (Fase 9), también bajo demanda. */
+const MapaTerritorialDiferido = lazy(() => import('../MapaTerritorial'));
+
+/** Niveles del mapa territorial (Fase 9). */
+export type NivelMapa = 'region' | 'calor' | 'colonia' | 'punto';
+const NIVELES: [NivelMapa, string][] = [['region', 'Región (municipios)'], ['calor', 'Calor'], ['colonia', 'Colonias'], ['punto', 'Puntos']];
+/** Franjas del horario de registro. */
+const FRANJAS: [string, string][] = [['madrugada', 'Madrugada (0 a 6 h)'], ['mañana', 'Mañana (6 a 12 h)'], ['tarde', 'Tarde (12 a 18 h)'], ['noche', 'Noche (18 a 24 h)']];
+
+/** Filtros adicionales del panel (Fase 9), como los guardan los controles. */
+export interface FiltrosExtra {
+  rangoEdad: string; riesgo: string; prioridad: string; franja: string; dependenciaId: string; verificacion: string; origen: string; reincidente: boolean;
+}
+export const FILTROS_EXTRA_VACIOS: FiltrosExtra = {
+  rangoEdad: '', riesgo: '', prioridad: '', franja: '', dependenciaId: '', verificacion: '', origen: '', reincidente: false,
+};
+
+/** Filtros adicionales listos para el API, sin vacíos (pura, probada). */
+export function filtrosExtra(x: FiltrosExtra): Partial<FiltrosPanel> {
+  return {
+    rangoEdad: x.rangoEdad || undefined, riesgo: x.riesgo || undefined, prioridad: x.prioridad || undefined, franja: x.franja || undefined,
+    dependenciaId: x.dependenciaId ? Number(x.dependenciaId) : undefined, verificacion: x.verificacion || undefined,
+    origen: x.origen || undefined, reincidente: x.reincidente || undefined,
+  };
+}
+
+/** Texto alternativo del mapa territorial (pura, probada). */
+export function resumenTerritorio(t: Territorio): string {
+  if (t.nivel === 'region') return `Mapa de municipios: ${(t.municipios ?? []).map((m) => `${m.nombre}, ${m.total ?? `menos de ${t.umbral}`} reporte(s)`).join('; ')}.`;
+  if (t.nivel === 'colonia') return `${(t.colonias ?? []).filter((c) => c.total !== null).length} colonia(s) con al menos ${t.umbral} reportes; las demás no se muestran.`;
+  return `${(t.puntos ?? []).length} punto(s) de reportes${t.sinUbicacion ? `; ${t.sinUbicacion} sin punto en el mapa` : ''}.`;
+}
+
+/** Tabla alternativa del mapa territorial (lectores de pantalla y para copiar). */
+function TablaTerritorio({ datos }: { datos: Territorio }) {
+  if (datos.nivel === 'punto') return null;
+  const filas = datos.nivel === 'region'
+    ? (datos.municipios ?? []).map((m) => ({ etiqueta: m.nombre, total: m.total }))
+    : [...(datos.colonias ?? []).map((c) => ({ etiqueta: c.colonia, total: c.total })), ...(datos.sinColonia ? [{ etiqueta: 'Sin colonia capturada', total: datos.sinColonia }] : [])];
+  const region = datos.nivel === 'region';
+  return <TablaProtegida titulo={region ? 'reportes por municipio' : 'reportes por colonia'} datos={filas} columna={region ? 'Municipio' : 'Colonia'} umbral={datos.umbral} />;
+}
 
 /**
  * Panel para el personal y el socio formador (rediseño de la Fase 5): primero
@@ -1024,23 +1075,37 @@ function ContenidoPanel() {
   const [municipio, setMunicipio] = useState<Municipio | null>(null);
   const [estatus, setEstatus] = useState('');
   const [actividad, setActividad] = useState('');
+  // Fase 9: filtros comunes del mapa y las gráficas.
+  const [extra, setExtra] = useState<FiltrosExtra>(FILTROS_EXTRA_VACIOS);
+  const [nivel, setNivel] = useState<NivelMapa>('region');
   const [dias, setDias] = useState(7);
   const [exportando, setExportando] = useState(false);
   const [errorExportar, setErrorExportar] = useState<unknown>(null);
   const municipios = useCarga(api.municipios, []);
   const catalogos = useCarga(api.catalogos, []);
-  const f: FiltrosPanel = { desde: desde || undefined, hasta: hasta || undefined, municipioId: municipio?.id, estatus: estatus || undefined, actividad: actividad || undefined };
+  const catExpediente = useCarga(() => api.catalogosExpediente().catch(() => null), []);
+  const perfil = useCarga(() => api.perfil().catch(() => null), []);
+  const f: FiltrosPanel = {
+    desde: desde || undefined, hasta: hasta || undefined, municipioId: municipio?.id, estatus: estatus || undefined, actividad: actividad || undefined,
+    ...filtrosExtra(extra),
+  };
   const clave = JSON.stringify(f);
   const datos = useCarga(() => Promise.all([api.estadisticas(f), api.distribuciones(f), api.tiempos(f), api.mapaCalor(f)]), [clave]);
   // Fase 7: embudo de atención (un servidor anterior responde 404 y el panel sigue sin él).
   const embudo = useCarga(() => api.embudo(f).catch(() => null), [clave]);
   const sinAtender = useCarga(() => api.sinAtender({ ...f, dias }), [clave, dias]);
-  const hayFiltros = Boolean(desde || hasta || municipio || estatus || actividad);
-  const filtrosBandeja = (extra: Partial<FiltrosUrl>) => `/personal${urlDeFiltros({ ...f, orden: 'prioridad', pagina: 1, ...extra })}`;
+  // Fase 9: hallazgos y mapa territorial (colonias y puntos requieren municipio).
+  const hallazgos = useCarga(() => api.hallazgos(f).catch(() => null), [clave]);
+  const nivelEfectivo: NivelMapa = !municipio && (nivel === 'colonia' || nivel === 'punto') ? 'region' : nivel;
+  const territorio = useCarga(() => (nivelEfectivo === 'calor' ? Promise.resolve(null) : api.territorio(nivelEfectivo, f).catch(() => null)), [clave, nivelEfectivo]);
+  const hayFiltros = Boolean(desde || hasta || municipio || estatus || actividad || Object.values(extra).some(Boolean));
+  const filtrosBandeja = (cambio: Partial<FiltrosUrl>) => `/personal${urlDeFiltros({ ...f, orden: 'prioridad', pagina: 1, ...cambio })}`;
+  const puedeBaseRegional = Boolean(perfil.datos?.permisos.some((p) => p.permiso === 'base.exportar'));
+  const ponerExtra = (cambio: Partial<FiltrosExtra>) => setExtra((x) => ({ ...x, ...cambio }));
 
-  const exportar = async () => {
+  const exportar = async (ruta?: string, nombre?: string) => {
     setExportando(true); setErrorExportar(null);
-    try { await descargarCsv(f); } catch (e) { setErrorExportar(e); } finally { setExportando(false); }
+    try { await descargarCsv(f, ruta, nombre); } catch (e) { setErrorExportar(e); } finally { setExportando(false); }
   };
 
   return (
@@ -1065,13 +1130,74 @@ function ContenidoPanel() {
             {catalogos.datos?.actividades.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
+        <div className="campo">
+          <label htmlFor="p-edad">Rango de edad</label>
+          <select id="p-edad" value={extra.rangoEdad} onChange={(e) => ponerExtra({ rangoEdad: e.target.value })}>
+            <option value="">Todos</option>
+            {catalogos.datos?.rangosEdad.map((r) => <option key={r} value={r}>{r === 'Sin determinar' ? r : `${r.replace('-', ' a ')} años`}</option>)}
+          </select>
+        </div>
+        <div className="campo">
+          <label htmlFor="p-riesgo">Riesgo percibido</label>
+          <select id="p-riesgo" value={extra.riesgo} onChange={(e) => ponerExtra({ riesgo: e.target.value })}>
+            <option value="">Todos</option>
+            {(catalogos.datos?.riesgos ?? ['Sí', 'No', 'No sé']).map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </div>
+        <div className="campo">
+          <label htmlFor="p-prioridad">Prioridad</label>
+          <select id="p-prioridad" value={extra.prioridad} onChange={(e) => ponerExtra({ prioridad: e.target.value })}>
+            <option value="">Todas</option>
+            {['Alta', 'Media', 'Normal'].map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div className="campo">
+          <label htmlFor="p-franja">Horario del registro</label>
+          <select id="p-franja" value={extra.franja} onChange={(e) => ponerExtra({ franja: e.target.value })}>
+            <option value="">Todo el día</option>
+            {FRANJAS.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+          </select>
+        </div>
+        <div className="campo">
+          <label htmlFor="p-dependencia">Dependencia</label>
+          <select id="p-dependencia" value={extra.dependenciaId} onChange={(e) => ponerExtra({ dependenciaId: e.target.value })}>
+            <option value="">Todas</option>
+            {catExpediente.datos?.dependencias.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+          </select>
+        </div>
+        <div className="campo">
+          <label htmlFor="p-verificacion">Verificación</label>
+          <select id="p-verificacion" value={extra.verificacion} onChange={(e) => ponerExtra({ verificacion: e.target.value })}>
+            <option value="">Todas</option>
+            {VERIFICACIONES.map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
+        <div className="campo">
+          <label htmlFor="p-origen">Origen</label>
+          <select id="p-origen" value={extra.origen} onChange={(e) => ponerExtra({ origen: e.target.value })}>
+            <option value="">Todos</option>
+            <option value="ciudadano">Ciudadano</option>
+            <option value="institucional">Institucional (recorridos)</option>
+          </select>
+        </div>
+        <label className="opcion">
+          <input type="checkbox" checked={extra.reincidente} onChange={(e) => ponerExtra({ reincidente: e.target.checked })} />
+          <span>Solo puntos recurrentes</span>
+        </label>
         <div className="acciones">
           {hayFiltros && (
-            <button type="button" className="boton boton-secundario" onClick={() => { setDesde(''); setHasta(''); setMunicipio(null); setEstatus(''); setActividad(''); }}>Quitar filtros</button>
+            <button type="button" className="boton boton-secundario"
+              onClick={() => { setDesde(''); setHasta(''); setMunicipio(null); setEstatus(''); setActividad(''); setExtra(FILTROS_EXTRA_VACIOS); }}>Quitar filtros</button>
           )}
-          <button type="button" className="boton boton-secundario" onClick={exportar} disabled={exportando}>{exportando ? 'Preparando…' : 'Exportar CSV de lo filtrado'}</button>
+          <button type="button" className="boton boton-secundario" onClick={() => exportar()} disabled={exportando}>{exportando ? 'Preparando…' : 'Exportar CSV de lo filtrado'}</button>
+          {puedeBaseRegional && (
+            <button type="button" className="boton boton-secundario" onClick={() => exportar('/estadisticas/base-regional.csv', 'base-regional-rieti')} disabled={exportando}>
+              Base regional anonimizada (CSV)
+            </button>
+          )}
         </div>
-        <p className="ayuda">Los filtros se aplican a todo el panel y a la exportación. El CSV no incluye descripciones ni coordenadas; requiere el permiso de exportar.</p>
+        <p className="ayuda">Los filtros se aplican a todo el panel, al mapa y a la exportación. El CSV no incluye descripciones ni coordenadas; requiere el permiso de exportar. El horario es el del registro del reporte.</p>
+        {puedeBaseRegional && <p className="ayuda">La base regional agrupa por celdas de ≈ 110 m, municipio y trimestre: solo conteos, sin texto, direcciones, folios ni fotos; se omiten las celdas con pocos reportes.</p>}
       </div>
       {!!errorExportar && <MensajeError error={errorExportar} />}
       {datos.cargando && <Esqueleto filas={3} />}
@@ -1133,17 +1259,75 @@ function ContenidoPanel() {
                 <TablaProtegida titulo="menores por grupo de edad" datos={dist.porGrupoEdad} columna="Grupo de edad" umbral={dist.umbral} />
               </section>
             </div>
+            <div className="rejilla rejilla-2">
+              {dist.porFranja && (
+                <section className="tarjeta">
+                  <h2>Reportes por horario de registro</h2>
+                  <BarrasConteo titulo="Reportes por horario" datos={dist.porFranja} umbral={dist.umbral} />
+                  <TablaProtegida titulo="reportes por horario" datos={dist.porFranja} columna="Horario" umbral={dist.umbral} />
+                </section>
+              )}
+              {dist.porSexo && (
+                <section className="tarjeta">
+                  <h2>Niñas y niños identificados (expediente)</h2>
+                  <BarrasConteo titulo="Niñas y niños identificados" datos={dist.porSexo} umbral={dist.umbral} />
+                  <p className="pequeno texto-secundario">Solo lo captura el personal y solo se muestra como total con umbral.</p>
+                </section>
+              )}
+            </div>
+            {dist.porDependencia && dist.porDependencia.length > 0 && (
+              <section className="tarjeta">
+                <h2>Reportes por dependencia de canalización</h2>
+                <BarrasConteo titulo="Reportes por dependencia" datos={dist.porDependencia} umbral={dist.umbral} />
+                <TablaProtegida titulo="reportes por dependencia" datos={dist.porDependencia} columna="Dependencia" umbral={dist.umbral} />
+              </section>
+            )}
             <section className="tarjeta">
               <h2>Reportes por actividad observada</h2>
               <BarrasConteo titulo="Reportes por actividad" datos={dist.porActividad} umbral={dist.umbral} maximo={15} />
               <TablaProtegida titulo="reportes por actividad" datos={dist.porActividad} columna="Actividad" umbral={dist.umbral} />
             </section>
-            <section className="tarjeta">
-              <h2>Mapa de calor (zonas de ≈ 550 m)</h2>
-              <p className="pequeno texto-secundario">{resumenMapa} El mapa no muestra ubicaciones exactas.</p>
-              {calor.celdas.length === 0
-                ? <Vacio>No hay zonas con suficientes reportes para mostrar.</Vacio>
-                : <Suspense fallback={<Esqueleto />}><MapaCalorDiferido celdas={calor.celdas} resumen={resumenMapa} /></Suspense>}
+            {hallazgos.datos && (
+              <section className="tarjeta" aria-labelledby="t-hallazgos">
+                <h2 id="t-hallazgos">Hallazgos automáticos</h2>
+                {hallazgos.datos.hallazgos.length === 0
+                  ? <p className="pequeno texto-secundario">Sin hallazgos: ninguna zona reúne al menos {hallazgos.datos.minimo} reportes en los últimos {hallazgos.datos.meses} meses con estos filtros.</p>
+                  : <ul className="lista-hallazgos">{hallazgos.datos.hallazgos.map((h) => <li key={h.texto}>{h.texto}</li>)}</ul>}
+                <p className="pequeno texto-secundario">Se calculan con los reportes reales (sin duplicados); solo se mencionan días u horas si concentran la mitad de los reportes o más.</p>
+              </section>
+            )}
+            <section className="tarjeta" aria-labelledby="t-mapa">
+              <h2 id="t-mapa">Mapa territorial</h2>
+              <fieldset className="grupo-opciones" aria-describedby="ayuda-niveles">
+                <legend className="solo-lectores">Nivel del mapa</legend>
+                {NIVELES.map(([v, t]) => (
+                  <label key={v} className="opcion">
+                    <input type="radio" name="nivel-mapa" checked={nivelEfectivo === v} disabled={!municipio && (v === 'colonia' || v === 'punto')} onChange={() => setNivel(v)} />
+                    <span>{t}</span>
+                  </label>
+                ))}
+              </fieldset>
+              <p id="ayuda-niveles" className="pequeno texto-secundario">
+                {municipio ? `Municipio: ${municipio.nombre}.` : 'Toca un municipio en el mapa de región (o elígelo en los filtros) para ver sus colonias y puntos.'}
+                {nivelEfectivo === 'calor' && ` ${resumenMapa} El mapa no muestra ubicaciones exactas.`}
+                {nivelEfectivo === 'punto' && ' Cada punto es un reporte (solo personal); tócalo para abrir el detalle.'}
+              </p>
+              {nivelEfectivo === 'calor'
+                ? (calor.celdas.length === 0
+                  ? <Vacio>No hay zonas con suficientes reportes para mostrar.</Vacio>
+                  : <Suspense fallback={<Esqueleto />}><MapaCalorDiferido celdas={calor.celdas} resumen={resumenMapa} /></Suspense>)
+                : territorio.cargando ? <Esqueleto />
+                  : !territorio.datos ? <Vacio>El mapa territorial no está disponible.</Vacio>
+                    : (
+                      <>
+                        <Suspense fallback={<Esqueleto />}>
+                          <MapaTerritorialDiferido datos={territorio.datos} resumen={resumenTerritorio(territorio.datos)}
+                            alElegirMunicipio={(id) => { const m = municipios.datos?.find((x) => x.id === id); if (m) { setMunicipio(m); setNivel('colonia'); } }}
+                            alAbrirReporte={(id) => navegar(`/personal/reportes/${id}`)} />
+                        </Suspense>
+                        <TablaTerritorio datos={territorio.datos} />
+                      </>
+                    )}
             </section>
             <section className="tarjeta">
               <h2>Reportes recibidos por mes</h2>

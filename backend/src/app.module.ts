@@ -12,6 +12,7 @@ import { EstadisticasController } from './estadisticas/estadisticas.controller';
 import { RedController } from './red/red.controller';
 import { ExpedienteController } from './expediente/expediente.controller';
 import { AdminController } from './admin/admin.controller';
+import { TerritorioController } from './estadisticas/territorio.controller';
 import { ReportesModule } from './reportes/reportes.module';
 import { GeoModule } from './geo/geo.module';
 import { CiudadanosModule } from './ciudadanos/ciudadanos.module';
@@ -30,7 +31,7 @@ import { CiudadanosModule } from './ciudadanos/ciudadanos.module';
     GeoModule,
     CiudadanosModule,
   ],
-  controllers: [HealthController, AvisosController, CatalogosController, RedController, EstadisticasController, ExpedienteController, AdminController],
+  controllers: [HealthController, AvisosController, CatalogosController, RedController, EstadisticasController, TerritorioController, ExpedienteController, AdminController],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: VERIFICADOR_JWT, useFactory: crearVerificadorCognito },

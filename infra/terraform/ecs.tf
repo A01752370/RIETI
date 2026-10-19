@@ -223,3 +223,23 @@ resource "aws_appautoscaling_policy" "api_cpu" {
     }
   }
 }
+
+# Rol de la tarea de limpieza de datos de prueba (scripts/limpiar-pruebas.ts). Se usa solo como
+# override de `run-task`; el servicio del API no lo tiene, así que el API nunca puede borrar fotos.
+resource "aws_iam_role" "limpieza" {
+  name               = "${local.nombre}-ecs-limpieza"
+  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
+}
+
+resource "aws_iam_role_policy" "limpieza" {
+  role = aws_iam_role.limpieza.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      { Sid = "LeerSecretoBD", Effect = "Allow", Action = "secretsmanager:GetSecretValue", Resource = aws_db_instance.principal.master_user_secret[0].secret_arn },
+      { Sid = "Kms", Effect = "Allow", Action = "kms:Decrypt", Resource = aws_kms_key.principal.arn },
+      { Sid = "ListarVersiones", Effect = "Allow", Action = "s3:ListBucketVersions", Resource = aws_s3_bucket.evidencias.arn },
+      { Sid = "BorrarFotos", Effect = "Allow", Action = ["s3:DeleteObject", "s3:DeleteObjectVersion"], Resource = ["${aws_s3_bucket.evidencias.arn}/fotos/*", "${aws_s3_bucket.evidencias.arn}/entrantes/*"] },
+    ]
+  })
+}

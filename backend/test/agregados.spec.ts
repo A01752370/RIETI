@@ -71,6 +71,7 @@ describe('CSV', () => {
     expect(celdaCsv('=HYPERLINK("http://x")')).toBe('"\'=HYPERLINK(""http://x"")"');
     expect(celdaCsv('+52 55')).toBe("'+52 55");
     expect(celdaCsv('-1')).toBe("'-1");
+    expect(celdaCsv(-99.251)).toBe('-99.251'); // un número negativo no es una fórmula
     expect(celdaCsv('@SUM(A1)')).toBe("'@SUM(A1)");
   });
 });
