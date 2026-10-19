@@ -40,6 +40,13 @@ class ControlExpedienteTest {
     }
 
     @Test
+    fun `la fecha de seguimiento se muestra sin hora`() {
+        val f = ControlExpediente.fechaCorta("2026-10-01")
+        assertTrue(f, f.startsWith("1 oct") && f.endsWith("2026") && !f.contains(":"))
+        assertEquals("sin-fecha", ControlExpediente.fechaCorta("sin-fecha"))
+    }
+
+    @Test
     fun `texto de una accion`() {
         assertEquals("Visita: se habló con la familia", ControlExpediente.textoAccion("Visita", "  se habló con la familia "))
     }
