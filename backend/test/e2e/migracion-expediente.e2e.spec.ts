@@ -61,8 +61,8 @@ describeBd('migración ExpedienteTerritorial sobre una base con datos', () => {
     const aplicadas = await ds.runMigrations();
     expect(aplicadas.map((m) => m.name)).toEqual(['ExpedienteTerritorial1760600000000']);
     const asignaciones = await ds.query(
-      `SELECT u.correo, m.clave_inegi FROM asignacion_municipio a JOIN usuario u USING (id_usuario)
-       JOIN municipio m USING (id_municipio) ORDER BY u.correo`);
+      `SELECT u.correo, m.clave_inegi FROM asignacion_municipio a JOIN usuario u ON u.id_usuario = a.id_usuario
+       JOIN municipio m ON m.id_municipio = a.id_municipio ORDER BY u.correo`);
     expect(asignaciones).toEqual([
       { correo: 'enlace-con@ejemplo.mx', clave_inegi: '15057' },
       { correo: 'enlace-sin@ejemplo.mx', clave_inegi: '15013' },

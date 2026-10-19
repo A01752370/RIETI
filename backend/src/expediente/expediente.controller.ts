@@ -132,8 +132,8 @@ export class ExpedienteController {
       throw new NotFoundException('Alerta no encontrada');
     }
     await this.ds.query(
-      `UPDATE alerta_territorial SET estatus = $2, comentario = $3, fecha_actualizacion = now(),
-              id_usuario_atendio = CASE WHEN $2 = 'atendida' THEN $4::int ELSE NULL END
+      `UPDATE alerta_territorial SET estatus = $2::text, comentario = $3::text, fecha_actualizacion = now(),
+              id_usuario_atendio = CASE WHEN $2::text = 'atendida' THEN $4::int ELSE NULL END
        WHERE id_alerta = $1`, [id, dto.estatus, dto.comentario ?? null, alcance.idUsuario]);
     return { id, estatus: dto.estatus };
   }
