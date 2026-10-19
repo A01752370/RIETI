@@ -105,11 +105,13 @@ export class ExpedienteController {
         `SELECT r.id_reporte AS id, f.codigo AS folio
          FROM reporte r JOIN ubicacion u ON u.id_ubicacion = r.id_ubicacion JOIN folio f ON f.id_reporte = r.id_reporte
          WHERE r.id_municipio = $1 AND u.latitud IS NOT NULL
-           AND r.fecha_creacion BETWEEN $5::timestamptz - make_interval(days => $4::int) AND $6::timestamptz
+           -- Sin cota superior: la fecha de la alerta llega como Date de JS (milisegundos) y la del
+           -- reporte que la abrió tiene microsegundos, así que una cota superior lo excluía.
+           AND r.fecha_creacion >= $5::timestamptz - make_interval(days => $4::int)
            AND ST_DWithin(ST_SetSRID(ST_MakePoint(u.longitud, u.latitud), 4326)::geography,
-                          ST_SetSRID(ST_MakePoint($3, $2), 4326)::geography, $7)
+                          ST_SetSRID(ST_MakePoint($3, $2), 4326)::geography, $6)
          ORDER BY r.fecha_creacion DESC LIMIT 10`,
-        [a.id_municipio, a.latitud, a.longitud, dias, a.fecha_creacion, a.fecha_actualizacion, radio]);
+        [a.id_municipio, a.latitud, a.longitud, dias, a.fecha_creacion, radio]);
       return {
         id: Number(a.id), municipio: a.municipio, latitud: Number(a.latitud), longitud: Number(a.longitud), reportes: a.reportes,
         estatus: a.estatus, fechaCreacion: new Date(a.fecha_creacion).toISOString(), fechaActualizacion: new Date(a.fecha_actualizacion).toISOString(),

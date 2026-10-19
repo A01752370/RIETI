@@ -386,7 +386,7 @@ private fun TarjetaExpediente(r: ReporteDetalle, enabled: Boolean, alAsignarme: 
         Dato("Responsable", e.responsable?.correo ?: "Sin asignar")
         Dato("Verificación", e.verificacion)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Dato("Próximo seguimiento", e.fechaSeguimiento?.let { formatearFecha(it + "T12:00:00Z") } ?: "Sin fecha")
+            Dato("Próximo seguimiento", e.fechaSeguimiento?.let { ControlExpediente.fechaCorta(it) } ?: "Sin fecha")
             if (e.seguimientoVencido) IndicadorTexto("Vencido", destacado = true)
         }
         e.dependencia?.let { Dato("Dependencia", it.nombre) }

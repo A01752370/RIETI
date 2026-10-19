@@ -1,5 +1,8 @@
 package mx.sipinna.rieti.viewmodel
 
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import mx.sipinna.rieti.model.EventoSeguimiento
 
 /**
@@ -35,6 +38,13 @@ object ControlExpediente {
         "accion" -> "Acción realizada"
         "expediente" -> "Cambio en el expediente"
         else -> "Nota interna"
+    }
+
+    /** "1 oct 2026" a partir de una fecha `AAAA-MM-DD` (sin hora: la fecha de seguimiento no la tiene). */
+    fun fechaCorta(fecha: String): String = try {
+        LocalDate.parse(fecha.take(10)).format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale.forLanguageTag("es-MX")))
+    } catch (e: Exception) {
+        fecha
     }
 
     /** Texto que se guarda para una acción: "Visita: se habló con la familia". */

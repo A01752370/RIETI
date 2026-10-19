@@ -883,12 +883,13 @@ describeBd('API RIETI (e2e)', () => {
     });
 
     it('alerta de punto recurrente: 3 reportes en 150 m abren una alerta, solo visible para sus municipios', async () => {
-      await crear({ latitud: 19.56015, longitud: -99.25205 }); // tercero en el radio
+      const { id: idTercero } = await crear({ latitud: 19.56015, longitud: -99.25205 }); // tercero en el radio
       const a = await http().get('/api/v1/alertas').set(enlace).expect(200);
       const alerta = a.body.find((x: { latitud: number }) => Math.abs(x.latitud - 19.5601) < 0.002);
       expect(alerta).toMatchObject({ estatus: 'abierta', municipio: 'Atizapán de Zaragoza' });
       expect(alerta.reportes).toBeGreaterThanOrEqual(3);
-      expect(alerta.relacionados.map((r: { id: number }) => r.id)).toEqual(expect.arrayContaining([idAtz, idAtz2]));
+      // Incluye el reporte que disparó la alerta (su marca de tiempo es posterior a la de la alerta).
+      expect(alerta.relacionados.map((r: { id: number }) => r.id)).toEqual(expect.arrayContaining([idAtz, idAtz2, idTercero]));
       const nau = await http().get('/api/v1/alertas').set(enlaceNau).expect(200);
       expect(nau.body.map((x: { id: number }) => x.id)).not.toContain(alerta.id);
       await http().patch(`/api/v1/alertas/${alerta.id}`).set(enlaceNau).send({ estatus: 'atendida' }).expect(404);
