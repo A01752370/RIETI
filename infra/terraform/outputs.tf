@@ -46,3 +46,8 @@ output "rds_secret_arn" {
 output "evidencias_bucket" {
   value = aws_s3_bucket.evidencias.bucket
 }
+
+output "rol_limpieza_arn" {
+  description = "Rol para la tarea única de limpieza de datos de prueba (runbook)"
+  value       = aws_iam_role.limpieza.arn
+}

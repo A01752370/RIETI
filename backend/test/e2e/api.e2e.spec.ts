@@ -1526,6 +1526,53 @@ describeBd('API RIETI (e2e)', () => {
       await expect(adminDs.query('DELETE FROM acceso_expediente')).rejects.toThrow(/append-only/);
     });
 
+    it('limpieza de datos de prueba: simulación sin cambios, borrado completo e idempotente', async () => {
+      const { limpiarPruebas, MARCA_PRUEBA } = await import('../../src/scripts/limpiar-pruebas');
+      const enlace = { Authorization: 'Bearer token-personal' };
+      const punto = { latitud: 19.5634, longitud: -99.2512 }; // a ≈ 440 m del punto de las demás pruebas
+      const crear = async (descripcion: string) => {
+        const r = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send({ ...reporteValido(), ...punto, descripcion, canal: 'app' }).expect(201);
+        return { folio: r.body.folio as string, id: Number((await adminDs.query('SELECT id_reporte AS id FROM folio WHERE codigo = $1', [r.body.folio]))[0].id) };
+      };
+      const p1 = await crear(`${MARCA_PRUEBA} ficticio 1`);
+      const p2 = await crear(`${MARCA_PRUEBA} ficticio 2`);
+      const p3 = await crear(`${MARCA_PRUEBA} ficticio 3`); // con los tres se abre una alerta en ese punto
+      const real = await crear('Reporte que no es de prueba, cerca del punto');
+      await http().post(`/api/v1/reportes/${real.id}/duplicado`).set(enlace).send({ idPrincipal: p1.id }).expect(200);
+      await http().get(`/api/v1/reportes/${p2.id}`).set(enlace).expect(200); // deja un acceso registrado
+      await adminDs.query("INSERT INTO foto_reporte (id_reporte, clave_objeto, bytes, ancho, alto, sha256) VALUES ($1, 'fotos/prueba-limpieza.jpg', 10, 1, 1, repeat('a', 64))", [p3.id]);
+      const alertasAntes = Number((await adminDs.query('SELECT count(*) AS n FROM alerta_territorial WHERE abs(latitud - 19.5634) < 0.002'))[0].n);
+      expect(alertasAntes).toBeGreaterThanOrEqual(1);
+      const contar = async () => Number((await adminDs.query('SELECT count(*) AS n FROM reporte'))[0].n);
+      const antes = await contar();
+
+      // Simulación: se calcula todo y se revierte.
+      let simulado: Awaited<ReturnType<typeof limpiarPruebas>> | undefined;
+      await expect(adminDs.transaction(async (m) => { simulado = await limpiarPruebas(m, { folios: ['RIETI-2026-999998'], marca: true }); throw new Error('revertir'); }))
+        .rejects.toThrow('revertir');
+      expect(simulado!.reportes.map((r) => r.folio).sort()).toEqual([p1.folio, p2.folio, p3.folio].sort());
+      expect(simulado!).toMatchObject({ noEncontrados: ['RIETI-2026-999998'], vinculosRetirados: 1, clavesS3: ['fotos/prueba-limpieza.jpg'] });
+      expect(simulado!.alertasEliminadas).toBeGreaterThanOrEqual(1);
+      expect(await contar()).toBe(antes);
+
+      // Limpieza real.
+      const plan = await adminDs.transaction((m) => limpiarPruebas(m, { folios: [], marca: true }));
+      expect(plan.reportes).toHaveLength(3);
+      expect(await contar()).toBe(antes - 3);
+      expect(await adminDs.query('SELECT 1 FROM folio WHERE codigo = ANY($1::text[])', [[p1.folio, p2.folio, p3.folio]])).toEqual([]);
+      expect(await adminDs.query('SELECT 1 FROM acceso_expediente WHERE id_reporte = ANY($1::int[])', [[p1.id, p2.id, p3.id]])).toEqual([]);
+      expect(await adminDs.query("SELECT 1 FROM foto_reporte WHERE clave_objeto = 'fotos/prueba-limpieza.jpg'")).toEqual([]);
+      const d = await http().get(`/api/v1/reportes/${real.id}`).set(enlace).expect(200);
+      expect(d.body.duplicadoDe).toBeNull();
+      expect(d.body.historial.at(-1).comentario).toMatch(/principal era de prueba/);
+      expect(Number((await adminDs.query("SELECT count(*) AS n FROM alerta_territorial WHERE abs(latitud - 19.5634) < 0.002"))[0].n)).toBe(0);
+      // Los triggers append-only quedaron activos y repetir no hace nada.
+      await expect(adminDs.query('DELETE FROM seguimiento')).rejects.toThrow(/append-only/);
+      await expect(adminDs.query('DELETE FROM acceso_expediente')).rejects.toThrow(/append-only/);
+      const otra = await adminDs.transaction((m) => limpiarPruebas(m, { folios: [p1.folio], marca: true }));
+      expect(otra).toMatchObject({ reportes: [], noEncontrados: [p1.folio], vinculosRetirados: 0, alertasEliminadas: 0 });
+    });
+
     it('si el folio no existe no cambia nada', async () => {
       const { borrarReportePorFolio } = await import('../../src/scripts/borrar-reporte');
       await expect(adminDs.transaction((m) => borrarReportePorFolio(m, 'RIETI-2026-999999'))).rejects.toThrow(/No existe/);
