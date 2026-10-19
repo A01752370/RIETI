@@ -2,13 +2,13 @@
 
 Matriz de los documentos del socio formador ("Consideraciones" y "Lista de estatus de expedientes") contra lo que hace RIETI. **Estados:** Implementado · Parcial · Trabajo futuro · Decisión del equipo (con su motivo). Las decisiones están en [`PLAN-RIETI.md`](PLAN-RIETI.md) §2.4.
 
-> Estado al cierre de la **Fase 8**. Las filas de la Fase 9 se actualizan al terminarla.
+> Estado al cierre de la **Fase 9**.
 
 ## A. Consideraciones
 
 | # | Requisito | Estado | Dónde / notas |
 |---|---|---|---|
-| A0 | Herramienta intermunicipal de detección, canalización, seguimiento e inteligencia territorial; el ciudadano reporta rápido y la información técnica se genera del lado administrativo | Parcial | Reporte rápido (asistente de 5 pasos), bandeja, expediente, aislamiento por municipio, duplicidad, alertas, panel con embudo y mapa de calor. Inteligencia territorial ampliada: Fase 9 |
+| A0 | Herramienta intermunicipal de detección, canalización, seguimiento e inteligencia territorial; el ciudadano reporta rápido y la información técnica se genera del lado administrativo | Implementado | Reporte rápido (asistente de 5 pasos, fotos opcionales), registro institucional, bandeja, expediente, aislamiento por municipio, duplicidad, alertas, panel con embudo, mapa territorial por niveles, hallazgos y base regional |
 | A1.1 | Elegir cómo reportar: **anónimo** (sin nombre, teléfono ni correo) | Implementado | Paso "Cómo reportar" (app y web), anónimo por defecto (D-25, D-33) |
 | A1.2 | **Con seguimiento**: solo correo o teléfono/WhatsApp para recibir folio y consultar avances | Parcial · Decisión del equipo | Con la **cuenta opcional** (correo + Mi panel) en la app. Sin teléfono/WhatsApp ni notificaciones: minimización y no hay canal de envío (D-33). En la web el reporte es anónimo |
 | A1.3 | Pedir los mínimos datos personales | Implementado | No se pide nombre, teléfono ni dirección de quien reporta; la cuenta guarda solo el `sub` de Cognito (D-19) |
@@ -22,7 +22,7 @@ Matriz de los documentos del socio formador ("Consideraciones" y "Lista de estat
 | A2.8 | El ciudadano no determina jurídicamente si hay trabajo infantil | Implementado | Reporta lo que observa; la modalidad y la verificación las asigna el personal en el expediente (D-35, D-37) |
 | A3 | Pregunta de **peligro inmediato** con aviso de que RIETI no sustituye emergencias ni la denuncia formal; queda como **prioridad alta** | Implementado | Pregunta, aviso y botón al 911 (app y web); prioridad Alta calculada por el servidor y destacada en bandeja, detalle y panel (D-32) |
 | A4 | Geolocalización: ubicación actual, punto en el mapa o dirección; guardar latitud, longitud, municipio, colonia, fecha, hora, actividad, edad y riesgo | Implementado (app) · Parcial (web) | La web no tiene mapa en el formulario (D-26) |
-| A5 | Mapa de calor institucional con niveles y filtros (periodo, municipio, edad, sexo, actividad, riesgo, horario, reincidencia, estatus, dependencia) | Parcial · Planeado (Fase 9) | Hoy: mapa de calor con celdas de ≈ 550 m y filtros de periodo, municipio, estatus, actividad y prioridad |
+| A5 | Mapa de calor institucional con niveles y filtros (periodo, municipio, edad, sexo, actividad, riesgo, horario, reincidencia, estatus, dependencia) | Implementado · Decisión del equipo | Región → calor → colonia → punto con los mismos filtros en mapa y gráficas, más hallazgos automáticos (D-43, D-44). El horario es el del **registro** (el formulario no pide la hora de la observación); el sexo solo como agregado con umbral y capturado por el personal; la colonia es el texto capturado normalizado (mejor esfuerzo) |
 | A6 | Separar reporte de caso confirmado; indicadores de recibidos, verificados, casos y NNA canalizados | Implementado | Verificación independiente del estatus y embudo en el panel web e inicio de la app, sin duplicados (D-37, D-41) |
 | A7 | Folio automático con clave municipal (`RIETI-ATZ-2026-000123`); el ciudadano solo ve estados generales | Implementado | D-31; la consulta solo muestra estatus y fechas (RF-38). Claves provisionales salvo ATZ, NAU, TLA y CIZ |
 | A8 | WhatsApp como segunda puerta de entrada | Trabajo futuro · Decisión del equipo | Columna `canal` lista (`whatsapp` reservado) y arquitectura propuesta (D-34) |
@@ -34,7 +34,8 @@ Matriz de los documentos del socio formador ("Consideraciones" y "Lista de estat
 | A10.2 | Expediente digital (responsable, dependencia, acciones, seguimiento, resultado, cierre) | Implementado | Responsable, dependencia, acciones tipadas, fecha de seguimiento con vencidos, verificación, modalidad, NNA y resultado/cierre obligatorios, cada cambio en la bitácora (D-37) |
 | A10.3 | Posible duplicidad | Implementado | Sugerencias por radio y ventana (150 m / 30 días, editables) y vínculo reversible; nunca se fusiona (D-38) |
 | A10.4 | Alertas territoriales ("punto recurrente") | Implementado | 3 reportes en 150 m y 30 días (editables), solo para el personal con alcance; sin correos (D-39) |
-| A10.5 | Base regional anonimizada | Planeado (Fase 9) | |
+| A10.5 | Base regional anonimizada | Implementado | CSV para coordinación y administración: celdas de ≈ 110 m por municipio y trimestre, solo conteos, sin texto ni fotos, con umbral (D-45) |
+| A10.6 | Registro institucional (detección en recorridos) | Implementado | Web y app, mismo flujo e indicadores, `origen = institucional`, solo en municipios asignados (D-46) |
 
 ## B. Lista de estatus y modalidades
 
@@ -53,3 +54,5 @@ Matriz de los documentos del socio formador ("Consideraciones" y "Lista de estat
 - Si el reporte con seguimiento debe incluir teléfono o WhatsApp, y con qué canal notificar (D-33).
 - Validación jurídica del aviso de privacidad (debe mencionar las fotos opcionales) y del texto de advertencia de fotos.
 - Plazo de conservación de las fotos (hoy 365 días provisional; D-42).
+- Si el formulario debe pedir la hora en que se observó la situación (hoy el horario del mapa es el del registro; D-43) y un catálogo oficial de colonias o localidades.
+- Si la coordinación regional debe ver detalle de casos o solo agregados (hoy ve el detalle; D-36).

@@ -203,6 +203,30 @@ El script `infra/sql/01-rol-rieti-app.sql` crea un rol sin permisos de DDL, sin 
 
 Se recomienda hacerlo después de la presentación, con calma.
 
+## Limpieza de datos de prueba (Fase 9, D-47)
+
+**Convención:** todo reporte ficticio lleva `[PRUEBA]` al inicio de la descripción. Los anteriores a esta convención se borran por folio.
+
+El script `backend/src/scripts/limpiar-pruebas.ts` borra, en una sola transacción, los reportes indicados con su bitácora, accesos, casos, folios, menores y ubicaciones; retira los vínculos de duplicado de otros reportes hacia ellos (y lo anota en su bitácora); elimina las alertas de punto recurrente que ya no reúnen el mínimo; y al final borra de S3 las fotos con todas sus versiones. Es idempotente: los folios que ya no existen se informan y se omiten.
+
+Corre como tarea única de ECS (variables del paso 3) con el **rol de limpieza**, el único que puede borrar fotos (el API no puede):
+
+```bash
+ROL=$(terraform -chdir=infra/terraform output -raw rol_limpieza_arn)
+correr() {   # $1 = argumentos del script en JSON, p. ej. '"--marca","--dry-run"'
+  TAREA=$(aws ecs run-task --cluster "$CLUSTER" --launch-type FARGATE --task-definition "$TD"     --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}"     --overrides "{\"taskRoleArn\":\"$ROL\",\"containerOverrides\":[{\"name\":\"api\",\"command\":[\"node\",\"dist/scripts/limpiar-pruebas.js\",$1]}]}"     --query 'tasks[0].taskArn' --output text)
+  aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TAREA"
+  aws logs tail /ecs/rieti-prod-api --since 10m --filter-pattern '"LIMPIEZA" OR "SIMULACIÓN" OR "RIETI-" OR "Error"'
+}
+
+# 1. Siempre primero la simulación (no cambia nada):
+correr '"--folios","RIETI-2026-000001,RIETI-ATZ-2026-000019","--dry-run"'
+correr '"--marca","--dry-run"'
+# 2. Si la lista es la correcta, la misma orden con --confirmar en lugar de --dry-run.
+```
+
+**Verificar:** la salida lista cada folio con su municipio, fecha y conteos (bitácora, accesos, fotos), los vínculos retirados, las alertas eliminadas y las versiones borradas en S3. Repetir la orden debe decir que los folios no existen.
+
 ## Conservación de la bitácora de accesos (Fase 7, D-40)
 
 La tabla `acceso_expediente` registra quién consultó o exportó expedientes y es solo de inserción. Conservación por omisión: **365 días** (parámetro `accesos_conservacion_dias`, editable por el Administrador entre 90 y 3650 días en **Administración → Parámetros**). Para aplicarla, corre esta tarea única con las variables del paso 3 (por ejemplo, una vez al mes):

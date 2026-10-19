@@ -1,6 +1,6 @@
 # Métodos de protección — RIETI
 
-> Etapa 3 · Fecha de corte: 10-oct-2026, actualizado al cierre de la Fase 8.
+> Etapa 3 · Fecha de corte: 10-oct-2026, actualizado al cierre de la Fase 9.
 > Cada control indica **dónde vive** y **cómo se verificó**. Lo que no está implementado aparece en la sección [Planeado](#planeado) y no se presenta como hecho.
 
 ## Cómo se verificó
@@ -170,6 +170,18 @@ Las pruebas e2e corrieron en una máquina de desarrollo con PostgreSQL local. **
 | Bucket privado, KMS, solo TLS, CORS solo POST desde la web; ciclo de vida: entrada 1 día, fotos 365 días | `infra/terraform/s3.tf` | A14 | `terraform plan` (sin destrucciones) |
 | CSP con una sola excepción: el S3 regional en `img-src` y `connect-src` | `configurar-app.ts` | A6 | e2e "CSP estricta" |
 | `rieti_app` solo `SELECT, INSERT` sobre `foto_reporte` | `infra/sql/01-rol-rieti-app.sql` | A21 | e2e como `rieti_app` |
+
+### Mapa e inteligencia territorial (Fase 9)
+
+| Control | Dónde | Mitiga | Verificación |
+|---|---|---|---|
+| Filtros comunes y alcance por municipio en cada consulta del mapa, hallazgos y exportaciones | `estadisticas.controller.ts` (`DESDE_FILTRADO`), `territorio.controller.ts` | A3 | e2e Fase 9 (región, puntos y hallazgos por municipio) |
+| Umbral en región, colonias, distribuciones (incluido el sexo) y base regional | `agregados.ts` (`proteger`), `territorio.controller.ts` | A31, A42 | e2e Fase 9 |
+| Puntos sin texto, con 4 decimales y solo para el personal con alcance | `territorio.controller.ts` | A42 | e2e (claves del punto) |
+| Base regional: permiso `base.exportar`, celdas de 3 decimales, sin texto ni fotos, celdas pequeñas omitidas, 5/min y registro en la bitácora | `territorio.controller.ts` | A29, A42 | e2e Fase 9 |
+| Hallazgos solo con datos suficientes; el centro de la zona no es la coordenada de un reporte | `territorio.ts` | A42 | `territorio.spec.ts` |
+| Registro institucional con permiso propio, solo en municipios asignados, a nombre de quien registra | `reportes.controller.ts`, `reportes.service.ts` | A43 | e2e Fase 9 |
+| Limpieza de datos de prueba con simulación obligatoria, triggers reactivados en la misma transacción y rol de IAM separado del API | `scripts/limpiar-pruebas.ts`, `infra/terraform/ecs.tf` | A21 | e2e "limpieza de datos de prueba" |
 
 ### App Android
 
