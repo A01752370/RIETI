@@ -1,5 +1,6 @@
 package mx.sipinna.rieti.view
 
+import mx.sipinna.rieti.viewmodel.ReglasFotos
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -67,7 +68,7 @@ private enum class Copiado { NADA, FOLIO, CLAVE, AMBOS }
  * @param alTerminar vuelve al inicio
  */
 @Composable
-fun ConfirmacionScreen(folio: String, clave: String, fecha: String? = null, alTerminar: () -> Unit) {
+fun ConfirmacionScreen(folio: String, clave: String, fecha: String? = null, fotos: Int = 0, alTerminar: () -> Unit) {
     val contexto = LocalContext.current
     var copiado by rememberSaveable { mutableStateOf(Copiado.NADA) }
     val ambos = "Folio: $folio\nClave de consulta: $clave"
@@ -86,6 +87,8 @@ fun ConfirmacionScreen(folio: String, clave: String, fecha: String? = null, alTe
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("¡Gracias por ayudar a proteger los derechos de niñas, niños y adolescentes!", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
                     Text("Tu reporte fue recibido correctamente.", style = MaterialTheme.typography.bodyMedium)
+                    // Fase 8: resultado de adjuntar las fotos (si había).
+                    ReglasFotos.mensajeConfirmacion(fotos)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold) }
                 }
             }
         }

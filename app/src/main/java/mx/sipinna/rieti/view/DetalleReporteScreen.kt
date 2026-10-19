@@ -1,5 +1,9 @@
 package mx.sipinna.rieti.view
 
+import androidx.compose.foundation.Image
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import androidx.core.net.toUri
@@ -191,6 +195,7 @@ private fun ContenidoDetalle(r: ReporteDetalle, guardado: UiState<Unit>, viewMod
         }
         r.motivoDescarte?.let { Dato("Motivo de cancelación", it) }
     }
+    TarjetaFotos(r, viewModel)
     TarjetaDescripcion(r.descripcion)
     Bitacora(r)
 
@@ -454,6 +459,31 @@ private fun DialogoVerificacion(actual: String, ocupado: Boolean, error: String?
         },
         dismissButton = { TextButton(onClick = alCancelar, enabled = !ocupado, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancelar") } }
     )
+}
+
+/**
+ * Fotos del reporte (Fase 8): se descargan solo al tocar "Ver fotos", con URL de 60 s;
+ * el servidor registra la consulta en la bitácora de accesos. No se guardan en el teléfono.
+ */
+@Composable
+private fun TarjetaFotos(r: ReporteDetalle, viewModel: DetalleReporteViewModel) {
+    if (r.numeroFotos <= 0) return
+    val fotos by viewModel.fotos.collectAsState()
+    Tarjeta("Fotos · ${r.numeroFotos}") {
+        Text("Las aportó quien reportó. Verlas queda registrado en la bitácora de accesos.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+        when (val f = fotos) {
+            is UiState.Inactivo -> OutlinedButton(onClick = viewModel::cargarFotos, modifier = Modifier.heightIn(min = 48.dp)) { Text("Ver fotos") }
+            is UiState.Cargando -> Cargando()
+            is UiState.Error -> {
+                MensajeError(f.mensaje)
+                OutlinedButton(onClick = viewModel::cargarFotos, modifier = Modifier.heightIn(min = 48.dp)) { Text("Reintentar") }
+            }
+            is UiState.Exito -> f.datos.forEachIndexed { i, bitmap ->
+                Image(bitmap.asImageBitmap(), contentDescription = "Foto ${i + 1} del reporte ${r.folio}", contentScale = ContentScale.FillWidth,
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)))
+            }
+        }
+    }
 }
 
 /** Dirección, referencias, mini mapa y botón para abrirlo en el mapa del teléfono. */

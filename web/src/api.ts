@@ -159,6 +159,8 @@ export interface ReporteDetalle extends ReporteResumen {
   direccion?: DireccionRespuesta | null;
   /** Expediente interno y duplicados (Fase 7; servidores anteriores no lo envían). */
   expediente?: Expediente;
+  /** Fotos del reporte (Fase 8). */
+  numeroFotos?: number;
   duplicadoDe?: ReporteRelacionado | null;
   duplicados?: ReporteRelacionado[];
 }
@@ -208,6 +210,10 @@ export interface PersonaPersonal { id: number; correo: string; perfil: string; a
 export interface Parametro { clave: string; valor: number; descripcion: string; minimo: number; maximo: number; fechaActualizacion: string }
 /** Dependencia del catálogo. */
 export interface Dependencia { id: number; nombre: string; activo: boolean }
+/** Formularios de subida directa de fotos (Fase 8). */
+export interface SolicitudFotos { subidas: { id: string; url: string; campos: Record<string, string> }[]; maxBytes: number; expiraEnSegundos: number }
+/** Foto para el personal: URL de lectura que caduca pronto. */
+export interface Foto { id: number; url: string; expiraEnSegundos: number; ancho: number; alto: number; bytes: number; fecha: string }
 /** Entrada de la bitácora de accesos. */
 export interface Acceso { id: number; usuario: string; accion: string; folio: string | null; detalle: string | null; fecha: string }
 /** Menores observados en un rango de edad. */
@@ -303,6 +309,12 @@ export const api = {
     }),
   agregarNota: (id: number, comentario: string, tipo: 'nota' | 'accion' = 'nota') =>
     llamar<ReporteDetalle>(`/reportes/${id}/seguimientos`, { metodo: 'POST', cuerpo: tipo === 'accion' ? { comentario, tipo } : { comentario } }),
+  // Fase 8: fotos (quien reportó, con folio + clave; el personal, con su sesión).
+  solicitarFotos: (folio: string, clave: string, cantidad: number) =>
+    llamar<SolicitudFotos>('/reportes/fotos/solicitud', { metodo: 'POST', cuerpo: { folio, clave, cantidad } }),
+  confirmarFotos: (folio: string, clave: string, ids: string[]) =>
+    llamar<{ fotos: number }>('/reportes/fotos/confirmar', { metodo: 'POST', cuerpo: { folio, clave, ids } }),
+  fotos: (id: number) => llamar<Foto[]>(`/reportes/${id}/fotos`),
   // Fase 7: expediente, duplicados, alertas y administración.
   catalogosExpediente: () => llamar<CatalogosExpediente>('/catalogos/expediente'),
   actualizarExpediente: (id: number, cambios: CambiosExpediente) =>

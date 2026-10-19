@@ -27,6 +27,7 @@ src/
 │   └── alcance.ts            Alcance territorial por municipio y bitácora de accesos (Fase 7)
 ├── expediente/             Catálogos del expediente y alertas de punto recurrente (Fase 7)
 ├── admin/                  Asignaciones, parámetros, dependencias y bitácora de accesos (Fase 7)
+├── fotos/                  Fotos opcionales (Fase 8): almacén S3, validación por contenido y re-codificación
 ├── reportes/               Registro, consulta ciudadana, bandeja, estatus, bitácora
 │   ├── estatus.ts            Máquina de estados de la Etapa 1
 │   ├── clave-consulta.ts     Clave aleatoria + Argon2id
@@ -71,6 +72,9 @@ src/
 | GET | `/api/v1/estadisticas/embudo` | Personal (`estadisticas.ver`) | Embudo de atención (Fase 7) |
 | GET/PATCH | `/api/v1/alertas`, `/api/v1/alertas/:id` | Personal (`alertas.ver`/`alertas.gestionar`) | Alertas de punto recurrente (Fase 7) |
 | GET/PUT/POST/PATCH | `/api/v1/admin/personal`, `/personal/:id/municipios`, `/configuracion`, `/dependencias`, `/dependencias/:id`, `/accesos` | Administrador | Administración (Fase 7) |
+
+| POST | `/api/v1/reportes/fotos/solicitud`, `/fotos/confirmar` | Público con folio + clave, 10/min | Fotos opcionales (Fase 8, D-42) |
+| GET | `/api/v1/reportes/:id/fotos` | Personal (`reportes.ver`), 30/min | Fotos con URL prefirmada de 60 s (Fase 8) |
 
 Todas las rutas del personal se limitan al **alcance territorial** de quien consulta (D-36): fuera de él, 404 uniforme.
 
@@ -151,6 +155,9 @@ Las migraciones corren al arrancar (`migrationsRun`). Con un usuario sin permiso
 | `configuracion` | Parámetros de duplicados, alertas y conservación |
 | `alerta_territorial` | Alertas de punto recurrente (centro con 5 decimales, conteo, estatus) |
 | `acceso_expediente` | Bitácora de accesos, append-only (D-40) |
+| `foto_reporte` (Fase 8) | Referencia al objeto en S3 (`fotos/<uuid>.jpg`), bytes, dimensiones y SHA-256 de la imagen re-codificada (D-42) |
+
+**Fotos (Fase 8).** Cliente → `POST /reportes/fotos/solicitud` (folio + clave) → POST prefirmado directo a `s3://…/entrantes/<reporte>/<uuid>` (no pasa por CloudFront ni el WAF) → `POST /reportes/fotos/confirmar` → el API lee el objeto por el endpoint de VPC de S3, valida, re-codifica con `sharp` y escribe `fotos/<uuid>.jpg`. `sharp` se carga al usarse; CI comprueba que funciona dentro de la imagen ARM64.
 
 ## Máquina de estados
 

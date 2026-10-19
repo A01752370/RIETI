@@ -1,6 +1,6 @@
 # Métodos de protección — RIETI
 
-> Etapa 3 · Fecha de corte: 10-oct-2026, actualizado al cierre de la Fase 7 (18-oct-2026).
+> Etapa 3 · Fecha de corte: 10-oct-2026, actualizado al cierre de la Fase 8.
 > Cada control indica **dónde vive** y **cómo se verificó**. Lo que no está implementado aparece en la sección [Planeado](#planeado) y no se presenta como hecho.
 
 ## Cómo se verificó
@@ -155,6 +155,22 @@ Las pruebas e2e corrieron en una máquina de desarrollo con PostgreSQL local. **
 | `rieti_app` con permisos por columna para el expediente (sin DELETE en `caso` ni en `reporte`) | `infra/sql/01-rol-rieti-app.sql` | A5, A21 | e2e como `rieti_app` |
 | Resultado obligatorio al concluir y motivo al cancelar | `reportes.service.ts` | Cierres sin sustento | e2e "Reincidente…" (422 `RESULTADO_REQUERIDO`) |
 
+### Evidencia fotográfica (Fase 8)
+
+| Control | Dónde | Mitiga | Verificación |
+|---|---|---|---|
+| Subida solo con folio + clave (bloqueo tras 5 fallos), 10/min por IP, 3 fotos por reporte y 24 h | `fotos/fotos.ts`, `reportes.service.ts` (`verificarFolioClave`) | A1, A41 | e2e Fase 8 |
+| POST prefirmado de 5 min con `content-length-range` ≤ 5 MB y clave exacta en una zona de entrada separada | `fotos/almacen.ts` | A7, A41 | `fotos.spec.ts` (política) |
+| Tipo real por los primeros bytes (JPEG/PNG/WebP) | `fotos/imagen.ts` (`formatoReal`) | A7 | `fotos.spec.ts`, e2e (PDF renombrado) |
+| Re-codificación en el servidor sin metadatos, con límite de píxeles; nombre aleatorio | `fotos/imagen.ts` (`recodificar`) | A7, A8 | `fotos.spec.ts` (EXIF/GPS, carga oculta), e2e (JPEG sin EXIF) |
+| La app y la web reducen y quitan metadatos antes de subir; la captura de la cámara se borra del teléfono | `PrepararFoto.kt`, `web/src/fotos.ts` | A8, A17 | Pruebas JVM y vitest; revisión de código |
+| Selector de fotos del sistema y cámara por intent: sin permisos de almacenamiento ni de cámara; FileProvider solo sobre la caché de capturas | `FormularioReporteScreen.kt`, `AndroidManifest.xml` | A17 | Manifiesto sin `CAMERA` ni `READ_MEDIA_*` |
+| Lectura del personal con URL prefirmada de 60 s, filtro por municipio y registro `foto` | `fotos/fotos.ts` (`listar`) | A3, A14, A38 | e2e Fase 8 |
+| Fotos fuera de la consulta, exportación, estadísticas y mapa | Diseño (ninguna de esas rutas lee `foto_reporte`) | A14 | e2e Fase 8 |
+| Bucket privado, KMS, solo TLS, CORS solo POST desde la web; ciclo de vida: entrada 1 día, fotos 365 días | `infra/terraform/s3.tf` | A14 | `terraform plan` (sin destrucciones) |
+| CSP con una sola excepción: el S3 regional en `img-src` y `connect-src` | `configurar-app.ts` | A6 | e2e "CSP estricta" |
+| `rieti_app` solo `SELECT, INSERT` sobre `foto_reporte` | `infra/sql/01-rol-rieti-app.sql` | A21 | e2e como `rieti_app` |
+
 ### App Android
 
 | Control | Dónde | Mitiga | Verificación |
@@ -182,4 +198,4 @@ Estos controles **no están implementados**. Están ordenados por prioridad.
 | CAPTCHA o prueba de trabajo en el registro de ciudadanos | A36 | Hoy solo límites por IP y WAF. |
 | Correo de Cognito por SES con dominio propio | A36 | El correo por defecto tiene cuota diaria baja; ver nota de SES en `docs/arquitectura/aws.md`. |
 | Dominio propio + ACM para fijar TLS 1.2+ mínimo | A12 | Con el certificado `*.cloudfront.net` no se puede endurecer la versión mínima de TLS. |
-| Evidencias fotográficas con URL prefirmada, EXIF eliminado y SHA-256 | A7, A8, A14 | No hay endpoint de subida. |
+| Antivirus de archivos subidos | A7 | La re-codificación ya descarta todo lo que no sea una imagen válida; un escáner adicional sería defensa en profundidad. |

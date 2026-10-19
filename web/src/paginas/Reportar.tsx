@@ -4,6 +4,7 @@ import { Esqueleto, Marco, MensajeError, useCarga, TextoAviso } from '../compone
 import { Enlace, useTitulo } from '../enrutador';
 import { BarraProgreso, calcularLinea, IndicadorPasos, LineaProgreso } from '../progreso';
 import { SelectorMunicipio } from '../SelectorMunicipio';
+import { ADVERTENCIA_FOTOS, MAX_FOTOS, subirFotos, TIPOS_FOTO, validarFotos } from '../fotos';
 
 export const MAX_DESCRIPCION = 2000;
 /** Tope de menores en un reporte (igual que en el servidor y la app). */
@@ -62,11 +63,15 @@ export interface Formulario {
   actividadOtro: string;
   riesgo: string;
   descripcion: string;
+  /** Fotos opcionales (Fase 8): solo en memoria hasta enviarlas, nunca se guardan en el navegador. */
+  fotos: File[];
+  /** La persona leyó la advertencia del socio antes de elegir fotos. */
+  advertenciaLeida: boolean;
 }
 
 export const FORMULARIO_VACIO: Formulario = {
   municipio: null, calle: '', numero: '', colonia: '', codigoPostal: '', referencias: '', peligro: '', cantidad: '', edades: [], conteos: {},
-  actividad: '', actividadOtro: '', riesgo: '', descripcion: '',
+  actividad: '', actividadOtro: '', riesgo: '', descripcion: '', fotos: [], advertenciaLeida: false,
 };
 
 /** Suma de menores. */
@@ -266,11 +271,22 @@ function PasoAviso({ alAceptar }: { alAceptar: (version: string) => void }) {
   );
 }
 
-/** Folio y clave, con copiar, compartir, advertencia y la línea de avance (hoy en "Recibido"). */
-function PasoListo({ creado }: { creado: ReporteCreado }) {
+/** Estado de la subida de fotos tras crear el reporte. */
+type EstadoFotos = { fase: 'sin-fotos' } | { fase: 'subiendo' } | { fase: 'lista'; total: number } | { fase: 'error'; error: unknown };
+
+/** Folio y clave, con copiar, compartir, advertencia y la línea de avance (hoy en "Recibido"); sube las fotos si las hay. */
+function PasoListo({ creado, fotos }: { creado: ReporteCreado; fotos: File[] }) {
   const titulo = useRef<HTMLHeadingElement>(null);
   const [aviso, setAviso] = useState('');
+  const [estadoFotos, setEstadoFotos] = useState<EstadoFotos>({ fase: fotos.length ? 'subiendo' : 'sin-fotos' });
   useEffect(() => titulo.current?.focus(), []);
+  const adjuntar = () => {
+    setEstadoFotos({ fase: 'subiendo' });
+    subirFotos(creado.folio, creado.claveConsulta, fotos)
+      .then((total) => setEstadoFotos({ fase: 'lista', total }))
+      .catch((error) => setEstadoFotos({ fase: 'error', error }));
+  };
+  useEffect(() => { if (fotos.length) adjuntar(); }, []);
   const texto = `RIETI\nFolio: ${creado.folio}\nClave de consulta: ${creado.claveConsulta}`;
 
   const copiar = async () => {
@@ -287,6 +303,14 @@ function PasoListo({ creado }: { creado: ReporteCreado }) {
       <section className="tarjeta tarjeta-tinte" aria-labelledby="titulo-listo">
         <h2 id="titulo-listo" ref={titulo} tabIndex={-1}>¡Gracias por ayudar a proteger los derechos de niñas, niños y adolescentes!</h2>
         <p>Tu reporte fue recibido correctamente.</p>
+        {estadoFotos.fase === 'subiendo' && <p role="status">Adjuntando {fotos.length === 1 ? 'la foto' : `las ${fotos.length} fotos`}…</p>}
+        {estadoFotos.fase === 'lista' && <p role="status">Se {estadoFotos.total === 1 ? 'adjuntó 1 foto' : `adjuntaron ${estadoFotos.total} fotos`} al reporte.</p>}
+        {estadoFotos.fase === 'error' && (
+          <div className="aviso aviso-atencion" role="alert">
+            <p><strong>Tu reporte sí quedó registrado</strong>, pero no se pudieron adjuntar las fotos.</p>
+            <MensajeError error={estadoFotos.error} alReintentar={adjuntar} />
+          </div>
+        )}
         <p>Guarda estos datos para consultar el avance en <Enlace a="/seguimiento">Seguimiento</Enlace>:</p>
         <div className="rejilla rejilla-2">
           <div className="credencial"><span>Folio</span><output>{creado.folio}</output></div>
@@ -326,7 +350,7 @@ function BloqueRevision({ titulo, alEditar, children }: { titulo: string; alEdit
 }
 
 /** Contenido del asistente: indicador de pasos, el paso visible y la barra inferior. */
-function Asistente({ version, alCrear }: { version: string; alCrear: (c: ReporteCreado) => void }) {
+function Asistente({ version, alCrear }: { version: string; alCrear: (c: ReporteCreado, fotos: File[]) => void }) {
   const catalogos = useCarga(() => Promise.all([api.catalogos(), api.municipios()]), []);
   const [f, setF] = useState<Formulario>(FORMULARIO_VACIO);
   const [paso, setPaso] = useState(0);
@@ -377,7 +401,7 @@ function Asistente({ version, alCrear }: { version: string; alCrear: (c: Reporte
       return;
     }
     setEnviando(true); setErrorEnvio(null);
-    try { alCrear(await api.crearReporte(aNuevoReporte(f, version))); }
+    try { alCrear(await api.crearReporte(aNuevoReporte(f, version)), f.fotos); }
     catch (err) { setErrorEnvio(err); } finally { setEnviando(false); }
   };
 
@@ -491,6 +515,45 @@ function Asistente({ version, alCrear }: { version: string; alCrear: (c: Reporte
               <span className="ayuda">{f.descripcion.length}/{MAX_DESCRIPCION}</span>
               {errores.descripcion && <span id="error-descripcion" className="error-campo">{errores.descripcion}</span>}
             </div>
+            <fieldset className="campo bloque-fotos">
+              <legend>Fotografía (opcional)</legend>
+              <div className="aviso aviso-atencion" role="note" id="advertencia-fotos"><strong>Antes de adjuntar:</strong> {ADVERTENCIA_FOTOS}</div>
+              <label className="opcion">
+                <input type="checkbox" checked={f.advertenciaLeida} aria-describedby="advertencia-fotos"
+                  onChange={(e) => { cambiar('advertenciaLeida', e.target.checked); if (!e.target.checked) cambiar('fotos', [], 'fotos'); }} />
+                <span>Leí la advertencia y quiero adjuntar fotos</span>
+              </label>
+              {f.advertenciaLeida && (
+                <>
+                  <label className="boton boton-secundario boton-archivo">
+                    <input id="fotos" type="file" className="solo-lectores" accept={TIPOS_FOTO.join(',')} multiple disabled={f.fotos.length >= MAX_FOTOS}
+                      aria-describedby={errores.fotos ? 'ayuda-fotos error-fotos' : 'ayuda-fotos'}
+                      onChange={(e) => {
+                        const nuevas = [...f.fotos, ...Array.from(e.target.files ?? [])];
+                        e.target.value = '';
+                        const error = validarFotos(nuevas);
+                        if (error) setErrores((x) => ({ ...x, fotos: error }));
+                        else cambiar('fotos', nuevas, 'fotos');
+                      }} />
+                    Elegir fotos (hasta {MAX_FOTOS})
+                  </label>
+                  <span id="ayuda-fotos" className="ayuda">JPG, PNG o WebP. Antes de enviarlas se quita la información del teléfono y de ubicación que traen las fotos.</span>
+                  {f.fotos.length > 0 && (
+                    <ul className="lista-simple">
+                      {f.fotos.map((foto, i) => (
+                        <li key={`${foto.name}-${i}`}>
+                          <span>Foto {i + 1} · {Math.max(1, Math.round(foto.size / 1024))} KB</span>
+                          <button type="button" className="boton-texto" onClick={() => cambiar('fotos', f.fotos.filter((_, j) => j !== i), 'fotos')}>
+                            Quitar<span className="solo-lectores"> la foto {i + 1}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {errores.fotos && <span id="error-fotos" className="error-campo">{errores.fotos}</span>}
+                </>
+              )}
+            </fieldset>
           </>
         )}
 
@@ -514,6 +577,7 @@ function Asistente({ version, alCrear }: { version: string; alCrear: (c: Reporte
               <dt>Actividad</dt><dd>{f.actividad === 'Otro' && f.actividadOtro.trim() ? `Otra actividad: ${f.actividadOtro.trim()}` : f.actividad ? textoActividad(f.actividad) : '—'}</dd>
               <dt>¿Riesgo percibido?</dt><dd>{f.riesgo || '—'}</dd>
               <dt>Descripción</dt><dd className="texto-largo">{f.descripcion.trim() || '—'}</dd>
+              <dt>Fotos</dt><dd>{f.fotos.length === 0 ? 'Sin fotos' : `${f.fotos.length} (se adjuntan al enviar)`}</dd>
             </BloqueRevision>
           </>
         )}
@@ -538,12 +602,12 @@ function Asistente({ version, alCrear }: { version: string; alCrear: (c: Reporte
 export function Reportar() {
   useTitulo('Reportar una situación');
   const [version, setVersion] = useState<string | null>(null);
-  const [creado, setCreado] = useState<ReporteCreado | null>(null);
+  const [creado, setCreado] = useState<{ reporte: ReporteCreado; fotos: File[] } | null>(null);
 
   let contenido;
-  if (creado) contenido = <PasoListo creado={creado} />;
+  if (creado) contenido = <PasoListo creado={creado.reporte} fotos={creado.fotos} />;
   else if (!version) contenido = <PasoAviso alAceptar={setVersion} />;
-  else contenido = <Asistente version={version} alCrear={(c) => { setCreado(c); window.scrollTo(0, 0); }} />;
+  else contenido = <Asistente version={version} alCrear={(reporte, fotos) => { setCreado({ reporte, fotos }); window.scrollTo(0, 0); }} />;
 
   return (
     <Marco>

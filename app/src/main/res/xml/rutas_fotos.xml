@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fase 8: única carpeta compartida con la app de cámara: la caché privada de capturas.
+     La captura se borra en cuanto se prepara la foto (sin metadatos) para el reporte. -->
+<paths>
+    <cache-path name="fotos" path="fotos/" />
+</paths>

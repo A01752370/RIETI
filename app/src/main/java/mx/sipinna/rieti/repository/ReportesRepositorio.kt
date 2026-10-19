@@ -16,7 +16,19 @@ import mx.sipinna.rieti.model.ReporteDetalle
 import mx.sipinna.rieti.model.ReporteResumen
 import mx.sipinna.rieti.model.ResumenPersonal
 import mx.sipinna.rieti.model.SinAtender
+import java.io.IOException
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import mx.sipinna.rieti.model.ConfirmarFotosRequest
+import mx.sipinna.rieti.model.FotoPersonal
+import mx.sipinna.rieti.model.SolicitarFotosRequest
 import mx.sipinna.rieti.network.ApiService
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import mx.sipinna.rieti.network.ServicioRemoto
 
 /**
@@ -26,7 +38,59 @@ import mx.sipinna.rieti.network.ServicioRemoto
  *
  * @param api implementación del API (por defecto, la de [ServicioRemoto])
  */
-class ReportesRepositorio(private val api: ApiService = ServicioRemoto.api) {
+class ReportesRepositorio(
+    private val api: ApiService = ServicioRemoto.api,
+    /** Cliente sin credenciales para el almacén de fotos (nunca lleva el token del API). */
+    private val almacen: OkHttpClient = ALMACEN
+) {
+
+    companion object {
+        private val ALMACEN: OkHttpClient by lazy {
+            OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).writeTimeout(60, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
+        }
+    }
+
+    /**
+     * Fase 8: sube las fotos (ya reducidas y sin metadatos) de un reporte recién creado.
+     * Pide los formularios con folio + clave, sube cada foto directo al almacén privado y confirma.
+     *
+     * @return fotos que quedaron en el reporte
+     */
+    suspend fun subirFotos(folio: String, clave: String, fotos: List<ByteArray>): Resultado<Int> {
+        if (fotos.isEmpty()) return Resultado.Exito(0)
+        val solicitud = when (val s = ejecutar { api.solicitarFotos(SolicitarFotosRequest(folio, clave, fotos.size)) }) {
+            is Resultado.Error -> return s
+            is Resultado.Exito -> s.datos
+        }
+        for ((i, subida) in solicitud.subidas.withIndex()) {
+            val cuerpo = MultipartBody.Builder().setType(MultipartBody.FORM).apply {
+                subida.campos.forEach { (k, v) -> addFormDataPart(k, v) }
+                // El archivo va al final: S3 ignora los campos que vienen después.
+                addFormDataPart("file", "foto.jpg", fotos[i].toRequestBody("image/jpeg".toMediaType()))
+            }.build()
+            val ok = try {
+                withContext(Dispatchers.IO) {
+                    almacen.newCall(Request.Builder().url(subida.url).post(cuerpo).build()).execute().use { it.isSuccessful }
+                }
+            } catch (e: IOException) {
+                return Resultado.Error("SIN_CONEXION", MensajesError.SIN_CONEXION)
+            }
+            if (!ok) return Resultado.Error("SUBIDA_FALLIDA", "No se pudo subir una de las fotos. Inténtalo de nuevo.")
+        }
+        return ejecutar { api.confirmarFotos(ConfirmarFotosRequest(folio, clave, solicitud.subidas.map { it.id })).fotos }
+    }
+
+    /** Fase 8: fotos de un reporte para el personal (URL de 60 s; el servidor registra el acceso). */
+    suspend fun fotos(id: Int): Resultado<List<FotoPersonal>> = ejecutar { api.fotos(id) }
+
+    /** Descarga una foto con su URL prefirmada (sin credenciales del API). */
+    suspend fun descargarFoto(url: String): ByteArray? = try {
+        withContext(Dispatchers.IO) {
+            almacen.newCall(Request.Builder().url(url).build()).execute().use { r -> if (r.isSuccessful) r.body?.bytes() else null }
+        }
+    } catch (e: IOException) {
+        null
+    }
 
     /** Aviso de privacidad vigente. */
     suspend fun avisoPrivacidad(): Resultado<AvisoPrivacidad> = ejecutar { api.avisoPrivacidad() }

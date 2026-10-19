@@ -99,7 +99,9 @@ data class ReporteDetalle(
     val direccion: DireccionRespuesta? = null,
     val fechaEstatusActual: String? = null,
     val expediente: Expediente? = null,
-    val duplicadoDe: ReporteRelacionado? = null
+    val duplicadoDe: ReporteRelacionado? = null,
+    /** Fotos del reporte (Fase 8); se leen con `GET /reportes/{id}/fotos`. */
+    val numeroFotos: Int = 0
 )
 
 /**
