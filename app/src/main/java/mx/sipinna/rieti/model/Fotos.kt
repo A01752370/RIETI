@@ -19,6 +19,9 @@ data class SubidaFoto(val id: String, val url: String, val campos: Map<String, S
 /** Cuerpo de `POST /api/v1/reportes/fotos/confirmar`. */
 data class ConfirmarFotosRequest(val folio: String, val clave: String, val ids: List<String>)
 
+/** Respuesta de `POST /api/v1/reportes/institucional` (Fase 9): sin clave de consulta. */
+data class ReporteInstitucional(val id: Int, val folio: String, val estatus: String, val fechaCreacion: String)
+
 /** Respuesta de la confirmación: fotos que quedaron en el reporte. */
 data class FotosConfirmadas(val fotos: Int)
 

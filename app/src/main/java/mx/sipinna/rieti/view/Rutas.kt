@@ -43,6 +43,9 @@ object Rutas {
     /** Bandeja del personal, con filtros iniciales opcionales. */
     const val BANDEJA = "bandeja?estatus={estatus}&sinAtender={sinAtender}&prioridadAlta={prioridadAlta}&pendientes={pendientes}&vencidos={vencidos}"
 
+    /** Registro institucional del personal (Fase 9). */
+    const val FORMULARIO_INSTITUCIONAL = "formulario-institucional"
+
     /** Detalle y seguimiento de un reporte. */
     const val DETALLE = "detalle/{id}"
 

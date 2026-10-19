@@ -99,6 +99,13 @@ class FormularioReporteViewModel(
     /** La persona leyó la advertencia del socio antes de elegir fotos. */
     val advertenciaLeida: StateFlow<Boolean> = _advertenciaLeida.asStateFlow()
 
+    /** Fase 9: registro institucional del personal (sin clave, sin fotos ni vínculo a cuenta). */
+    var institucional: Boolean = false
+
+    /** Id del reporte institucional recién registrado (para abrir su detalle). */
+    var idInstitucional: Int = 0
+        private set
+
     /** Fotos que se adjuntaron tras crear el reporte (-1 si falló la subida). */
     var fotosAdjuntadas: Int = 0
         private set
@@ -258,10 +265,18 @@ class FormularioReporteViewModel(
             _asistente.value = AsistenteReporte.avanzar(estado.copy(paso = pendiente), _actividades.value, haySesion)
             return
         }
-        val vincular = haySesion && estado.datos.vincular
+        val vincular = haySesion && estado.datos.vincular && !institucional
         _envio.value = UiState.Cargando
         val punto = _ubicacion.value
         viewModelScope.launch {
+            if (institucional) {
+                val r = repositorio.crearInstitucional(AsistenteReporte.solicitud(estado.datos, avisoVersion, punto, false))
+                _envio.value = when (r) {
+                    is Resultado.Exito -> { idInstitucional = r.datos.id; UiState.Exito(ReporteCreado(r.datos.folio, "", r.datos.estatus, r.datos.fechaCreacion)) }
+                    is Resultado.Error -> UiState.Error(r.mensaje, r.codigo)
+                }
+                return@launch
+            }
             val token = if (vincular) SesionCiudadanoRepositorio.tokenVigente() else null
             if (vincular && token == null) {
                 _envio.value = UiState.Error("Tu sesión venció. Vuelve a iniciar sesión o envía el reporte sin vincular.")

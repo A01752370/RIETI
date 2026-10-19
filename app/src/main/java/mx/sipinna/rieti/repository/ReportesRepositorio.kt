@@ -22,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mx.sipinna.rieti.model.ConfirmarFotosRequest
 import mx.sipinna.rieti.model.FotoPersonal
+import mx.sipinna.rieti.model.ReporteInstitucional
 import mx.sipinna.rieti.model.SolicitarFotosRequest
 import mx.sipinna.rieti.network.ApiService
 import okhttp3.MediaType.Companion.toMediaType
@@ -79,6 +80,10 @@ class ReportesRepositorio(
         }
         return ejecutar { api.confirmarFotos(ConfirmarFotosRequest(folio, clave, solicitud.subidas.map { it.id })).fotos }
     }
+
+    /** Fase 9: registro institucional (origen institucional, sin clave); el servidor exige la sesión del personal. */
+    suspend fun crearInstitucional(request: CrearReporteRequest): Resultado<ReporteInstitucional> =
+        ejecutar { api.registrarInstitucional(request) }
 
     /** Fase 8: fotos de un reporte para el personal (URL de 60 s; el servidor registra el acceso). */
     suspend fun fotos(id: Int): Resultado<List<FotoPersonal>> = ejecutar { api.fotos(id) }

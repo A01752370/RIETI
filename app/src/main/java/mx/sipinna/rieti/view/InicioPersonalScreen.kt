@@ -59,6 +59,7 @@ import mx.sipinna.rieti.viewmodel.UiState
  * @param alAbrirPrioridadAlta abre la bandeja con los pendientes de prioridad Alta (peligro inmediato)
  * @param alAbrirPendientes abre la bandeja con los pendientes (Recibido y En revisión)
  * @param alAbrirVencidos abre la bandeja con los casos de seguimiento vencido (Fase 7)
+ * @param alRegistrar abre el registro institucional (Fase 9)
  * @param alCerrarSesion descarta el token y vuelve al inicio
  * @param alSesionExpirada el servidor respondió 401: hay que volver a iniciar sesión
  */
@@ -69,6 +70,7 @@ fun InicioPersonalScreen(
     alAbrirPrioridadAlta: () -> Unit,
     alAbrirPendientes: () -> Unit,
     alAbrirVencidos: () -> Unit,
+    alRegistrar: () -> Unit = {},
     alCerrarSesion: () -> Unit,
     alSesionExpirada: () -> Unit,
     viewModel: InicioPersonalViewModel = viewModel()
@@ -99,7 +101,13 @@ fun InicioPersonalScreen(
                         MensajeError(e.mensaje)
                         OutlinedButton(onClick = viewModel::cargar, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Reintentar") }
                     }
-                    is UiState.Exito -> Tablero(e.datos, alAbrirBandeja, alAbrirPrioridadAlta, alAbrirPendientes, alAbrirVencidos)
+                    is UiState.Exito -> {
+                        Tablero(e.datos, alAbrirBandeja, alAbrirPrioridadAlta, alAbrirPendientes, alAbrirVencidos)
+                        // Fase 9: registro institucional simple (detección en recorridos).
+                        OutlinedButton(onClick = alRegistrar, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                            Text("Registrar detección en recorrido")
+                        }
+                    }
                 }
             }
             // Solo durante el gesto o la recarga (en reposo el indicador asomaría arriba).
