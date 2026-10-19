@@ -1082,6 +1082,120 @@ describeBd('API RIETI (e2e)', () => {
     });
   });
 
+  describe('mapa e inteligencia territorial (Fase 9)', () => {
+    const enlace = { Authorization: 'Bearer token-personal' };
+    const enlaceNau = { Authorization: 'Bearer token-enlace-nau' };
+    const coord = { Authorization: 'Bearer token-coordinador' };
+    let idNau: number;
+    let folioInst: string;
+
+    beforeAll(async () => {
+      idNau = Number((await adminDs.query("SELECT id_municipio AS id FROM municipio WHERE clave_inegi = '15057'"))[0].id);
+    });
+
+    it('registro institucional: mismo formulario, origen institucional, sin clave y solo en sus municipios', async () => {
+      const r = await http().post('/api/v1/reportes/institucional').set(enlace)
+        .send({ ...reporteValido(), descripcion: 'Detección en recorrido (prueba)' }).expect(201);
+      expect(Object.keys(r.body).sort()).toEqual(['estatus', 'fechaCreacion', 'folio', 'id']);
+      expect(r.body.folio).toMatch(/^RIETI-ATZ-\d{4}-\d{6}$/);
+      folioInst = r.body.folio;
+      const [fila] = await adminDs.query('SELECT origen, canal, clave_consulta_hash FROM reporte WHERE id_reporte = $1', [r.body.id]);
+      expect(fila).toEqual({ origen: 'institucional', canal: 'institucional', clave_consulta_hash: null });
+      const d = await http().get(`/api/v1/reportes/${r.body.id}`).set(enlace).expect(200);
+      expect(d.body.origen).toBe('institucional');
+      expect(d.body.historial[0]).toMatchObject({ tipo: 'registro', autor: 'enlace@ejemplo.mx', comentario: 'Registro institucional (detección en recorrido)' });
+      // Otro municipio: prohibido para el enlace.
+      const fuera = await http().post('/api/v1/reportes/institucional').set(enlace)
+        .send({ ...reporteValido(), municipioId: idNau, latitud: 19.4785, longitud: -99.2396 }).expect(403);
+      expect(fuera.body.codigo).toBe('FUERA_DE_ALCANCE');
+      // Sin sesión del personal no existe; el ciudadano no puede declarar el canal institucional.
+      await http().post('/api/v1/reportes/institucional').send(reporteValido()).expect(401);
+      await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send({ ...reporteValido(), canal: 'institucional' }).expect(400);
+      // Sin clave no hay consulta pública posible.
+      await http().post('/api/v1/reportes/consulta').set('X-Forwarded-For', nuevaIp()).send({ folio: folioInst, clave: 'AAAA-BBBB-CCCC' }).expect(404);
+    });
+
+    it('la bandeja y el panel filtran por origen; la respuesta pública de crear no expone el id', async () => {
+      const b = await http().get('/api/v1/reportes?origen=institucional&tamano=100').set(enlace).expect(200);
+      expect(b.body.elementos.map((e: { folio: string }) => e.folio)).toContain(folioInst);
+      expect(b.body.elementos.every((e: { origen: string }) => e.origen === 'institucional')).toBe(true);
+      const res = await http().get('/api/v1/estadisticas/resumen?origen=institucional').set(enlace).expect(200);
+      expect(res.body.total).toBe(b.body.total);
+      const c = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send(reporteValido()).expect(201);
+      expect(c.body.id).toBeUndefined();
+    });
+
+    it('filtros comunes nuevos (edad, riesgo, franja, verificación, dependencia, reincidencia) en resumen y mapa', async () => {
+      const base = (await http().get('/api/v1/estadisticas/resumen').set(enlace).expect(200)).body.total;
+      for (const q of ['rangoEdad=6-11', 'riesgo=No%20s%C3%A9', 'franja=tarde', 'verificacion=Caso%20confirmado', 'dependenciaId=1', 'reincidente=true', 'origen=ciudadano']) {
+        const r = await http().get(`/api/v1/estadisticas/resumen?${q}`).set(enlace).expect(200);
+        expect(r.body.total).toBeLessThanOrEqual(base);
+        await http().get(`/api/v1/estadisticas/mapa-calor?${q}`).set(enlace).expect(200);
+        await http().get(`/api/v1/estadisticas/distribuciones?${q}`).set(enlace).expect(200);
+      }
+      // Los reportes del punto recurrente (Fase 7) cuentan como reincidentes.
+      expect((await http().get('/api/v1/estadisticas/resumen?reincidente=true').set(enlace).expect(200)).body.total).toBeGreaterThanOrEqual(3);
+      await http().get('/api/v1/estadisticas/resumen?franja=siempre').set(enlace).expect(400);
+      await http().get('/api/v1/estadisticas/resumen?riesgo=Alto').set(enlace).expect(400);
+      const dist = await http().get('/api/v1/estadisticas/distribuciones').set(enlace).expect(200);
+      expect(dist.body.porFranja.map((x: { etiqueta: string }) => x.etiqueta)).toEqual(['madrugada', 'mañana', 'tarde', 'noche']);
+      expect(dist.body.porSexo.map((x: { etiqueta: string }) => x.etiqueta)).toEqual(['Niñas', 'Niños']);
+      // Sexo solo agregado con umbral: con 1 niña capturada el conteo se oculta.
+      expect(dist.body.porSexo.every((x: { total: number | null }) => x.total === null || x.total >= dist.body.umbral)).toBe(true);
+    });
+
+    it('niveles región → colonia → punto, con umbral y aislamiento por municipio', async () => {
+      const reg = await http().get('/api/v1/estadisticas/territorio?nivel=region').set(enlace).expect(200);
+      expect(reg.body.municipios.map((m: { nombre: string }) => m.nombre)).toEqual(['Atizapán de Zaragoza']); // solo su municipio
+      expect(reg.body.municipios[0].geometria.type).toMatch(/Polygon/);
+      const regCoord = await http().get('/api/v1/estadisticas/territorio?nivel=region').set(coord).expect(200);
+      expect(regCoord.body.municipios.map((m: { nombre: string }) => m.nombre)).toEqual(expect.arrayContaining(['Atizapán de Zaragoza', 'Naucalpan de Juárez']));
+      expect(regCoord.body.municipios.find((m: { nombre: string }) => m.nombre === 'Naucalpan de Juárez').total).toBeNull(); // pocos: oculto
+
+      await http().get('/api/v1/estadisticas/territorio?nivel=colonia').set(enlace).expect(400); // requiere municipio
+      const col = await http().get('/api/v1/estadisticas/territorio?nivel=colonia&municipioId=1').set(enlace).expect(200);
+      expect(col.body.colonias.length + (col.body.sinColonia ?? 0)).toBeGreaterThan(0);
+      expect(col.body.colonias.every((c: { total: number | null }) => c.total === null || c.total >= col.body.umbral)).toBe(true);
+
+      const pts = await http().get('/api/v1/estadisticas/territorio?nivel=punto&municipioId=1').set(enlace).expect(200);
+      expect(pts.body.puntos.length).toBeGreaterThan(0);
+      expect(Object.keys(pts.body.puntos[0]).sort()).toEqual(['estatus', 'id', 'lat', 'lng', 'prioridad']); // sin texto
+      const otro = await http().get(`/api/v1/estadisticas/territorio?nivel=punto&municipioId=${idNau}`).set(enlace).expect(200);
+      expect(otro.body.puntos).toEqual([]); // otro municipio: nada
+      expect((await http().get(`/api/v1/estadisticas/territorio?nivel=punto&municipioId=${idNau}`).set(enlaceNau).expect(200)).body.puntos.length).toBeGreaterThan(0);
+    });
+
+    it('hallazgos automáticos con datos reales y suficientes', async () => {
+      const h = await http().get('/api/v1/estadisticas/hallazgos').set(enlace).expect(200);
+      expect(h.body.minimo).toBeGreaterThanOrEqual(5);
+      expect(h.body.hallazgos.length).toBeGreaterThan(0); // hay muchos reportes en el punto de prueba
+      expect(h.body.hallazgos[0].texto).toMatch(/^En (la colonia|una zona de) .+ se han recibido \d+ reportes en los últimos 3 meses/);
+      expect(JSON.stringify(h.body)).not.toMatch(/RIETI-|Dos menores/);
+      const nau = await http().get('/api/v1/estadisticas/hallazgos').set(enlaceNau).expect(200);
+      expect(nau.body.hallazgos).toEqual([]); // pocos reportes en su municipio
+      await http().get('/api/v1/estadisticas/hallazgos?meses=13').set(enlace).expect(400);
+    });
+
+    it('base regional anonimizada: solo coordinación y administración, celdas de ≈ 110 m, sin texto y con umbral', async () => {
+      await http().get('/api/v1/estadisticas/base-regional.csv').set(enlace).expect(403);
+      const r = await http().get('/api/v1/estadisticas/base-regional.csv').set(coord).expect(200);
+      expect(r.headers['content-type']).toContain('text/csv');
+      const [cabecera, ...filas] = r.text.trim().split('\r\n');
+      expect(cabecera).toBe('clave_inegi,municipio,celda_lat,celda_lng,trimestre,reportes,prioridad_alta,verificados,casos_confirmados,nna_canalizados,actividad_frecuente,franja_frecuente');
+      expect(filas.length).toBeGreaterThan(0);
+      for (const f of filas) {
+        const c = f.split(',');
+        expect(c[2]).toMatch(/^-?\d+(\.\d{1,3})?$/); // 3 decimales como máximo
+        expect(c[3]).toMatch(/^-?\d+(\.\d{1,3})?$/);
+        expect(Number(c[5])).toBeGreaterThanOrEqual(3);
+      }
+      expect(r.text).not.toMatch(/RIETI-|Dos menores|López Mateos|Calle|foto|amazonaws/);
+      const accesos = await http().get('/api/v1/admin/accesos?tamano=5').set({ Authorization: 'Bearer token-admin' }).expect(200);
+      expect(accesos.body.elementos[0]).toMatchObject({ accion: 'exportar', usuario: 'coordinacion@ejemplo.mx' });
+      expect(accesos.body.elementos[0].detalle).toMatch(/^base regional/);
+    });
+  });
+
   describe('panel del personal (Fase 3)', () => {
     const personal = { Authorization: 'Bearer token-personal' };
     const RUTAS = ['distribuciones', 'tiempos', 'sin-atender', 'mapa-calor'];

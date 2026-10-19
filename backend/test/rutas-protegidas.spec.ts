@@ -60,6 +60,11 @@ const PERMISO_ESPERADO: Record<string, Permiso> = {
   'PATCH admin/dependencias/:id': 'configuracion.editar',
   'GET admin/accesos': 'accesos.ver',
   'GET reportes/:id/fotos': 'reportes.ver',
+  // Fase 9: territorio, hallazgos, base regional y registro institucional.
+  'GET estadisticas/territorio': 'estadisticas.ver',
+  'GET estadisticas/hallazgos': 'estadisticas.ver',
+  'GET estadisticas/base-regional.csv': 'base.exportar',
+  'POST reportes/institucional': 'reportes.registrar',
 };
 
 describe('inventario de rutas y matriz de permisos (D-18)', () => {
