@@ -15,6 +15,7 @@ const PUBLICAS_PERMITIDAS = new Set([
   'POST ciudadanos/registro', 'POST ciudadanos/confirmar', 'POST ciudadanos/reenviar-codigo', 'POST ciudadanos/login',
   'POST ciudadanos/refresh', 'POST ciudadanos/olvide-contrasena', 'POST ciudadanos/restablecer-contrasena',
   'GET red-municipios',
+  'POST reportes/fotos/solicitud', 'POST reportes/fotos/confirmar',
 ]);
 
 /**
@@ -58,6 +59,7 @@ const PERMISO_ESPERADO: Record<string, Permiso> = {
   'POST admin/dependencias': 'configuracion.editar',
   'PATCH admin/dependencias/:id': 'configuracion.editar',
   'GET admin/accesos': 'accesos.ver',
+  'GET reportes/:id/fotos': 'reportes.ver',
 };
 
 describe('inventario de rutas y matriz de permisos (D-18)', () => {

@@ -72,6 +72,9 @@ const cuentasFalsas = {
   async correo() { return 'persona@ejemplo.mx'; },
 };
 
+/** Doble del almacén de fotos (S3): guarda en memoria; la prueba simula la subida directa. */
+const almacenFalso = new Map<string, Buffer>();
+
 let siguienteIp = 1;
 /** IP de cliente distinta por grupo de peticiones. */
 const nuevaIp = () => `203.0.113.${siguienteIp++}, 127.0.0.1`;
@@ -139,6 +142,9 @@ describeBd('API RIETI (e2e)', () => {
     const { FUENTE_GEO } = await import('../../src/geo/fuente-geo');
     const { VERIFICADOR_JWT_CIUDADANO } = await import('../../src/auth/jwt.guard');
     const { PROVEEDOR_CUENTAS } = await import('../../src/ciudadanos/proveedor-cuentas');
+    const { ALMACEN_FOTOS, AlmacenMemoria } = await import('../../src/fotos/almacen');
+    const almacen = new AlmacenMemoria();
+    Object.defineProperty(almacen, 'objetos', { value: almacenFalso });
     const { configurarApp } = await import('../../src/configurar-app');
 
     const modulo = await Test.createTestingModule({ imports: [AppModule] })
@@ -160,6 +166,8 @@ describeBd('API RIETI (e2e)', () => {
       })
       .overrideProvider(PROVEEDOR_CUENTAS)
       .useValue(cuentasFalsas)
+      .overrideProvider(ALMACEN_FOTOS)
+      .useValue(almacen)
       .compile();
     app = modulo.createNestApplication<NestExpressApplication>({ bodyParser: false, logger: false });
     configurarApp(app);
@@ -951,6 +959,129 @@ describeBd('API RIETI (e2e)', () => {
     });
   });
 
+  describe('evidencia fotográfica (Fase 8)', () => {
+    const enlace = { Authorization: 'Bearer token-personal' };
+    const enlaceNau = { Authorization: 'Bearer token-enlace-nau' };
+    const admin = { Authorization: 'Bearer token-admin' };
+    let folio: string;
+    let clave: string;
+    let idReporte: number;
+
+    const jpegConGps = async () => {
+      const sharp = (await import('sharp')).default;
+      return sharp({ create: { width: 80, height: 60, channels: 3, background: '#5a5' } })
+        .withExif({ IFD0: { Make: 'TelefonoFicticio' }, IFD3: { GPSLatitudeRef: 'N', GPSLatitude: '19/1 33/1 33/1' } })
+        .jpeg().toBuffer();
+    };
+    const solicitar = (cantidad: number, c = clave) =>
+      http().post('/api/v1/reportes/fotos/solicitud').set('X-Forwarded-For', nuevaIp()).send({ folio, clave: c, cantidad });
+    const confirmar = (ids: string[]) =>
+      http().post('/api/v1/reportes/fotos/confirmar').set('X-Forwarded-For', nuevaIp()).send({ folio, clave, ids });
+    /** Simula la subida directa del cliente al formulario prefirmado. */
+    const subir = (campos: { key: string }, datos: Buffer) => almacenFalso.set(campos.key, datos);
+
+    beforeAll(async () => {
+      const r = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send({ ...reporteValido(), canal: 'app' }).expect(201);
+      ({ folio, claveConsulta: clave } = r.body);
+      idReporte = Number((await adminDs.query('SELECT id_reporte AS id FROM folio WHERE codigo = $1', [folio]))[0].id);
+    });
+
+    it('la solicitud exige folio y clave válidos (mismas protecciones que la consulta)', async () => {
+      const mala = await solicitar(1, 'AAAA-BBBB-CCCC').expect(404);
+      expect(mala.body.codigo).toBe('FOLIO_O_CLAVE_INCORRECTOS');
+      await solicitar(0).expect(400);
+      await solicitar(4).expect(400);
+      const r = await solicitar(2).expect(200);
+      expect(r.body.subidas).toHaveLength(2);
+      expect(r.body.maxBytes).toBe(5 * 1024 * 1024);
+      expect(r.body.subidas[0].campos.key).toBe(`entrantes/${idReporte}/${r.body.subidas[0].id}`);
+    });
+
+    it('A7: rechaza archivos que no son imagen aunque se llamen .jpg, y los borra de la entrada', async () => {
+      const r = await solicitar(1).expect(200);
+      const s = r.body.subidas[0];
+      subir(s.campos, Buffer.from('%PDF-1.7 esto es un documento renombrado como foto.jpg'));
+      const c = await confirmar([s.id]).expect(422);
+      expect(c.body.codigo).toBe('TIPO_NO_PERMITIDO');
+      expect(almacenFalso.has(s.campos.key)).toBe(false);
+      // Encabezado de JPEG con datos basura: se detecta al re-codificar.
+      const r2 = await solicitar(1).expect(200);
+      subir(r2.body.subidas[0].campos, Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(500, 9)]));
+      expect((await confirmar([r2.body.subidas[0].id]).expect(422)).body.codigo).toBe('IMAGEN_INVALIDA');
+      // Subida que nunca llegó o que excede el tamaño.
+      const r3 = await solicitar(1).expect(200);
+      expect((await confirmar([r3.body.subidas[0].id]).expect(422)).body.codigo).toBe('FOTO_NO_ENCONTRADA');
+      subir(r3.body.subidas[0].campos, Buffer.alloc(5 * 1024 * 1024 + 1, 1));
+      expect((await confirmar([r3.body.subidas[0].id]).expect(422)).body.codigo).toBe('FOTO_NO_ENCONTRADA');
+      await confirmar(['no-es-un-uuid']).expect(400);
+    });
+
+    it('A8: la foto guardada es un JPEG re-codificado sin EXIF ni GPS, con nombre aleatorio', async () => {
+      const r = await solicitar(1).expect(200);
+      const s = r.body.subidas[0];
+      subir(s.campos, await jpegConGps());
+      const c = await confirmar([s.id]).expect(200);
+      expect(c.body).toEqual({ fotos: 1 });
+      expect(almacenFalso.has(s.campos.key)).toBe(false); // la entrada se limpia
+      const [fila] = await adminDs.query('SELECT clave_objeto, bytes, ancho, alto, sha256 FROM foto_reporte WHERE id_reporte = $1', [idReporte]);
+      expect(fila.clave_objeto).toMatch(/^fotos\/[0-9a-f-]{36}\.jpg$/);
+      expect(fila.clave_objeto).not.toContain(s.id);
+      const guardada = almacenFalso.get(fila.clave_objeto)!;
+      const sharp = (await import('sharp')).default;
+      const meta = await sharp(guardada).metadata();
+      expect(meta.format).toBe('jpeg');
+      expect(meta.exif).toBeUndefined();
+      expect(guardada.includes(Buffer.from('TelefonoFicticio'))).toBe(false);
+      expect([fila.ancho, fila.alto]).toEqual([80, 60]);
+    });
+
+    it('límite de 3 fotos por reporte', async () => {
+      await solicitar(3).expect(422); // ya tiene 1
+      const r = await solicitar(2).expect(200);
+      for (const s of r.body.subidas) subir(s.campos, await jpegConGps());
+      expect((await confirmar(r.body.subidas.map((s: { id: string }) => s.id)).expect(200)).body).toEqual({ fotos: 3 });
+      expect((await solicitar(1).expect(422)).body.codigo).toBe('LIMITE_FOTOS');
+    });
+
+    it('el personal las ve con URL de 60 s y queda en la bitácora; otro municipio recibe 404', async () => {
+      const d = await http().get(`/api/v1/reportes/${idReporte}`).set(enlace).expect(200);
+      expect(d.body.numeroFotos).toBe(3);
+      const f = await http().get(`/api/v1/reportes/${idReporte}/fotos`).set(enlace).expect(200);
+      expect(f.body).toHaveLength(3);
+      expect(f.body[0]).toMatchObject({ expiraEnSegundos: 60, ancho: 80, alto: 60 });
+      expect(f.body[0].url).toMatch(/expira=60$/);
+      await http().get(`/api/v1/reportes/${idReporte}/fotos`).set(enlaceNau).expect(404);
+      await http().get(`/api/v1/reportes/${idReporte}/fotos`).expect(401);
+      const accesos = await http().get(`/api/v1/admin/accesos?folio=${folio}`).set(admin).expect(200);
+      expect(accesos.body.elementos[0]).toMatchObject({ accion: 'foto', detalle: '3 foto(s)', usuario: 'enlace@ejemplo.mx' });
+    });
+
+    it('las fotos nunca salen en la consulta del ciudadano, la exportación ni las estadísticas', async () => {
+      const c = await http().post('/api/v1/reportes/consulta').set('X-Forwarded-For', nuevaIp()).send({ folio, clave }).expect(200);
+      expect(JSON.stringify(c.body)).not.toMatch(/foto|almacen|entrantes/i);
+      const csv = await http().get('/api/v1/reportes/exportar.csv').set(enlace).expect(200);
+      expect(csv.text).not.toMatch(/foto|almacen\.invalid/i);
+      for (const ruta of ['resumen', 'distribuciones', 'mapa-calor', 'embudo']) {
+        const r = await http().get(`/api/v1/estadisticas/${ruta}`).set(enlace).expect(200);
+        expect(JSON.stringify(r.body)).not.toMatch(/foto|almacen/i);
+      }
+    });
+
+    it('fuera de la ventana de 24 horas ya no se pueden agregar fotos', async () => {
+      const r = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send({ ...reporteValido(), canal: 'app' }).expect(201);
+      await adminDs.query(`UPDATE reporte SET fecha_creacion = now() - interval '25 hours'
+        WHERE id_reporte = (SELECT id_reporte FROM folio WHERE codigo = $1)`, [r.body.folio]);
+      const s = await http().post('/api/v1/reportes/fotos/solicitud').set('X-Forwarded-For', nuevaIp())
+        .send({ folio: r.body.folio, clave: r.body.claveConsulta, cantidad: 1 }).expect(422);
+      expect(s.body.codigo).toBe('FUERA_DE_TIEMPO');
+    });
+
+    (COMO_RIETI_APP ? it : it.skip)('rieti_app no puede borrar ni cambiar las referencias a fotos', async () => {
+      await expect(ds.query('DELETE FROM foto_reporte')).rejects.toThrow(/permission denied/);
+      await expect(ds.query("UPDATE foto_reporte SET clave_objeto = 'x'")).rejects.toThrow(/permission denied/);
+    });
+  });
+
   describe('panel del personal (Fase 3)', () => {
     const personal = { Authorization: 'Bearer token-personal' };
     const RUTAS = ['distribuciones', 'tiempos', 'sin-atender', 'mapa-calor'];
@@ -1242,7 +1373,14 @@ describeBd('API RIETI (e2e)', () => {
       expect(csp).toContain("default-src 'self'");
       expect(csp).toContain("style-src 'self'");
       expect(csp).toContain("frame-ancestors 'none'");
-      expect(csp).not.toMatch(/unsafe-inline|unsafe-eval|https:|\*/);
+      expect(csp).not.toMatch(/unsafe-inline|unsafe-eval/);
+      // Única excepción (Fase 8): el S3 regional de las fotos, solo en img-src y connect-src.
+      const directivas = Object.fromEntries(csp.split(';').map((d) => d.trim().split(/\s+/)).map(([k, ...v]) => [k, v]));
+      const externos = Object.entries(directivas).filter(([, v]) => v.some((x) => /https:|\*/.test(x)));
+      expect(externos).toEqual([
+        ['img-src', ["'self'", 'data:', 'https://*.s3.mx-central-1.amazonaws.com']],
+        ['connect-src', ["'self'", 'https://*.s3.mx-central-1.amazonaws.com']],
+      ]);
     });
   });
 

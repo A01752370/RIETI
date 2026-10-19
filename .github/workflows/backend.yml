@@ -72,6 +72,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - run: docker build --platform linux/arm64 -f Dockerfile -t rieti-api:pr ..
+      # Fase 8: la librería nativa de imágenes (sharp) carga y re-codifica dentro de la imagen ARM64.
+      - name: Prueba de humo de sharp
+        run: >
+          docker run --rm rieti-api:pr node -e "require('sharp')({create:{width:8,height:8,channels:3,background:'#fff'}})
+          .jpeg().toBuffer().then((b)=>{if(b[0]!==0xff)process.exit(1);console.log('sharp ok',b.length)})"
 
   deploy:
     needs: [test, e2e]

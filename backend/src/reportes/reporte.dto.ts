@@ -443,6 +443,8 @@ export interface ReporteDetalleDto extends ReporteResumenDto {
   duplicadoDe: ReporteRelacionadoDto | null;
   /** Reportes marcados como duplicados de este (Fase 7). */
   duplicados: ReporteRelacionadoDto[];
+  /** Fotos del reporte (Fase 8); se leen con `GET /reportes/:id/fotos`. */
+  numeroFotos: number;
 }
 
 /** Cuerpo de `PATCH /api/v1/reportes/:id/estatus`. */

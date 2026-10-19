@@ -3953,6 +3953,234 @@
           }
         }
       }
+    },
+    "/api/v1/reportes/fotos/solicitud": {
+      "post": {
+        "tags": [
+          "Público"
+        ],
+        "summary": "Pide formularios de subida directa a S3 (hasta 3 fotos, 5 MB, 5 min) con folio + clave; 10/min por IP (Fase 8).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitarFotos"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolicitudFotos"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDACION",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "FOLIO_O_CLAVE_INCORRECTOS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "FUERA_DE_TIEMPO (24 h) o LIMITE_FOTOS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "DEMASIADOS_INTENTOS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reportes/fotos/confirmar": {
+      "post": {
+        "tags": [
+          "Público"
+        ],
+        "summary": "Confirma las fotos subidas: tipo real por contenido, re-codificación sin metadatos y nombre aleatorio; 10/min por IP (Fase 8).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmarFotos"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "fotos"
+                  ],
+                  "properties": {
+                    "fotos": {
+                      "type": "integer"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDACION",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "FOLIO_O_CLAVE_INCORRECTOS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "FOTO_NO_ENCONTRADA, TIPO_NO_PERMITIDO, IMAGEN_INVALIDA, FUERA_DE_TIEMPO o LIMITE_FOTOS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "DEMASIADOS_INTENTOS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reportes/{id}/fotos": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Fotos del reporte con URL prefirmada de 60 s; queda en la bitácora de accesos (reportes.ver; Fase 8).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Foto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "NO_AUTENTICADO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "PROHIBIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NO_ENCONTRADO (también si es de otro municipio)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "DEMASIADOS_INTENTOS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4855,7 +5083,8 @@
               "origen",
               "expediente",
               "duplicadoDe",
-              "duplicados"
+              "duplicados",
+              "numeroFotos"
             ],
             "properties": {
               "latitud": {
@@ -4963,6 +5192,10 @@
                 "items": {
                   "$ref": "#/components/schemas/ReporteRelacionado"
                 }
+              },
+              "numeroFotos": {
+                "type": "integer",
+                "description": "Fotos del reporte (Fase 8); se leen con GET /reportes/{id}/fotos"
               }
             }
           }
@@ -6337,6 +6570,144 @@
               },
               "additionalProperties": false
             }
+          }
+        },
+        "additionalProperties": false
+      },
+      "SolicitarFotos": {
+        "type": "object",
+        "required": [
+          "folio",
+          "clave",
+          "cantidad"
+        ],
+        "properties": {
+          "folio": {
+            "type": "string",
+            "pattern": "^RIETI-(?:[A-Z]{3}-)?\\d{4}-\\d{6}$"
+          },
+          "clave": {
+            "type": "string",
+            "maxLength": 30
+          },
+          "cantidad": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3
+          }
+        },
+        "additionalProperties": false
+      },
+      "SolicitudFotos": {
+        "type": "object",
+        "required": [
+          "subidas",
+          "maxBytes",
+          "expiraEnSegundos"
+        ],
+        "properties": {
+          "subidas": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "url",
+                "campos"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "url": {
+                  "type": "string",
+                  "description": "Formulario POST prefirmado de S3 (multipart/form-data: los campos y al final `file`)"
+                },
+                "campos": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "maxBytes": {
+            "type": "integer",
+            "description": "5 MB por foto"
+          },
+          "expiraEnSegundos": {
+            "type": "integer",
+            "description": "300"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConfirmarFotos": {
+        "type": "object",
+        "required": [
+          "folio",
+          "clave",
+          "ids"
+        ],
+        "properties": {
+          "folio": {
+            "type": "string",
+            "pattern": "^RIETI-(?:[A-Z]{3}-)?\\d{4}-\\d{6}$"
+          },
+          "clave": {
+            "type": "string",
+            "maxLength": 30
+          },
+          "ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "Foto": {
+        "type": "object",
+        "required": [
+          "id",
+          "url",
+          "expiraEnSegundos",
+          "ancho",
+          "alto",
+          "bytes",
+          "fecha"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "url": {
+            "type": "string",
+            "description": "URL prefirmada de lectura (GET) que caduca en 60 s"
+          },
+          "expiraEnSegundos": {
+            "type": "integer"
+          },
+          "ancho": {
+            "type": "integer"
+          },
+          "alto": {
+            "type": "integer"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "additionalProperties": false

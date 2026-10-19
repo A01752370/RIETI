@@ -176,6 +176,28 @@ export class ReportesService {
    * @throws HttpException 429 `DEMASIADOS_INTENTOS`
    */
   async consultar(folio: string, clave: string): Promise<ConsultaPublicaDto> {
+    const idReporte = await this.verificarFolioClave(folio, clave);
+    const reporte = await this.resumen(idReporte);
+    const eventos = await this.bitacora(idReporte);
+    return {
+      folio: reporte.folio,
+      estatus: reporte.estatus,
+      estatusEtiqueta: etiquetaEstatus(reporte.estatus),
+      fechaCreacion: reporte.fechaCreacion,
+      fechaActualizacion: reporte.fechaActualizacion,
+      historial: lineaDeTiempoPublica(eventos.map((e) => ({ estatus: e.estatus, fecha: new Date(e.fecha) }))),
+    };
+  }
+
+  /**
+   * Verifica folio + clave con las protecciones de la consulta (A1): respuesta y tiempo
+   * iguales si el folio no existe, y bloqueo del folio tras 5 fallos. La usan la consulta
+   * y la carga de fotos (Fase 8).
+   *
+   * @returns id interno del reporte
+   * @throws HttpException 429 `DEMASIADOS_INTENTOS` · NotFoundException `FOLIO_O_CLAVE_INCORRECTOS`
+   */
+  async verificarFolioClave(folio: string, clave: string): Promise<number> {
     if (this.limitador.estaBloqueado(folio)) {
       throw new HttpException(
         { codigo: 'DEMASIADOS_INTENTOS', mensaje: 'Demasiados intentos con este folio. Espera 15 minutos e inténtalo de nuevo' },
@@ -196,17 +218,7 @@ export class ReportesService {
       throw errorConsulta();
     }
     this.limitador.reiniciar(folio);
-
-    const reporte = await this.resumen(fila.r_id_reporte);
-    const eventos = await this.bitacora(fila.r_id_reporte);
-    return {
-      folio: reporte.folio,
-      estatus: reporte.estatus,
-      estatusEtiqueta: etiquetaEstatus(reporte.estatus),
-      fechaCreacion: reporte.fechaCreacion,
-      fechaActualizacion: reporte.fechaActualizacion,
-      historial: lineaDeTiempoPublica(eventos.map((e) => ({ estatus: e.estatus, fecha: new Date(e.fecha) }))),
-    };
+    return Number(fila.r_id_reporte);
   }
 
   /**
@@ -335,6 +347,7 @@ export class ReportesService {
       origen: reporte.origen,
       expediente: await this.expediente(rc!.caso, resumen.estatus),
       duplicadoDe: reporte.duplicadoDe ? (await this.relacionados([reporte.duplicadoDe]))[0] ?? null : null,
+      numeroFotos: Number((await this.ds.query('SELECT count(*) AS n FROM foto_reporte WHERE id_reporte = $1', [id]))[0].n),
       duplicados: await this.relacionados(
         (await this.ds.query('SELECT id_reporte FROM reporte WHERE duplicado_de = $1 ORDER BY id_reporte', [id])).map((x: { id_reporte: number }) => Number(x.id_reporte))),
     };
