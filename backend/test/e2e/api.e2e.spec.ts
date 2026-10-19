@@ -1260,6 +1260,19 @@ describeBd('API RIETI (e2e)', () => {
       await expect(adminDs.query('DELETE FROM seguimiento')).rejects.toThrow(/append-only/);
     });
 
+    it('acepta folios con clave municipal y la depuración de accesos respeta la conservación (Fase 7)', async () => {
+      const { borrarReportePorFolio } = await import('../../src/scripts/borrar-reporte');
+      const { depurarAccesos } = await import('../../src/scripts/depurar-accesos');
+      const r = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send({ ...reporteValido(), canal: 'app' }).expect(201);
+      expect(r.body.folio).toMatch(/^RIETI-ATZ-/);
+      await adminDs.transaction((m) => borrarReportePorFolio(m, r.body.folio));
+      const antes = Number((await adminDs.query('SELECT count(*) AS n FROM acceso_expediente'))[0].n);
+      const res = await adminDs.transaction((m) => depurarAccesos(m));
+      expect(res).toEqual({ dias: 365, borradas: 0 }); // todo es de hoy
+      expect(Number((await adminDs.query('SELECT count(*) AS n FROM acceso_expediente'))[0].n)).toBe(antes);
+      await expect(adminDs.query('DELETE FROM acceso_expediente')).rejects.toThrow(/append-only/);
+    });
+
     it('si el folio no existe no cambia nada', async () => {
       const { borrarReportePorFolio } = await import('../../src/scripts/borrar-reporte');
       await expect(adminDs.transaction((m) => borrarReportePorFolio(m, 'RIETI-2026-999999'))).rejects.toThrow(/No existe/);

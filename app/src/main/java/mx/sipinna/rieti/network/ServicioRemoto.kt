@@ -25,6 +25,10 @@ object ServicioRemoto {
     @Volatile
     var accessToken: String? = null
 
+    /** Correo del personal con sesión (solo en memoria, igual que el token; Fase 7). */
+    @Volatile
+    var correoPersonal: String? = null
+
     /**
      * Agrega `Authorization: Bearer` con el token del **personal** cuando hay sesión,
      * salvo que la petición ya traiga uno (las rutas de cuenta de ciudadano mandan

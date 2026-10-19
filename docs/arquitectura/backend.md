@@ -24,6 +24,9 @@ src/
 ├── configurar-app.ts       Helmet, límite de cuerpo, prefijo /api/v1, ValidationPipe, filtro de errores
 ├── app.module.ts           TypeORM, throttler, guards globales
 ├── auth/                   Login con Cognito, guard JWT (deniega por defecto), roles
+│   └── alcance.ts            Alcance territorial por municipio y bitácora de accesos (Fase 7)
+├── expediente/             Catálogos del expediente y alertas de punto recurrente (Fase 7)
+├── admin/                  Asignaciones, parámetros, dependencias y bitácora de accesos (Fase 7)
 ├── reportes/               Registro, consulta ciudadana, bandeja, estatus, bitácora
 │   ├── estatus.ts            Máquina de estados de la Etapa 1
 │   ├── clave-consulta.ts     Clave aleatoria + Argon2id
@@ -35,7 +38,7 @@ src/
 ├── health/                 /health y /health/ready
 ├── config/                 TypeORM y contraseña desde Secrets Manager
 ├── database/migrations/    Esquema versionado
-└── scripts/borrar-reporte.ts  Herramienta de administración (tarea única de ECS)
+└── scripts/                borrar-reporte.ts y depurar-accesos.ts (tareas únicas de ECS)
 ```
 
 ## Rutas
@@ -60,7 +63,16 @@ src/
 | GET | `/api/v1/reportes` | Personal | CU-09 bandeja (filtros: `estatus`, `municipioId`, `actividad`, `desde`, `hasta`, `folio`, `sinAtenderDias`, `riesgo`, `pendientes`, `orden`) |
 | GET | `/api/v1/reportes/:id` | Personal | CU-09 detalle (Fase 5: `fechaEstatusActual` y `tipo` de cada evento de la bitácora) |
 | PATCH | `/api/v1/reportes/:id/estatus` | Personal | CU-09/CU-10 |
-| POST | `/api/v1/reportes/:id/seguimientos` | Personal | Nota de seguimiento |
+| POST | `/api/v1/reportes/:id/seguimientos` | Personal | Nota interna o acción realizada (`tipo: accion`, Fase 7) |
+| PATCH | `/api/v1/reportes/:id/expediente` | Personal (`expediente.editar`), 30/min | Expediente (Fase 7) |
+| GET | `/api/v1/reportes/:id/cercanos`, `/responsables` | Personal | Posibles duplicados y responsables (Fase 7) |
+| POST/DELETE | `/api/v1/reportes/:id/duplicado` | Personal (`expediente.editar`), 30/min | Vincular o quitar duplicado (Fase 7) |
+| GET | `/api/v1/catalogos/expediente` | Personal | Dependencias, modalidades, verificaciones (Fase 7) |
+| GET | `/api/v1/estadisticas/embudo` | Personal (`estadisticas.ver`) | Embudo de atención (Fase 7) |
+| GET/PATCH | `/api/v1/alertas`, `/api/v1/alertas/:id` | Personal (`alertas.ver`/`alertas.gestionar`) | Alertas de punto recurrente (Fase 7) |
+| GET/PUT/POST/PATCH | `/api/v1/admin/personal`, `/personal/:id/municipios`, `/configuracion`, `/dependencias`, `/dependencias/:id`, `/accesos` | Administrador | Administración (Fase 7) |
+
+Todas las rutas del personal se limitan al **alcance territorial** de quien consulta (D-36): fuera de él, 404 uniforme.
 
 Contrato completo: [docs/api/openapi.json](../api/openapi.json). Se retiraron `GET /reportes/folio/:folio` (permitía enumerar reportes) y `PATCH /reportes/:id`.
 
@@ -126,6 +138,19 @@ Las migraciones corren al arrancar (`migrationsRun`). Con un usuario sin permiso
 | `municipio.clave_folio` | 3 letras, única | Catálogo (provisional salvo ATZ, NAU, TLA, CIZ) |
 
 **WhatsApp (propuesta, no implementada; D-34).** Una entrada por WhatsApp Business API (Cloud API de Meta) llegaría a un webhook propio (`POST /api/v1/canales/whatsapp`, verificado con la firma de Meta), que conversaría con la persona con las mismas preguntas del formulario, guardaría el estado de la conversación solo en memoria con caducidad corta y, al final, llamaría al mismo servicio `ReportesService.crear` con `canal = whatsapp`. El número de teléfono **no** se guardaría con el reporte (minimización); el folio y la clave se responderían en el mismo chat. Requisitos: cuenta de WhatsApp Business verificada, plantilla de mensajes aprobada, costos por conversación y una revisión de privacidad, porque Meta procesa los mensajes.
+
+### Fase 7: expediente y control territorial
+
+| Tabla / columna | Qué guarda |
+|---|---|
+| `asignacion_municipio` | Municipios de cada enlace municipal (PK usuario + municipio) |
+| `caso.id_responsable`, `id_dependencia`, `fecha_seguimiento`, `resultado`, `fecha_cierre`, `id_modalidad`, `verificacion`, `nna_*` | Expediente interno (D-37) |
+| `dependencia`, `modalidad` | Catálogos del expediente (dependencias editables por el Administrador) |
+| `seguimiento.tipo` | `nota`, `accion` o `expediente` (null en eventos anteriores) |
+| `reporte.duplicado_de` | Principal del posible duplicado (D-38) |
+| `configuracion` | Parámetros de duplicados, alertas y conservación |
+| `alerta_territorial` | Alertas de punto recurrente (centro con 5 decimales, conteo, estatus) |
+| `acceso_expediente` | Bitácora de accesos, append-only (D-40) |
 
 ## Máquina de estados
 

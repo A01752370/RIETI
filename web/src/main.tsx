@@ -1,10 +1,14 @@
-import { StrictMode } from 'react';
+import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { coincide, useRuta } from './enrutador';
 import { AvisoPrivacidad, ComoFunciona, Inicio, NoEncontrada, RedDeMunicipios, Seguimiento } from './paginas/publicas';
 import { Reportar } from './paginas/Reportar';
 import { Bandeja, Detalle, Panel, Perfil } from './paginas/personal';
 import './estilos.css';
+
+// Fase 7: alertas y administración se descargan solo si el personal las abre.
+const Alertas = lazy(() => import('./paginas/control').then((m) => ({ default: m.Alertas })));
+const Administracion = lazy(() => import('./paginas/control').then((m) => ({ default: m.Administracion })));
 
 /** Resuelve la página según la ruta actual. */
 export function App() {
@@ -21,6 +25,8 @@ export function App() {
     case '/personal': return <Bandeja />;
     case '/personal/panel': return <Panel />;
     case '/personal/perfil': return <Perfil />;
+    case '/personal/alertas': return <Suspense fallback={null}><Alertas /></Suspense>;
+    case '/personal/administracion': return <Suspense fallback={null}><Administracion /></Suspense>;
     default: return <NoEncontrada />;
   }
 }

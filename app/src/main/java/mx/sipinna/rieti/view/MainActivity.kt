@@ -144,6 +144,7 @@ private fun AppRieti() {
                 alAbrirBandeja = { estatus, sinAtender -> nav.navigate(Rutas.bandeja(estatus, sinAtender)) },
                 alAbrirPrioridadAlta = { nav.navigate(Rutas.bandeja(prioridadAlta = true)) },
                 alAbrirPendientes = { nav.navigate(Rutas.bandeja(pendientes = true)) },
+                alAbrirVencidos = { nav.navigate(Rutas.bandeja(vencidos = true)) },
                 alCerrarSesion = { volverAlInicio(nav) },
                 alSesionExpirada = { irAlLogin(nav) }
             )
@@ -154,7 +155,8 @@ private fun AppRieti() {
                 navArgument("estatus") { type = NavType.StringType; defaultValue = "" },
                 navArgument("sinAtender") { type = NavType.IntType; defaultValue = 0 },
                 navArgument("prioridadAlta") { type = NavType.BoolType; defaultValue = false },
-                navArgument("pendientes") { type = NavType.BoolType; defaultValue = false }
+                navArgument("pendientes") { type = NavType.BoolType; defaultValue = false },
+                navArgument("vencidos") { type = NavType.BoolType; defaultValue = false }
             )
         ) {
             BandejaScreen(

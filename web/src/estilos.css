@@ -408,3 +408,28 @@ kbd { font-family: ui-monospace, Consolas, monospace; border: 1px solid var(--co
 .aviso-911 { display: grid; gap: var(--e3); }
 .aviso-911 p { margin: 0; }
 .aviso-911 .boton { justify-self: start; }
+
+/* ---------- Fase 7: expediente, duplicados, alertas y administración ---------- */
+.insignia-vencido {
+  display: inline-flex; align-items: center; gap: var(--e1); padding: var(--e1) var(--e3); border-radius: 999px;
+  background: #fff4e5; color: #7a3e00; font-weight: 700; font-size: var(--texto-xs); border: 1px solid #f0b46c;
+}
+.insignia-vencido::before { content: "\23F0"; }
+.insignia-neutra {
+  display: inline-flex; align-items: center; padding: var(--e1) var(--e3); border-radius: 999px;
+  background: var(--color-superficie); color: var(--color-texto); font-weight: 700; font-size: var(--texto-xs); border: 1px solid var(--color-borde);
+}
+.marca-accion { background: var(--color-primario-oscuro); color: #fff; }
+.marca-expediente { background: var(--estatus-archivado); color: #fff; }
+.marca-nota { color: #fff; }
+.formulario-expediente { display: grid; gap: var(--e2); }
+.rejilla-conteos { display: grid; gap: var(--e3); grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }
+.grupo-opciones { border: 0; padding: 0; margin: 0 0 var(--e3); display: flex; flex-wrap: wrap; gap: var(--e3); }
+.grupo-opciones legend { font-weight: 700; margin-bottom: var(--e2); }
+.lista-cercanos, .lista-simple { list-style: none; padding: 0; margin: var(--e3) 0; display: grid; gap: var(--e2); }
+.lista-cercanos li, .lista-simple li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--e2); align-items: center;
+  padding: var(--e2) 0; border-bottom: 1px solid var(--color-borde); }
+.embudo { list-style: none; padding: 0; margin: 0 0 var(--e4); display: grid; gap: var(--e3); grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }
+.embudo li { position: relative; border-top: 6px solid var(--color-primario); }
+.campo-corto { max-width: 16rem; }
+.editor-municipios { margin-top: var(--e3); padding: var(--e3); border-radius: var(--radio); background: var(--color-superficie); display: grid; gap: var(--e2); }

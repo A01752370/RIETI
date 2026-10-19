@@ -16,6 +16,8 @@ package mx.sipinna.rieti.model
  * @property fechaActualizacion fecha del último cambio (ISO-8601)
  * @property prioridad "Alta", "Media" o "Normal" (la calcula el servidor; Fase 6), o null si el servidor es anterior
  * @property peligroInmediato "Sí", "No" o "No sé" (null en reportes anteriores a la Fase 6)
+ * @property seguimientoVencido la fecha de seguimiento ya pasó y el caso sigue abierto (Fase 7)
+ * @property esDuplicado marcado como posible duplicado de otro reporte (Fase 7)
  */
 data class ReporteResumen(
     val id: Int,
@@ -23,6 +25,9 @@ data class ReporteResumen(
     val estatus: String,
     val prioridad: String? = null,
     val peligroInmediato: String? = null,
+    val verificacion: String? = null,
+    val esDuplicado: Boolean = false,
+    val seguimientoVencido: Boolean = false,
     val ubicacion: String,
     val municipio: String?,
     val actividad: String,
@@ -63,6 +68,8 @@ data class Pagina<T>(
  * @property transicionesPermitidas estatus a los que se puede cambiar desde el actual;
  *   los calcula el servidor con la máquina de estados, la app solo los muestra
  * @property fechaEstatusActual cuándo entró el caso a su estatus vigente (Fase 5); null si el servidor es anterior
+ * @property expediente expediente interno (Fase 7); null si el servidor es anterior
+ * @property duplicadoDe reporte principal si este es un posible duplicado (Fase 7)
  */
 data class ReporteDetalle(
     val id: Int,
@@ -90,8 +97,36 @@ data class ReporteDetalle(
     val grupos: List<GrupoMenores>? = null,
     val actividadOtro: String? = null,
     val direccion: DireccionRespuesta? = null,
-    val fechaEstatusActual: String? = null
+    val fechaEstatusActual: String? = null,
+    val expediente: Expediente? = null,
+    val duplicadoDe: ReporteRelacionado? = null
 )
+
+/**
+ * Expediente interno del caso (Fase 7). Solo personal.
+ *
+ * @property seguimientoVencido la fecha de seguimiento ya pasó y el caso sigue abierto
+ */
+data class Expediente(
+    val responsable: Responsable?,
+    val dependencia: IdNombre?,
+    val fechaSeguimiento: String?,
+    val seguimientoVencido: Boolean = false,
+    val resultado: String?,
+    val modalidad: IdNombre?,
+    val verificacion: String = "Sin verificar",
+    val nnaIdentificados: Int?,
+    val nnaCanalizados: Int?
+)
+
+/** Persona del personal responsable de un caso. */
+data class Responsable(val id: Int, val correo: String, val perfil: String? = null)
+
+/** Elemento de un catálogo. */
+data class IdNombre(val id: Int, val nombre: String)
+
+/** Reporte relacionado (duplicado). */
+data class ReporteRelacionado(val id: Int, val folio: String, val estatusEtiqueta: String)
 
 /** Dirección de un reporte tal como la devuelve el servidor (cualquier campo puede faltar). */
 data class DireccionRespuesta(
@@ -109,7 +144,7 @@ data class DireccionRespuesta(
  * @property comentario nota registrada, o null
  * @property autor correo de quien la registró; null para el registro automático
  * @property fecha fecha del evento (ISO-8601)
- * @property tipo "registro", "cambio" (de estatus) o "nota" (interna); null si el servidor es anterior
+ * @property tipo "registro", "cambio" (de estatus), "nota" (interna), "accion" o "expediente" (Fase 7); null si el servidor es anterior
  */
 data class EventoSeguimiento(
     val estatus: String,
@@ -125,20 +160,39 @@ data class EventoSeguimiento(
  * @property estatus estatus destino (debe estar en [ReporteDetalle.transicionesPermitidas])
  * @property comentario comentario de seguimiento (opcional salvo al reabrir un caso concluido)
  * @property motivo motivo de descarte (obligatorio si [estatus] es "Descartado")
+ * @property resultado resultado del caso (obligatorio al concluir; Fase 7)
  */
 data class CambiarEstatusRequest(
     val estatus: String,
     val comentario: String?,
-    val motivo: String?
+    val motivo: String?,
+    val resultado: String? = null
 )
 
 /**
  * Cuerpo de `POST /api/v1/reportes/{id}/seguimientos`.
  *
- * @property comentario texto de la nota
+ * @property comentario texto de la nota o de la acción
+ * @property tipo null (nota) o "accion" (acción realizada; Fase 7)
  */
 data class AgregarSeguimientoRequest(
-    val comentario: String
+    val comentario: String,
+    val tipo: String? = null
+)
+
+/**
+ * Embudo y controles del inicio del personal (`GET /api/v1/estadisticas/embudo`, Fase 7).
+ *
+ * @property seguimientosVencidos casos abiertos con la fecha de seguimiento vencida
+ * @property alertasAbiertas alertas de punto recurrente abiertas en sus municipios
+ */
+data class Embudo(
+    val recibidos: Int = 0,
+    val verificados: Int = 0,
+    val casosIdentificados: Int = 0,
+    val nnaCanalizados: Int = 0,
+    val seguimientosVencidos: Int = 0,
+    val alertasAbiertas: Int = 0
 )
 
 /**

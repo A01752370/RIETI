@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import mx.sipinna.rieti.model.Embudo
 import mx.sipinna.rieti.model.Pagina
 import mx.sipinna.rieti.model.ReporteDetalle
 import mx.sipinna.rieti.model.ReporteResumen
@@ -50,6 +51,11 @@ class BandejaViewModel @JvmOverloads constructor(
     /** true: solo pendientes con prioridad Alta, es decir, con peligro inmediato (enlace del inicio, Fase 6). */
     val prioridadAlta: StateFlow<Boolean> = _prioridadAlta.asStateFlow()
 
+    private val _vencidos = MutableStateFlow(estado.get<Boolean>("vencidos") == true)
+
+    /** true: solo casos abiertos con la fecha de seguimiento vencida (enlace del inicio, Fase 7). */
+    val vencidos: StateFlow<Boolean> = _vencidos.asStateFlow()
+
     private val _pendientes = MutableStateFlow(estado.get<Boolean>("pendientes") == true)
 
     /** true: solo casos pendientes de atender, Recibido o En revisión (enlace del inicio, Fase 5). */
@@ -61,6 +67,7 @@ class BandejaViewModel @JvmOverloads constructor(
         _sinAtenderDias.value = null
         _prioridadAlta.value = false
         _pendientes.value = false
+        _vencidos.value = false
         cargar()
     }
 
@@ -73,7 +80,7 @@ class BandejaViewModel @JvmOverloads constructor(
         // "Prioridad alta" en el inicio siempre se refiere a casos pendientes de atender.
         val soloPendientes = _pendientes.value || riesgo
         viewModelScope.launch {
-            _reportes.value = repositorio.listarFiltrado(estatus, dias, riesgo, soloPendientes).aUiState()
+            _reportes.value = repositorio.listarFiltrado(estatus, dias, riesgo, soloPendientes, vencidos = _vencidos.value).aUiState()
         }
     }
 
@@ -92,7 +99,8 @@ class BandejaViewModel @JvmOverloads constructor(
  */
 class DetalleReporteViewModel @JvmOverloads constructor(
     estado: SavedStateHandle,
-    private val repositorio: ReportesRepositorio = ReportesRepositorio()
+    private val repositorio: ReportesRepositorio = ReportesRepositorio(),
+    private val sesionCorreo: () -> String? = { SesionRepositorio().correo() }
 ) : ViewModel() {
 
     private val id: Int = checkNotNull(estado.get<Int>("id")) { "Falta el id del reporte" }
@@ -134,18 +142,24 @@ class DetalleReporteViewModel @JvmOverloads constructor(
     }
 
     /**
-     * Cambia el estatus. Si es "Descartado", [motivo] es obligatorio.
+     * Cambia el estatus. Si es "Descartado", [motivo] es obligatorio; si es "Concluido",
+     * el [resultado] (Fase 7).
      *
      * @param estatus estatus destino (uno de los permitidos)
      * @param comentario nota que acompaña al cambio
      * @param motivo motivo de descarte
+     * @param resultado resultado del caso al concluir
      */
-    fun cambiarEstatus(estatus: String, comentario: String, motivo: String) {
+    fun cambiarEstatus(estatus: String, comentario: String, motivo: String, resultado: String = "") {
         if (estatus == "Descartado" && motivo.isBlank()) {
             _guardado.value = UiState.Error("Para descartar escribe el motivo")
             return
         }
-        guardar { repositorio.cambiarEstatus(id, estatus, comentario, motivo) }
+        if (estatus == "Concluido" && resultado.isBlank()) {
+            _guardado.value = UiState.Error("Para concluir escribe el resultado del caso")
+            return
+        }
+        guardar { repositorio.cambiarEstatus(id, estatus, comentario, motivo, resultado.trim()) }
     }
 
     /** Agrega una nota sin cambiar el estatus. */
@@ -155,6 +169,24 @@ class DetalleReporteViewModel @JvmOverloads constructor(
             return
         }
         guardar { repositorio.agregarSeguimiento(id, comentario.trim()) }
+    }
+
+    /** Registra una acción realizada (visita, llamada…) en la bitácora (Fase 7). */
+    fun registrarAccion(tipo: String, detalle: String) {
+        if (detalle.isBlank()) {
+            _guardado.value = UiState.Error("Describe la acción antes de guardarla")
+            return
+        }
+        guardar { repositorio.agregarSeguimiento(id, ControlExpediente.textoAccion(tipo, detalle), accion = true) }
+    }
+
+    /** Cambia la verificación del expediente (Fase 7). */
+    fun verificar(verificacion: String) = guardar { repositorio.actualizarExpediente(id, mapOf("verificacion" to verificacion)) }
+
+    /** Se asigna el caso a quien tiene la sesión (Fase 7). */
+    fun asignarme() {
+        val correo = sesionCorreo() ?: run { _guardado.value = UiState.Error("Vuelve a iniciar sesión", "NO_AUTENTICADO"); return }
+        guardar { repositorio.asignarme(id, correo) }
     }
 
     /** Limpia el mensaje de la última acción. */
@@ -177,8 +209,8 @@ class DetalleReporteViewModel @JvmOverloads constructor(
     }
 }
 
-/** Datos del inicio del personal: resumen agregado y casos sin atender. */
-data class InicioPersonal(val resumen: ResumenPersonal, val sinAtender: Int, val diasSinAtender: Int)
+/** Datos del inicio del personal: resumen agregado, casos sin atender y embudo (Fase 7; null si el servidor es anterior). */
+data class InicioPersonal(val resumen: ResumenPersonal, val sinAtender: Int, val diasSinAtender: Int, val embudo: Embudo? = null)
 
 /**
  * ViewModel del inicio del personal (Fase 3): conteos por estatus, pendientes y
@@ -227,7 +259,8 @@ class InicioPersonalViewModel(
         val resumen = repositorio.resumen()
         if (resumen is Resultado.Error) return resumen.aUiState()
         val sinAtender = (repositorio.sinAtender(diasSinAtender) as? Resultado.Exito)?.datos?.total ?: 0
-        return UiState.Exito(InicioPersonal((resumen as Resultado.Exito).datos, sinAtender, diasSinAtender))
+        val embudo = (repositorio.embudo() as? Resultado.Exito)?.datos
+        return UiState.Exito(InicioPersonal((resumen as Resultado.Exito).datos, sinAtender, diasSinAtender, embudo))
     }
 
     /** Descarta el token en memoria. */

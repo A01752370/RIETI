@@ -1,6 +1,6 @@
 # Identificación de ataques — RIETI
 
-> Etapa 3 · Fecha de corte: 10-oct-2026 · `main` (incluye web pública y del personal, municipios, red y matriz de permisos).
+> Etapa 3 · Fecha de corte: 10-oct-2026, actualizado al cierre de la Fase 7 (18-oct-2026: A3 mitigado, A38–A40).
 > Complemento: [métodos de protección](metodos-proteccion.md) (qué control mitiga cada ataque, dónde está en el código y cómo se probó).
 
 RIETI recibe reportes sobre **niñas, niños y adolescentes en posible situación de trabajo infantil**. Un incidente no solo expone datos: puede poner en riesgo a un menor o a la persona que reporta. Por eso el análisis prioriza la confidencialidad del reporte y el anonimato del denunciante por encima de la disponibilidad.
@@ -43,7 +43,7 @@ Estado: **Mitigado (probado)** = hay control y prueba automatizada · **Mitigado
 |---|---|---|---|---|
 | A1 | Enumeración de folios / IDOR | Probar folios secuenciales `RIETI-2026-000001…` en la consulta pública | Leer el estatus de reportes ajenos | Mitigado (probado) |
 | A2 | Acceso sin autenticación a la bandeja | Llamar `GET/PATCH /reportes` sin token | Leer y alterar todos los reportes | Mitigado (probado) |
-| A3 | Escalamiento horizontal entre municipios | Un enlace del municipio A pide reportes del municipio B | Fuga entre municipios | Planeado (hoy hay un solo municipio y los reportes no guardan municipio) |
+| A3 | Escalamiento horizontal entre municipios | Un enlace del municipio A pide reportes del municipio B (por id, filtro, exportación, estadísticas, mapa o alertas) | Fuga entre municipios | Mitigado (probado; Fase 7): filtro en el servicio y 404 uniforme. RLS en PostgreSQL queda como defensa adicional planeada |
 | A4 | Escalamiento vertical | Una cuenta sin rol de personal llama rutas del personal | Acceso indebido | Mitigado (probado) |
 | A5 | Inyección SQL | Payloads en folio, filtros o campos de texto | Lectura/borrado de la BD | Mitigado (probado) |
 | A6 | XSS almacenado | `<script>` en la descripción, visto luego por el personal | Robo de sesión del personal | Mitigado (probado): React escapa el texto, sin `dangerouslySetInnerHTML`, CSP sin `unsafe-inline` |
@@ -77,6 +77,9 @@ Estado: **Mitigado (probado)** = hay control y prueba automatizada · **Mitigado
 | A35 | Correlación de un reporte anónimo con una cuenta | Que la app envíe el token "por si acaso" o que el personal vea quién reportó | Romper el anonimato de quien no quiso vincular | Mitigado (probado): sin el interruptor el reporte no lleva token ni `vincularCuenta`, y si llega un token se ignora; el personal nunca ve la cuenta vinculada ni el correo; RIETI no guarda el correo (solo el `sub`) |
 | A36 | Abuso del registro (correo masivo, cuentas basura) | Registrar muchos correos ajenos para que reciban códigos | Molestia a terceros, agotar la cuota diaria de correo de Cognito | Parcial: 5 registros y 3 reenvíos por minuto por IP, más el WAF. Sin CAPTCHA; la cuota baja del correo por defecto de Cognito limita el daño pero también bloquearía registros legítimos (ver nota de SES en `docs/arquitectura/aws.md`) |
 | A37 | Uso cruzado de tokens entre pools | Mandar un token de ciudadano a rutas del personal, o uno del personal a `/ciudadano/*` | Escalar privilegios | Mitigado (probado): dos verificadores con emisor y `client_id` distintos; cada ruta acepta un solo tipo de token (`rutas-protegidas.spec.ts` y e2e "separación estricta") |
+| A38 | Consulta abusiva de expedientes por personal autorizado | Una cuenta del personal (o una sesión robada) abre expedientes o exporta sin necesidad | Fuga interna de datos de NNA | Mitigado (probado; Fase 7): alcance por municipio, bitácora de accesos append-only (`ver`, `exportar`) que solo consulta el Administrador |
+| A39 | Fusión o borrado indebido por "duplicado" | Marcar como duplicado para ocultar o borrar un reporte | Pérdida de un caso real | Mitigado (probado; Fase 7): el vínculo no borra ni fusiona, es reversible, se limita al mismo municipio y queda en la bitácora de ambos reportes |
+| A40 | Manipulación de parámetros de alertas y duplicados | Poner un radio enorme o un mínimo de 1 para inundar de alertas, o 0 para ocultarlas | Ruido o ceguera operativa | Mitigado (probado; Fase 7): solo el Administrador, claves cerradas y límites validados en el servidor (p. ej. radio 25–1000 m, mínimo 2–50) |
 | A24 | Reconocimiento con la documentación pública | Leer en el repo público el ID de la cuenta de AWS, alias de llaves o la postura de IAM para preparar ataques dirigidos (phishing, *bucket squatting*, abuso de llaves filtradas) | Facilitar otros ataques | Mitigado (revisión del árbol): el ID de cuenta salió de `versions.tf` (va en `backend.hcl`, ignorado por git) y la auditoría de cuenta ya no publica alias de llaves ni detalles de IAM. El historial anterior conserva el nombre del bucket de estado |
 
 ## 4. Detalle de los ataques principales
@@ -90,8 +93,11 @@ Estado: **Mitigado (probado)** = hay control y prueba automatizada · **Mitigado
 **Escenario.** Llamar a la bandeja sin token, o con el token de una cuenta que no es del personal.
 **Evidencia.** Pruebas e2e "A2: sin token → 401 en todas las rutas del personal", "A4: usuario sin grupo de personal → 403" y "usuario desactivado en la BD → 403". Además, `rutas-protegidas.spec.ts` falla si alguien agrega una ruta pública nueva sin declararla.
 
-### A3 — Escalamiento horizontal entre municipios (planeado)
-Hoy solo existe Atizapán de Zaragoza y los reportes no guardan municipio (`reporte.id_municipio` siempre es NULL), así que todo el personal ve todos los reportes. Cuando haya más municipios se requiere asignar municipio al reporte (D-14) y aplicar Row Level Security. Ver hoja de ruta en [métodos de protección](metodos-proteccion.md#planeado).
+### A3 — Escalamiento horizontal entre municipios (Fase 7, D-36)
+**Escenario.** Un enlace municipal con cuenta válida pide un reporte de otro municipio por id, filtra la bandeja con `municipioId` ajeno, exporta, consulta estadísticas o el mapa, o intenta atender una alerta ajena.
+**Qué se hizo.** `auth/alcance.ts` calcula el alcance de cada petición (regionales: todos; enlace: `asignacion_municipio`). Bandeja, exportación, estadísticas, embudo y mapa agregan `r.id_municipio = ANY($n)` en SQL; detalle, cambios de estatus, notas, expediente, cercanos, duplicados y responsables verifican el municipio y responden el **mismo 404** que un reporte inexistente. Sin asignaciones no se ve nada.
+**Evidencia.** e2e "A3: el enlace no ve reportes de otro municipio: 404 uniforme…", "A3: bandeja, exportación y estadísticas solo cuentan sus municipios…", "un enlace sin municipios asignados no ve nada", "alerta de punto recurrente… solo visible para sus municipios" (corren como usuario maestro y como `rieti_app`).
+**Hueco conocido.** El filtro vive en la aplicación; Row Level Security en PostgreSQL sigue planeado como segunda barrera.
 
 ### A11 — JWT manipulado
 **Evidencia.** `backend/test/jwt-falsificado.spec.ts` usa el verificador real (`aws-jwt-verify`) y comprueba que se rechazan `alg:none`, HS256 con secreto inventado, emisor de otro pool y basura.

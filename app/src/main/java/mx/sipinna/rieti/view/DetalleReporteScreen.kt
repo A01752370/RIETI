@@ -27,12 +27,15 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Create
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -73,6 +76,7 @@ import mx.sipinna.rieti.ui.theme.Primario
 import mx.sipinna.rieti.ui.theme.TextoSecundario
 import mx.sipinna.rieti.ui.theme.TintePrimario
 import mx.sipinna.rieti.viewmodel.CatalogoEstatus
+import mx.sipinna.rieti.viewmodel.ControlExpediente
 import mx.sipinna.rieti.viewmodel.DetalleReporteViewModel
 import mx.sipinna.rieti.viewmodel.FormatoReporte
 import mx.sipinna.rieti.viewmodel.LineaEstatus
@@ -144,16 +148,30 @@ private fun ContenidoDetalle(r: ReporteDetalle, guardado: UiState<Unit>, viewMod
     val ocupado = guardado is UiState.Cargando
 
     // Al guardar con éxito se cierra el diálogo y se avisa sin recargar la pantalla.
+    var ultimo by remember { mutableStateOf<String?>(null) } // acción rápida del expediente en curso
     LaunchedEffect(guardado) {
-        if (guardado is UiState.Exito && accion != null) {
-            mensaje = if (accion == NOTA) "Nota agregada." else "Estatus cambiado a \"${CatalogoEstatus.etiqueta(accion!!)}\"."
+        if (guardado is UiState.Exito && (accion != null || ultimo != null)) {
+            mensaje = when (accion) {
+                null -> ultimo
+                NOTA -> "Nota agregada."
+                ACCION -> "Acción registrada."
+                VERIFICACION -> "Verificación actualizada."
+                else -> "Estatus cambiado a \"${CatalogoEstatus.etiqueta(accion!!)}\"."
+            }
             accion = null
+            ultimo = null
             viewModel.consumirGuardado()
         }
     }
 
     Encabezado(r, mensaje)
     Acciones(r, enabled = !ocupado) { mensaje = null; viewModel.consumirGuardado(); accion = it }
+    if (r.expediente != null) {
+        TarjetaExpediente(r, enabled = !ocupado,
+            alAsignarme = { mensaje = null; ultimo = "Ahora eres responsable del caso."; viewModel.asignarme() },
+            alVerificar = { mensaje = null; viewModel.consumirGuardado(); accion = VERIFICACION })
+        if (accion == null && ultimo != null) (guardado as? UiState.Error)?.let { MensajeError(it.mensaje) }
+    }
 
     Tarjeta("Avance") { LineaProgresoEstatus(lineaPersonal(r), mostrarSignificado = false) }
     Tarjeta("Resumen") {
@@ -177,39 +195,48 @@ private fun ContenidoDetalle(r: ReporteDetalle, guardado: UiState<Unit>, viewMod
     Bitacora(r)
 
     accion?.let { destino ->
-        DialogoAccion(
-            r = r,
-            destino = destino,
-            ocupado = ocupado,
-            error = (guardado as? UiState.Error)?.mensaje,
-            alCancelar = { accion = null; viewModel.consumirGuardado() },
-            alConfirmar = { comentario, motivo ->
-                if (destino == NOTA) viewModel.agregarNota(comentario) else viewModel.cambiarEstatus(destino, comentario, motivo)
-            }
-        )
+        when (destino) {
+            ACCION -> DialogoRegistrarAccion(ocupado, (guardado as? UiState.Error)?.mensaje,
+                alCancelar = { accion = null; viewModel.consumirGuardado() },
+                alConfirmar = { tipo, detalle -> viewModel.registrarAccion(tipo, detalle) })
+            VERIFICACION -> DialogoVerificacion(r.expediente?.verificacion ?: "Sin verificar", ocupado, (guardado as? UiState.Error)?.mensaje,
+                alCancelar = { accion = null; viewModel.consumirGuardado() },
+                alConfirmar = { viewModel.verificar(it) })
+            else -> DialogoAccion(
+                r = r,
+                destino = destino,
+                ocupado = ocupado,
+                error = (guardado as? UiState.Error)?.mensaje,
+                alCancelar = { accion = null; viewModel.consumirGuardado() },
+                alConfirmar = { comentario, motivo, resultado ->
+                    if (destino == NOTA) viewModel.agregarNota(comentario) else viewModel.cambiarEstatus(destino, comentario, motivo, resultado)
+                }
+            )
+        }
     }
 }
 
 /** Marca de la acción "agregar nota" (no es un estatus). */
 private const val NOTA = "__nota__"
 
+/** Marca de "registrar acción" (Fase 7). */
+private const val ACCION = "__accion__"
+
+/** Marca de "cambiar verificación" (Fase 7). */
+private const val VERIFICACION = "__verificacion__"
+
 /** Línea de progreso del personal: solo los cambios de estatus (las notas no avanzan el caso). */
 private fun lineaPersonal(r: ReporteDetalle): LineaEstatus {
-    val cambios = r.historial.filterIndexed { i, e -> tipoEvento(r.historial, i) != "nota" || i == 0 }.map { it.estatus to it.fecha }
+    val cambios = r.historial.filterIndexed { i, _ -> ControlExpediente.esCambio(tipoEvento(r.historial, i)) || i == 0 }.map { it.estatus to it.fecha }
     return LineaEstatus.calcular(r.estatus, cambios, r.fechaCreacion)
 }
 
 /** Clase del evento; si el servidor es anterior a la Fase 5 se calcula con la misma regla que el servidor. */
-private fun tipoEvento(historial: List<EventoSeguimiento>, i: Int): String =
-    historial[i].tipo ?: when {
-        i == 0 -> "registro"
-        historial[i].estatus != historial[i - 1].estatus -> "cambio"
-        else -> "nota"
-    }
+private fun tipoEvento(historial: List<EventoSeguimiento>, i: Int): String = ControlExpediente.tipoEvento(historial, i)
 
 /** Fecha en que el caso entró a su estatus vigente (del servidor o calculada con la bitácora). */
 private fun fechaEstatus(r: ReporteDetalle): String =
-    r.fechaEstatusActual ?: r.historial.indices.reversed().firstOrNull { tipoEvento(r.historial, it) != "nota" }
+    r.fechaEstatusActual ?: r.historial.indices.reversed().firstOrNull { ControlExpediente.esCambio(tipoEvento(r.historial, it)) }
         ?.let { r.historial[it].fecha } ?: r.fechaCreacion
 
 /** Folio con copiar, estatus, riesgo, municipio y tiempos medidos. */
@@ -233,6 +260,8 @@ private fun Encabezado(r: ReporteDetalle, mensaje: String?) {
                 EtiquetaEstatus(r.estatus)
                 IndicadorPrioridad(r.prioridad)
                 if (r.situacionRiesgo == "Sí") IndicadorRiesgo()
+                if (r.expediente?.seguimientoVencido == true) IndicadorTexto("Seguimiento vencido", destacado = true)
+                if (r.duplicadoDe != null) IndicadorTexto("Posible duplicado")
             }
             Text(r.municipio ?: "Municipio no indicado", style = MaterialTheme.typography.titleSmall)
             val desdeAlta = FormatoReporte.transcurrido(r.fechaCreacion)
@@ -273,6 +302,12 @@ private fun Acciones(r: ReporteDetalle, enabled: Boolean, alElegir: (String) -> 
                 Icon(Icons.Filled.Create, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                 Text("Agregar nota", modifier = Modifier.padding(start = 6.dp))
             }
+            if (r.expediente != null) {
+                OutlinedButton(onClick = { alElegir(ACCION) }, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Icon(Icons.Filled.Done, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                    Text("Registrar acción", modifier = Modifier.padding(start = 6.dp))
+                }
+            }
         }
     }
 }
@@ -285,20 +320,17 @@ private fun DialogoAccion(
     ocupado: Boolean,
     error: String?,
     alCancelar: () -> Unit,
-    alConfirmar: (comentario: String, motivo: String) -> Unit
+    alConfirmar: (comentario: String, motivo: String, resultado: String) -> Unit
 ) {
     var comentario by rememberSaveable(destino) { mutableStateOf("") }
     var motivo by rememberSaveable(destino) { mutableStateOf("") }
+    var resultado by rememberSaveable(destino) { mutableStateOf("") }
     val esNota = destino == NOTA
     val descartar = destino == "Descartado"
-    // Fase 6: marcar un caso como Reincidente exige comentario (el servidor lo vuelve a validar).
+    // Fase 6: marcar un caso como Reincidente exige comentario; Fase 7: concluir exige el resultado.
     val reabrir = destino == CatalogoEstatus.REINCIDENTE
-    val listo = when {
-        esNota -> comentario.isNotBlank()
-        descartar -> motivo.isNotBlank()
-        reabrir -> comentario.isNotBlank()
-        else -> true
-    }
+    val concluir = destino == "Concluido"
+    val listo = if (esNota) comentario.isNotBlank() else ControlExpediente.cambioCompleto(destino, comentario, motivo, resultado)
     AlertDialog(
         onDismissRequest = { if (!ocupado) alCancelar() },
         title = { Text(if (esNota) "Agregar nota interna" else "Cambiar a \"${CatalogoEstatus.etiqueta(destino)}\"") },
@@ -309,6 +341,12 @@ private fun DialogoAccion(
                     OutlinedTextField(
                         value = motivo, onValueChange = { motivo = it.take(500) },
                         label = { Text("Motivo de la cancelación (obligatorio)") }, modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (concluir) {
+                    OutlinedTextField(
+                        value = resultado, onValueChange = { resultado = it.take(1000) },
+                        label = { Text("Resultado del caso (obligatorio)") }, minLines = 2, modifier = Modifier.fillMaxWidth()
                     )
                 }
                 OutlinedTextField(
@@ -326,13 +364,95 @@ private fun DialogoAccion(
             }
         },
         confirmButton = {
-            TextButton(onClick = { alConfirmar(comentario, motivo) }, enabled = listo && !ocupado, modifier = Modifier.heightIn(min = 48.dp)) {
+            TextButton(onClick = { alConfirmar(comentario, motivo, resultado) }, enabled = listo && !ocupado, modifier = Modifier.heightIn(min = 48.dp)) {
                 Text(if (ocupado) "Guardando…" else if (esNota) "Guardar nota" else "Cambiar")
             }
         },
         dismissButton = {
             TextButton(onClick = alCancelar, enabled = !ocupado, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancelar") }
         }
+    )
+}
+
+/**
+ * Expediente en modo de control rápido (Fase 7): responsable, verificación, seguimiento
+ * y dependencia, con "Asignarme" y "Cambiar verificación". La edición completa está en la web.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TarjetaExpediente(r: ReporteDetalle, enabled: Boolean, alAsignarme: () -> Unit, alVerificar: () -> Unit) {
+    val e = r.expediente ?: return
+    Tarjeta("Expediente") {
+        Dato("Responsable", e.responsable?.correo ?: "Sin asignar")
+        Dato("Verificación", e.verificacion)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Dato("Próximo seguimiento", e.fechaSeguimiento?.let { formatearFecha(it + "T12:00:00Z") } ?: "Sin fecha")
+            if (e.seguimientoVencido) IndicadorTexto("Vencido", destacado = true)
+        }
+        e.dependencia?.let { Dato("Dependencia", it.nombre) }
+        e.resultado?.let { Dato("Resultado", it) }
+        r.duplicadoDe?.let { Dato("Posible duplicado de", "${it.folio} (${it.estatusEtiqueta})") }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (e.responsable == null) {
+                OutlinedButton(onClick = alAsignarme, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp)) { Text("Asignarme") }
+            }
+            OutlinedButton(onClick = alVerificar, enabled = enabled, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cambiar verificación") }
+        }
+        Text("Dependencia, fechas y conteos se editan en la web del personal.", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+    }
+}
+
+/** Diálogo "Registrar acción": tipo (visita, llamada…) y qué se hizo. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DialogoRegistrarAccion(ocupado: Boolean, error: String?, alCancelar: () -> Unit, alConfirmar: (tipo: String, detalle: String) -> Unit) {
+    var tipo by rememberSaveable { mutableStateOf(ControlExpediente.TIPOS_ACCION.first()) }
+    var detalle by rememberSaveable { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = { if (!ocupado) alCancelar() },
+        title = { Text("Registrar acción") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Tipo de acción", style = MaterialTheme.typography.labelLarge)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    ControlExpediente.TIPOS_ACCION.forEach { t -> FilterChip(selected = tipo == t, onClick = { tipo = t }, label = { Text(t) }) }
+                }
+                OutlinedTextField(value = detalle, onValueChange = { detalle = it.take(1900) }, label = { Text("Qué se hizo (solo lo ve el personal)") },
+                    minLines = 3, modifier = Modifier.fillMaxWidth())
+                error?.let { MensajeError(it) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { alConfirmar(tipo, detalle) }, enabled = detalle.isNotBlank() && !ocupado, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(if (ocupado) "Guardando…" else "Registrar")
+            }
+        },
+        dismissButton = { TextButton(onClick = alCancelar, enabled = !ocupado, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancelar") } }
+    )
+}
+
+/** Diálogo para cambiar la verificación del expediente. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DialogoVerificacion(actual: String, ocupado: Boolean, error: String?, alCancelar: () -> Unit, alConfirmar: (String) -> Unit) {
+    var elegida by rememberSaveable { mutableStateOf(actual) }
+    AlertDialog(
+        onDismissRequest = { if (!ocupado) alCancelar() },
+        title = { Text("Verificación") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    ControlExpediente.VERIFICACIONES.forEach { v -> FilterChip(selected = elegida == v, onClick = { elegida = v }, label = { Text(v) }) }
+                }
+                error?.let { MensajeError(it) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { alConfirmar(elegida) }, enabled = elegida != actual && !ocupado, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(if (ocupado) "Guardando…" else "Guardar")
+            }
+        },
+        dismissButton = { TextButton(onClick = alCancelar, enabled = !ocupado, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancelar") } }
     )
 }
 
@@ -419,16 +539,21 @@ private fun Bitacora(r: ReporteDetalle) {
 /** Un evento: icono según su clase (registro, cambio de estatus o nota), autor, fecha y comentario. */
 @Composable
 private fun EventoBitacora(ev: EventoSeguimiento, tipo: String, conector: Boolean) {
-    val (color, titulo) = when (tipo) {
-        "registro" -> colorEstatus("Recibido") to "Reporte recibido"
-        "cambio" -> colorEstatus(ev.estatus) to "Cambio de estatus a \"${CatalogoEstatus.etiqueta(ev.estatus)}\""
-        else -> TextoSecundario to "Nota interna"
+    val titulo = ControlExpediente.tituloEvento(tipo, ev.estatus)
+    val color = when (tipo) {
+        "registro" -> colorEstatus("Recibido")
+        "cambio" -> colorEstatus(ev.estatus)
+        "accion" -> Primario
+        else -> TextoSecundario
     }
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(36.dp).fillMaxHeight()) {
             Surface(color = color, shape = CircleShape, modifier = Modifier.size(32.dp)) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(if (tipo == "nota") Icons.Filled.Create else iconoEstatus(ev.estatus), contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(
+                        when (tipo) { "nota" -> Icons.Filled.Create; "accion" -> Icons.Filled.Done; "expediente" -> Icons.Filled.Edit; else -> iconoEstatus(ev.estatus) },
+                        contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp)
+                    )
                 }
             }
             if (conector) Box(Modifier.width(2.dp).weight(1f).background(TintePrimario))
