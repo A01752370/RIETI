@@ -189,7 +189,7 @@ Fuente de cada dato: **[Dev]** = comprobado por el equipo de desarrollo con coma
 
 ### Limitaciones conocidas
 
-- **Evidencias fotográficas: no implementadas.** El bucket S3 privado y cifrado existe (Terraform) y el rol de la tarea tiene permiso de escritura, pero **no hay endpoint ni código de carga** (A7, A8 y A14 sin funcionalidad que proteger).
+- **Fotos opcionales (Fase 8)**: hasta 3 por reporte en las 24 h siguientes; conservación provisional de 365 días hasta que el socio defina la política; sin antivirus (la re-codificación descarta lo que no es imagen). El aviso de privacidad debe mencionarlas (validación jurídica pendiente).
 - **Reporte con datos de contacto: no disponible** (solo anónimo); requiere cifrado a nivel aplicación.
 - **Filtro por municipio en la aplicación (Fase 7)**; sin RLS en PostgreSQL como segunda barrera. Las asignaciones y quién es Coordinador regional las debe definir el socio.
 - **API con el usuario maestro de la BD**: el rol `rieti_app` está preparado y probado en local, **no aplicado** en AWS.

@@ -4,6 +4,7 @@ import { RequestMethod } from '@nestjs/common';
 import { CIUDADANO_KEY, Permiso, PERMISO_KEY, PUBLICO_KEY, ROLES_KEY } from '../../src/auth/roles';
 import { AuthController } from '../../src/auth/auth.controller';
 import { ReportesController } from '../../src/reportes/reportes.controller';
+import { FotosController } from '../../src/fotos/fotos';
 import { HealthController } from '../../src/health/health.controller';
 import { AvisosController } from '../../src/avisos/aviso-privacidad';
 import { CatalogosController } from '../../src/catalogos/catalogos.controller';
@@ -16,7 +17,7 @@ import { AdminController } from '../../src/admin/admin.controller';
 
 /** Todos los controladores del API. Un controlador nuevo se agrega aquí. */
 export const CONTROLADORES = [
-  AuthController, ReportesController, HealthController, AvisosController, CatalogosController, RedController, EstadisticasController,
+  AuthController, ReportesController, FotosController, HealthController, AvisosController, CatalogosController, RedController, EstadisticasController,
   GeoController, CuentasPublicasController, CuentaCiudadanoController, ExpedienteController, AdminController,
 ];
 

@@ -676,6 +676,42 @@ function TarjetaDuplicados({ r, alGuardar }: { r: ReporteDetalle; alGuardar: (d:
   );
 }
 
+/**
+ * Fotos del reporte (Fase 8): se piden solo al tocar "Ver fotos"; cada URL caduca en 60 s y
+ * consultarlas queda en la bitácora de accesos. No se imprimen en la ficha.
+ */
+function TarjetaFotos({ r }: { r: ReporteDetalle }) {
+  const [abiertas, setAbiertas] = useState(false);
+  const fotos = useCarga(() => (abiertas ? api.fotos(r.id) : Promise.resolve(null)), [abiertas, r.id]);
+  if (!r.numeroFotos) return null;
+  return (
+    <section className="tarjeta no-imprimir" aria-labelledby="t-fotos">
+      <h2 id="t-fotos">Fotos · {r.numeroFotos}</h2>
+      <p className="pequeno texto-secundario">Las aportó quien reportó. Verlas queda registrado en la bitácora de accesos; los enlaces caducan en 1 minuto.</p>
+      {!abiertas
+        ? <button type="button" className="boton boton-secundario" onClick={() => setAbiertas(true)}>Ver fotos</button>
+        : (
+          <>
+            {fotos.cargando && <Esqueleto filas={2} />}
+            {!!fotos.error && <MensajeError error={fotos.error} alReintentar={fotos.recargar} />}
+            {fotos.datos && (
+              <>
+                <div className="rejilla-fotos">
+                  {fotos.datos.map((foto, i) => (
+                    <a key={foto.id} href={foto.url} target="_blank" rel="noopener noreferrer">
+                      <img className="foto-evidencia" src={foto.url} alt={`Foto ${i + 1} del reporte ${r.folio}`} width={foto.ancho} height={foto.alto} loading="lazy" referrerPolicy="no-referrer" />
+                    </a>
+                  ))}
+                </div>
+                <button type="button" className="boton-texto" onClick={fotos.recargar}>Volver a cargar (si caducaron)</button>
+              </>
+            )}
+          </>
+        )}
+    </section>
+  );
+}
+
 /** Bitácora como línea de tiempo vertical, lo más reciente arriba, distinguiendo registro, cambio de estatus y nota. */
 function Bitacora({ historial }: { historial: EventoBitacora[] }) {
   const eventos = historial.map((h, i) => ({ ...h, tipo: tipoEvento(historial, i) })).reverse();
@@ -811,6 +847,7 @@ function ContenidoDetalle({ id }: { id: number }) {
               {r.motivoDescarte && (<><dt>Motivo de cancelación</dt><dd>{r.motivoDescarte}</dd></>)}
             </dl>
           </section>
+          <TarjetaFotos r={r} />
           <section className="tarjeta" aria-labelledby="t-descripcion">
             <h2 id="t-descripcion">Descripción</h2>
             <p className="texto-largo">{larga && !completa ? `${r.descripcion.slice(0, DESCRIPCION_CORTA).trimEnd()}…` : r.descripcion}</p>

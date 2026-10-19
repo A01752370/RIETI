@@ -75,9 +75,9 @@ private fun AppRieti() {
         ) { entrada ->
             FormularioReporteScreen(
                 avisoVersion = entrada.arguments?.getString("avisoVersion").orEmpty(),
-                alEnviar = { creado ->
+                alEnviar = { creado, fotos ->
                     // Al confirmar no se puede volver al formulario ni reenviar el mismo reporte.
-                    nav.navigate(Rutas.confirmacion(creado.folio, creado.claveConsulta, creado.fechaCreacion)) {
+                    nav.navigate(Rutas.confirmacion(creado.folio, creado.claveConsulta, creado.fechaCreacion, fotos)) {
                         popUpTo(Rutas.INICIO)
                     }
                 },
@@ -90,13 +90,15 @@ private fun AppRieti() {
             arguments = listOf(
                 navArgument("folio") { type = NavType.StringType },
                 navArgument("clave") { type = NavType.StringType },
-                navArgument("fecha") { type = NavType.StringType; defaultValue = "" }
+                navArgument("fecha") { type = NavType.StringType; defaultValue = "" },
+                navArgument("fotos") { type = NavType.IntType; defaultValue = 0 }
             )
         ) { entrada ->
             ConfirmacionScreen(
                 folio = entrada.arguments?.getString("folio").orEmpty(),
                 clave = entrada.arguments?.getString("clave").orEmpty(),
                 fecha = entrada.arguments?.getString("fecha")?.takeIf { it.isNotBlank() },
+                fotos = entrada.arguments?.getInt("fotos") ?: 0,
                 alTerminar = { volverAlInicio(nav) }
             )
         }

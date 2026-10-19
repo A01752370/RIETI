@@ -43,6 +43,35 @@ resource "aws_s3_bucket_lifecycle_configuration" "evidencias" {
     noncurrent_version_expiration { noncurrent_days = 90 }
     abort_incomplete_multipart_upload { days_after_initiation = 7 }
   }
+
+  # Fase 8: subidas sin confirmar (zona de entrada, pueden traer EXIF) se borran al día siguiente,
+  # también sus versiones anteriores (S3 aplica la expiración más corta cuando las reglas se traslapan).
+  rule {
+    id     = "expirar-entrantes"
+    status = "Enabled"
+    filter { prefix = "entrantes/" }
+    expiration { days = 1 }
+    noncurrent_version_expiration { noncurrent_days = 1 }
+  }
+
+  # Fase 8 (D-42): conservación provisional de las fotos, 365 días, hasta que el socio defina la política.
+  rule {
+    id     = "expirar-fotos"
+    status = "Enabled"
+    filter { prefix = "fotos/" }
+    expiration { days = 365 }
+  }
+}
+
+# Fase 8: la web sube la foto directo a S3 con un POST prefirmado; solo desde su propio origen.
+resource "aws_s3_bucket_cors_configuration" "evidencias" {
+  bucket = aws_s3_bucket.evidencias.id
+  cors_rule {
+    allowed_methods = ["POST"]
+    allowed_origins = ["https://${aws_cloudfront_distribution.api.domain_name}"]
+    allowed_headers = ["*"]
+    max_age_seconds = 300
+  }
 }
 
 data "aws_iam_policy_document" "evidencias" {

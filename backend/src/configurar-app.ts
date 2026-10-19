@@ -7,6 +7,15 @@ import { join } from 'path';
 import { FiltroErrores } from './comun/filtro-errores';
 
 /**
+ * Única excepción a "solo este origen" (Fase 8, D-42): el almacén privado de fotos en S3 de la
+ * región, para subir la foto con el POST prefirmado (`connect-src`) y para que el personal la vea
+ * con la URL prefirmada de 60 s (`img-src`). Se usa el comodín de S3 regional para no publicar
+ * en cada respuesta el nombre del bucket (lleva el ID de la cuenta). Scripts, estilos, fuentes y
+ * marcos siguen restringidos a este origen.
+ */
+export const ORIGEN_FOTOS = `https://*.s3.${process.env.AWS_REGION ?? 'mx-central-1'}.amazonaws.com`;
+
+/**
  * CSP estricta (sin CDN, sin fuentes externas, sin estilos ni scripts en línea).
  * La web pública y la del personal se sirven desde este mismo origen.
  */
@@ -15,9 +24,9 @@ export const DIRECTIVAS_CSP = {
   scriptSrc: ["'self'"],
   scriptSrcAttr: ["'none'"],
   styleSrc: ["'self'"],
-  imgSrc: ["'self'", 'data:'],
+  imgSrc: ["'self'", 'data:', ORIGEN_FOTOS],
   fontSrc: ["'self'"],
-  connectSrc: ["'self'"],
+  connectSrc: ["'self'", ORIGEN_FOTOS],
   objectSrc: ["'none'"],
   baseUri: ["'self'"],
   formAction: ["'self'"],

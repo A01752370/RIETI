@@ -59,7 +59,7 @@ flowchart LR
 | Identidad | Cognito **personal**: alta solo por administrador, contraseñas ≥12 con complejidad, MFA TOTP **opcional**, grupos `Administrador` y `PersonalSIPINNA`, cliente público sin secreto | Sin dominio de Hosted UI configurado (verificado). |
 | Identidad (ciudadanos) | Cognito **ciudadanos** (`rieti-prod-ciudadanos`, Fase 4): autorregistro con código por correo, contraseña ≥ 12, sin atributos extra, protección contra borrado, cliente público sin secreto con `prevent_user_existence_errors` y revocación de tokens | Correo con el remitente por defecto de Cognito (ver [Correo de Cognito y SES](#correo-de-cognito-y-ses)). |
 | Secretos | Secrets Manager: contraseña maestra de RDS generada y rotada por AWS, cifrada con la CMK | La API la relee cada 5 min. |
-| Almacenamiento | S3 de evidencias: privado, *Block Public Access*, KMS, versionado | Sin endpoint de subida todavía. |
+| Almacenamiento | S3 de evidencias: privado, *Block Public Access*, KMS, versionado, solo TLS | **Fase 8:** fotos opcionales. CORS solo `POST` desde la web; ciclo de vida: `entrantes/` 1 día (con versiones), `fotos/` 365 días (provisional); el rol de la tarea solo puede borrar en `entrantes/`. |
 | Operación | CloudWatch Logs (30 días, KMS), 5 alarmas (5xx del ALB, destinos sanos, CPU de ECS y RDS, almacenamiento de RDS), presupuesto mensual (150 USD) → SNS | Sin suscriptores hasta configurar `alerta_emails` (ver runbook). |
 | CI/CD | Rol IAM para GitHub Actions por OIDC, limitado a `main` del repositorio | Sin llaves estáticas en GitHub. |
 | Estado de Terraform | Bucket S3 cifrado y versionado con bloqueo nativo | Creado con `infra/bootstrap.sh`. |
@@ -121,6 +121,10 @@ El pool de ciudadanos envía los códigos de verificación y de recuperación co
 4. Cambiar `email_configuration` del pool a `DEVELOPER` con `source_arn` de la identidad (cambio en `infra/terraform/cognito_ciudadanos.tf` que no reemplaza el pool, pero conviene revisar el `plan`).
 
 Los correos de Cognito salen de AWS hacia el buzón de la persona: su contenido solo es el código, sin datos del reporte.
+
+## Fotos (Fase 8, D-42)
+
+La subida de fotos no pasa por CloudFront ni por el WAF: la regla `SizeRestrictions_BODY` de `AWSManagedRulesCommonRuleSet` bloquea cuerpos de más de 8 KB. El API entrega un POST prefirmado de S3 (5 min, ≤ 5 MB, clave exacta) a quien tiene folio y clave; el cliente sube a `entrantes/`, y el API valida, re-codifica y guarda en `fotos/`. El personal lee con una URL prefirmada de 60 s. Costo estimado: ~3 GB al año con 1,000 reportes al mes (30 % con 2 fotos de ~0.4 MB): centavos de dólar al mes de almacenamiento; las solicitudes y la llave KMS (con *bucket key*) no cambian el orden de magnitud.
 
 ## Costo
 

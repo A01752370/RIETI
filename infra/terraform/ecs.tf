@@ -97,6 +97,8 @@ resource "aws_iam_role_policy" "tarea" {
     Statement = [
       { Sid = "LeerSecretoBD", Effect = "Allow", Action = "secretsmanager:GetSecretValue", Resource = aws_db_instance.principal.master_user_secret[0].secret_arn },
       { Sid = "Evidencias", Effect = "Allow", Action = ["s3:PutObject", "s3:GetObject"], Resource = "${aws_s3_bucket.evidencias.arn}/*" },
+      # Fase 8: el API limpia la zona de entrada de fotos tras validarlas; nunca borra fotos guardadas.
+      { Sid = "LimpiarEntrantes", Effect = "Allow", Action = "s3:DeleteObject", Resource = "${aws_s3_bucket.evidencias.arn}/entrantes/*" },
       { Sid = "Kms", Effect = "Allow", Action = ["kms:Decrypt", "kms:GenerateDataKey"], Resource = aws_kms_key.principal.arn },
     ]
   })

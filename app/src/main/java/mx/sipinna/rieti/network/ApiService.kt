@@ -6,7 +6,12 @@ import mx.sipinna.rieti.model.AvisoPrivacidad
 import mx.sipinna.rieti.model.CambiarEstatusRequest
 import mx.sipinna.rieti.model.ConsultaPublica
 import mx.sipinna.rieti.model.ConsultaRequest
+import mx.sipinna.rieti.model.ConfirmarFotosRequest
 import mx.sipinna.rieti.model.Embudo
+import mx.sipinna.rieti.model.FotoPersonal
+import mx.sipinna.rieti.model.FotosConfirmadas
+import mx.sipinna.rieti.model.SolicitarFotosRequest
+import mx.sipinna.rieti.model.SolicitudFotos
 import mx.sipinna.rieti.model.Responsable
 import mx.sipinna.rieti.model.CrearReporteRequest
 import mx.sipinna.rieti.model.GeoReversa
@@ -147,6 +152,18 @@ interface ApiService {
         @Query("orden") orden: String? = null,
         @Query("vencidos") vencidos: Boolean? = null
     ): Pagina<ReporteResumen>
+
+    /** Fase 8: formularios de subida directa de fotos para un reporte recién creado (público, con folio + clave). */
+    @POST("api/v1/reportes/fotos/solicitud")
+    suspend fun solicitarFotos(@Body r: SolicitarFotosRequest): SolicitudFotos
+
+    /** Fase 8: confirma las fotos subidas; el servidor valida y re-codifica (público, con folio + clave). */
+    @POST("api/v1/reportes/fotos/confirmar")
+    suspend fun confirmarFotos(@Body r: ConfirmarFotosRequest): FotosConfirmadas
+
+    /** Fase 8: fotos de un reporte para el personal, con URL de 60 s (requiere sesión). */
+    @GET("api/v1/reportes/{id}/fotos")
+    suspend fun fotos(@Path("id") id: Int): List<FotoPersonal>
 
     /** Fase 7: embudo y controles (vencidos, alertas) para el inicio del personal (requiere sesión). */
     @GET("api/v1/estadisticas/embudo")

@@ -17,7 +17,7 @@ object Rutas {
     const val FORMULARIO = "formulario/{avisoVersion}"
 
     /** Confirmación con folio y clave (y la fecha de registro para la línea de avance). */
-    const val CONFIRMACION = "confirmacion/{folio}/{clave}?fecha={fecha}"
+    const val CONFIRMACION = "confirmacion/{folio}/{clave}?fecha={fecha}&fotos={fotos}"
 
     /** Consulta ciudadana con folio + clave. */
     const val CONSULTA = "consulta"
@@ -50,8 +50,8 @@ object Rutas {
     fun formulario(avisoVersion: String) = "formulario/${Uri.encode(avisoVersion)}"
 
     /** Ruta de la confirmación. La clave solo vive en la pila de navegación en memoria. */
-    fun confirmacion(folio: String, clave: String, fecha: String? = null) =
-        "confirmacion/${Uri.encode(folio)}/${Uri.encode(clave)}?fecha=${Uri.encode(fecha ?: "")}"
+    fun confirmacion(folio: String, clave: String, fecha: String? = null, fotos: Int = 0) =
+        "confirmacion/${Uri.encode(folio)}/${Uri.encode(clave)}?fecha=${Uri.encode(fecha ?: "")}&fotos=$fotos"
 
     /** Ruta de la bandeja, opcionalmente filtrada por estatus, casos sin atender, pendientes o pendientes de riesgo alto. */
     fun bandeja(estatus: String? = null, sinAtender: Int? = null, prioridadAlta: Boolean = false, pendientes: Boolean = false, vencidos: Boolean = false): String =

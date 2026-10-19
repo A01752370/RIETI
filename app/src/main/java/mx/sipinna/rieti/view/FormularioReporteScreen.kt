@@ -1,5 +1,17 @@
 package mx.sipinna.rieti.view
 
+import android.content.ActivityNotFoundException
+import android.net.Uri
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Checkbox
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.text.font.FontWeight
+import androidx.core.content.FileProvider
+import java.io.File
+import java.util.UUID
+import kotlinx.coroutines.launch
+import mx.sipinna.rieti.viewmodel.ReglasFotos
 import android.Manifest
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -94,14 +106,14 @@ import org.osmdroid.util.GeoPoint
  * - El cuerpo que se envía es el mismo que el del formulario de una sola pantalla.
  *
  * @param avisoVersion versión del aviso de privacidad aceptada en la pantalla anterior
- * @param alEnviar navega a la confirmación con el folio y la clave
+ * @param alEnviar navega a la confirmación con el folio, la clave y cuántas fotos se adjuntaron (-1 si falló la subida)
  * @param alRegresar vuelve al aviso
  * @param alCuenta abre el acceso a la cuenta opcional (reporte con seguimiento) y regresa aquí sin perder lo capturado
  */
 @Composable
 fun FormularioReporteScreen(
     avisoVersion: String,
-    alEnviar: (ReporteCreado) -> Unit,
+    alEnviar: (ReporteCreado, Int) -> Unit,
     alRegresar: () -> Unit,
     alCuenta: () -> Unit = {},
     viewModel: FormularioReporteViewModel = viewModel()
@@ -121,7 +133,7 @@ fun FormularioReporteScreen(
         val e = envio
         if (e is UiState.Exito) {
             viewModel.reiniciarEnvio()
-            alEnviar(e.datos)
+            alEnviar(e.datos, viewModel.fotosAdjuntadas)
         }
     }
     // Cada paso empieza arriba; si un intento de avanzar falla, también se sube para ver el resumen.
@@ -529,6 +541,109 @@ private fun PasoQue(estado: EstadoAsistente, viewModel: FormularioReporteViewMod
         minLines = 4,
         modifier = Modifier.fillMaxWidth()
     )
+
+    SeccionFotos(viewModel)
+}
+
+/**
+ * Fotos opcionales (Fase 8): primero la advertencia del socio y la casilla de lectura; luego
+ * el selector de fotos del sistema (sin permisos de almacenamiento) o la cámara por intent
+ * (sin permiso de cámara). Cada foto se reduce y pierde sus metadatos en el teléfono.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SeccionFotos(viewModel: FormularioReporteViewModel) {
+    val contexto = LocalContext.current
+    val alcance = rememberCoroutineScope()
+    val fotos by viewModel.fotos.collectAsState()
+    val leida by viewModel.advertenciaLeida.collectAsState()
+    var aviso by remember { mutableStateOf<String?>(null) }
+    var preparando by remember { mutableStateOf(false) }
+    var captura by remember { mutableStateOf<Uri?>(null) }
+    val restantes = ReglasFotos.restantes(fotos.size)
+
+    val agregar: (List<Uri>) -> Unit = { uris ->
+        if (uris.isNotEmpty()) alcance.launch {
+            preparando = true
+            aviso = null
+            uris.take(ReglasFotos.restantes(viewModel.fotos.value.size)).forEach { uri ->
+                val bytes = prepararFoto(contexto, uri)
+                if (bytes != null) viewModel.agregarFoto(bytes) else aviso = "Una de las fotos no se pudo leer. Elige otra (JPG, PNG o WebP)."
+            }
+            preparando = false
+        }
+    }
+    val galeriaVarias = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(ReglasFotos.MAXIMO)) { agregar(it) }
+    val galeriaUna = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> agregar(listOfNotNull(uri)) }
+    val camara = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val uri = captura
+        if (ok && uri != null) {
+            alcance.launch {
+                preparando = true
+                val bytes = prepararFoto(contexto, uri)
+                if (bytes != null) viewModel.agregarFoto(bytes) else aviso = "No se pudo usar la foto. Inténtalo de nuevo."
+                // La captura original (con sus metadatos) se borra del teléfono en cuanto se preparó.
+                contexto.contentResolver.delete(uri, null, null)
+                preparando = false
+            }
+        } else if (uri != null) {
+            contexto.contentResolver.delete(uri, null, null)
+        }
+        captura = null
+    }
+
+    Seccion("Fotografía (opcional)")
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Antes de adjuntar", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(ReglasFotos.ADVERTENCIA, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .toggleable(value = leida, role = Role.Checkbox, onValueChange = { viewModel.leerAdvertencia(it) })
+    ) {
+        Checkbox(checked = leida, onCheckedChange = null)
+        Text("Leí la advertencia y quiero adjuntar fotos", modifier = Modifier.padding(start = 8.dp))
+    }
+    if (leida) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = {
+                    val solicitud = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    if (restantes > 1) galeriaVarias.launch(solicitud) else galeriaUna.launch(solicitud)
+                },
+                enabled = restantes > 0 && !preparando,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) { Text("Elegir de la galería") }
+            OutlinedButton(
+                onClick = {
+                    val carpeta = File(contexto.cacheDir, "fotos").apply { mkdirs() }
+                    val uri = FileProvider.getUriForFile(contexto, "${contexto.packageName}.fotos", File(carpeta, "captura-${UUID.randomUUID()}.jpg"))
+                    captura = uri
+                    try {
+                        camara.launch(uri)
+                    } catch (e: ActivityNotFoundException) {
+                        captura = null
+                        aviso = "No encontramos una app de cámara. Elige la foto de la galería."
+                    }
+                },
+                enabled = restantes > 0 && !preparando,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) { Text("Tomar foto") }
+        }
+        NotaCampo("Hasta ${ReglasFotos.MAXIMO} fotos. Se quita la información del teléfono y de ubicación que traen las fotos.")
+        if (preparando) Text("Preparando la foto…", style = MaterialTheme.typography.bodySmall)
+        fotos.forEachIndexed { i, foto ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text("Foto ${i + 1} · ${maxOf(1, foto.size / 1024)} KB", modifier = Modifier.weight(1f))
+                TextButton(onClick = { viewModel.quitarFoto(i) }, modifier = Modifier.heightIn(min = 48.dp)
+                    .semantics { contentDescription = "Quitar la foto ${i + 1}" }) { Text("Quitar") }
+            }
+        }
+        aviso?.let { ErrorCampo(it) }
+    }
 }
 
 // ---------- Paso 5: Revisar y enviar ----------
@@ -566,6 +681,8 @@ private fun PasoRevisar(estado: EstadoAsistente, haySesion: Boolean, viewModel: 
         Dato("Actividad", FormatoReporte.actividad(ValidadorReporte.textoActividad(d.actividad), d.actividadOtro.takeIf { d.actividad == ValidadorReporte.ACTIVIDAD_OTRO }))
         Dato("¿Riesgo percibido?", d.riesgo)
         Dato("Descripción", d.descripcion.trim())
+        val fotos by viewModel.fotos.collectAsState()
+        Dato("Fotos", if (fotos.isEmpty()) "Sin fotos" else "${fotos.size} (se adjuntan al enviar)")
     }
 
 }

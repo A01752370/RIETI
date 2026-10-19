@@ -433,3 +433,11 @@ kbd { font-family: ui-monospace, Consolas, monospace; border: 1px solid var(--co
 .embudo li { position: relative; border-top: 6px solid var(--color-primario); }
 .campo-corto { max-width: 16rem; }
 .editor-municipios { margin-top: var(--e3); padding: var(--e3); border-radius: var(--radio); background: var(--color-superficie); display: grid; gap: var(--e2); }
+
+/* ---------- Fase 8: fotos ---------- */
+.bloque-fotos { display: grid; gap: var(--e2); }
+.boton-archivo { justify-self: start; cursor: pointer; }
+.boton-archivo:focus-within { outline: 3px solid var(--color-texto); outline-offset: 2px; }
+.boton-archivo:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
+.rejilla-fotos { display: grid; gap: var(--e3); grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); margin: var(--e3) 0; }
+.foto-evidencia { width: 100%; height: auto; aspect-ratio: auto; border-radius: var(--radio); border: 1px solid var(--color-borde); background: var(--color-superficie); }

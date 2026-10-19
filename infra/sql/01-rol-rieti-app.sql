@@ -75,6 +75,9 @@ GRANT SELECT, INSERT, UPDATE ON alerta_territorial TO rieti_app;
 -- Bitácora de accesos: solo lectura e inserción (además, un trigger rechaza UPDATE/DELETE).
 GRANT SELECT, INSERT ON acceso_expediente TO rieti_app;
 
+-- Fase 8: referencias a las fotos (el objeto vive en S3). Sin UPDATE ni DELETE.
+GRANT SELECT, INSERT ON foto_reporte TO rieti_app;
+
 -- Secuencias de las llaves serial.
 
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO rieti_app;

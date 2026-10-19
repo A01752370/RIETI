@@ -1,5 +1,7 @@
 package mx.sipinna.rieti.viewmodel
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -178,6 +180,26 @@ class DetalleReporteViewModel @JvmOverloads constructor(
             return
         }
         guardar { repositorio.agregarSeguimiento(id, ControlExpediente.textoAccion(tipo, detalle), accion = true) }
+    }
+
+    private val _fotos = MutableStateFlow<UiState<List<Bitmap>>>(UiState.Inactivo)
+
+    /** Fotos del reporte, descargadas al pedirlas (Fase 8); solo en memoria. */
+    val fotos: StateFlow<UiState<List<Bitmap>>> = _fotos.asStateFlow()
+
+    /** Pide las URL de 60 s y descarga las fotos (el servidor registra el acceso). */
+    fun cargarFotos() {
+        if (_fotos.value is UiState.Cargando) return
+        _fotos.value = UiState.Cargando
+        viewModelScope.launch {
+            _fotos.value = when (val r = repositorio.fotos(id)) {
+                is Resultado.Error -> UiState.Error(r.mensaje, r.codigo)
+                is Resultado.Exito -> {
+                    val imagenes = r.datos.mapNotNull { f -> repositorio.descargarFoto(f.url)?.let { BitmapFactory.decodeByteArray(it, 0, it.size) } }
+                    if (imagenes.size == r.datos.size) UiState.Exito(imagenes) else UiState.Error("No se pudieron descargar todas las fotos. Reintenta.")
+                }
+            }
+        }
     }
 
     /** Cambia la verificación del expediente (Fase 7). */

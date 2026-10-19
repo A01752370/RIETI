@@ -89,6 +89,41 @@ class FormularioReporteViewModel(
 
     private var consultaGeo: Job? = null
 
+    private val _fotos = MutableStateFlow<List<ByteArray>>(emptyList())
+
+    /** Fotos opcionales (Fase 8), ya reducidas y sin metadatos; solo en memoria (D-25). */
+    val fotos: StateFlow<List<ByteArray>> = _fotos.asStateFlow()
+
+    private val _advertenciaLeida = MutableStateFlow(false)
+
+    /** La persona leyó la advertencia del socio antes de elegir fotos. */
+    val advertenciaLeida: StateFlow<Boolean> = _advertenciaLeida.asStateFlow()
+
+    /** Fotos que se adjuntaron tras crear el reporte (-1 si falló la subida). */
+    var fotosAdjuntadas: Int = 0
+        private set
+
+    private val _subiendoFotos = MutableStateFlow(false)
+
+    /** true mientras se adjuntan las fotos después de crear el reporte. */
+    val subiendoFotos: StateFlow<Boolean> = _subiendoFotos.asStateFlow()
+
+    /** Marca (o desmarca) la advertencia; al desmarcarla se quitan las fotos elegidas. */
+    fun leerAdvertencia(leida: Boolean) {
+        _advertenciaLeida.value = leida
+        if (!leida) _fotos.value = emptyList()
+    }
+
+    /** Agrega una foto preparada, sin pasar del máximo. */
+    fun agregarFoto(foto: ByteArray) {
+        if (_fotos.value.size < ReglasFotos.MAXIMO) _fotos.value = _fotos.value + listOf(foto)
+    }
+
+    /** Quita la foto en la posición indicada. */
+    fun quitarFoto(i: Int) {
+        _fotos.value = _fotos.value.filterIndexed { j, _ -> j != i }
+    }
+
     /** Descarga el catálogo de municipios si aún no se tiene. */
     fun cargarMunicipios() {
         if (_municipios.value is UiState.Exito || _municipios.value is UiState.Cargando) return
@@ -232,7 +267,18 @@ class FormularioReporteViewModel(
                 _envio.value = UiState.Error("Tu sesión venció. Vuelve a iniciar sesión o envía el reporte sin vincular.")
                 return@launch
             }
-            _envio.value = repositorio.crear(AsistenteReporte.solicitud(estado.datos, avisoVersion, punto, vincular), token).aUiState()
+            val creado = repositorio.crear(AsistenteReporte.solicitud(estado.datos, avisoVersion, punto, vincular), token)
+            // Fase 8: con el reporte ya registrado se adjuntan las fotos; si fallan, el reporte sigue registrado.
+            if (creado is Resultado.Exito && _fotos.value.isNotEmpty()) {
+                _subiendoFotos.value = true
+                fotosAdjuntadas = when (val r = repositorio.subirFotos(creado.datos.folio, creado.datos.claveConsulta, _fotos.value)) {
+                    is Resultado.Exito -> r.datos
+                    is Resultado.Error -> -1
+                }
+                _subiendoFotos.value = false
+                _fotos.value = emptyList()
+            }
+            _envio.value = creado.aUiState()
         }
     }
 

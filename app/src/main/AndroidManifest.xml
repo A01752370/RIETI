@@ -30,6 +30,18 @@
             </intent-filter>
         </activity>
 
+        <!-- Fase 8: la cámara del sistema escribe la captura aquí (por intent, sin permiso de cámara).
+             Solo expone la caché privada de capturas y únicamente a la app que recibe el permiso. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fotos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/rutas_fotos" />
+        </provider>
+
     </application>
 
 </manifest>

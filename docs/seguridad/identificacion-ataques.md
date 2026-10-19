@@ -1,6 +1,6 @@
 # Identificación de ataques — RIETI
 
-> Etapa 3 · Fecha de corte: 10-oct-2026, actualizado al cierre de la Fase 7 (18-oct-2026: A3 mitigado, A38–A40).
+> Etapa 3 · Fecha de corte: 10-oct-2026, actualizado al cierre de la Fase 8 (A3, A7, A8 y A14 mitigados; A38–A41).
 > Complemento: [métodos de protección](metodos-proteccion.md) (qué control mitiga cada ataque, dónde está en el código y cómo se probó).
 
 RIETI recibe reportes sobre **niñas, niños y adolescentes en posible situación de trabajo infantil**. Un incidente no solo expone datos: puede poner en riesgo a un menor o a la persona que reporta. Por eso el análisis prioriza la confidencialidad del reporte y el anonimato del denunciante por encima de la disponibilidad.
@@ -47,14 +47,14 @@ Estado: **Mitigado (probado)** = hay control y prueba automatizada · **Mitigado
 | A4 | Escalamiento vertical | Una cuenta sin rol de personal llama rutas del personal | Acceso indebido | Mitigado (probado) |
 | A5 | Inyección SQL | Payloads en folio, filtros o campos de texto | Lectura/borrado de la BD | Mitigado (probado) |
 | A6 | XSS almacenado | `<script>` en la descripción, visto luego por el personal | Robo de sesión del personal | Mitigado (probado): React escapa el texto, sin `dangerouslySetInnerHTML`, CSP sin `unsafe-inline` |
-| A7 | Subida de archivos maliciosos | Evidencias con malware o archivos enormes | Malware, costo | No aplica aún (no hay subida de evidencias) |
-| A8 | Fuga de metadatos EXIF | Foto con GPS del teléfono del denunciante | Reidentificación | No aplica aún (no hay fotos) |
+| A7 | Subida de archivos maliciosos | Evidencias con malware, archivos con extensión falsa, imágenes dañadas o enormes | Malware, ejecución en el visor del personal, costo | Mitigado (probado; Fase 8): tipo real por contenido (solo JPEG/PNG/WebP), re-codificación en el servidor, límite de píxeles, 5 MB y 3 fotos por reporte en 24 h, folio + clave obligatorios, zona de entrada separada que expira en 1 día |
+| A8 | Fuga de metadatos EXIF | Foto con GPS del teléfono del denunciante | Reidentificación | Mitigado (probado; Fase 8): el servidor re-codifica sin EXIF/GPS/XMP/ICC y la app y la web también quitan metadatos antes de subir; la captura de la cámara se borra del teléfono al prepararla |
 | A9 | Spam / reportes falsos masivos | Scripts que envían miles de reportes | Saturar al personal, costo | Mitigado (probado) |
 | A10 | Fuerza bruta al login | Diccionarios contra `/auth/login` | Tomar una cuenta del personal | Parcial (límite de tasa y bloqueo de Cognito; MFA no obligatorio) |
 | A11 | JWT manipulado | `alg:none`, firma inventada, token de otro pool | Suplantar al personal | Mitigado (probado) |
 | A12 | Intermediario (MITM) | Wi-Fi pública, proxy malicioso | Leer o alterar reportes en tránsito | Mitigado (configuración) |
 | A13 | Saltarse el WAF yendo directo al ALB | Llamar al balanceador sin pasar por CloudFront | Evadir límites y reglas | Mitigado (configuración) |
-| A14 | Exposición de evidencias en S3 | Bucket público o listable | Fuga masiva | Mitigado (configuración); sin evidencias aún |
+| A14 | Exposición de evidencias en S3 | Bucket público o listable, URL de lectura reenviada | Fuga masiva o de una foto | Mitigado (configuración + probado; Fase 8): bloqueo de acceso público, cifrado KMS, solo TLS, CORS solo POST desde la web, lectura con URL prefirmada de 60 s solo para el personal con alcance sobre el municipio y registrada en la bitácora |
 | A15 | Fuga de datos sensibles en logs | Cuerpos de petición, contraseñas o claves en logs | Fuga silenciosa | Mitigado (configuración) |
 | A16 | Reidentificación del denunciante | IP, ID de dispositivo o ID de publicidad guardados con el reporte | Exponer a quien reporta | Parcial (nada en la BD; muestras del WAF con IP por 3 h) |
 | A17 | Datos en el teléfono | Respaldo en la nube, capturas, archivos de la app | Fuga desde el dispositivo | Mitigado (configuración) |
@@ -80,6 +80,7 @@ Estado: **Mitigado (probado)** = hay control y prueba automatizada · **Mitigado
 | A38 | Consulta abusiva de expedientes por personal autorizado | Una cuenta del personal (o una sesión robada) abre expedientes o exporta sin necesidad | Fuga interna de datos de NNA | Mitigado (probado; Fase 7): alcance por municipio, bitácora de accesos append-only (`ver`, `exportar`) que solo consulta el Administrador |
 | A39 | Fusión o borrado indebido por "duplicado" | Marcar como duplicado para ocultar o borrar un reporte | Pérdida de un caso real | Mitigado (probado; Fase 7): el vínculo no borra ni fusiona, es reversible, se limita al mismo municipio y queda en la bitácora de ambos reportes |
 | A40 | Manipulación de parámetros de alertas y duplicados | Poner un radio enorme o un mínimo de 1 para inundar de alertas, o 0 para ocultarlas | Ruido o ceguera operativa | Mitigado (probado; Fase 7): solo el Administrador, claves cerradas y límites validados en el servidor (p. ej. radio 25–1000 m, mínimo 2–50) |
+| A41 | Abuso del almacenamiento de fotos | Pedir formularios de subida en masa o subir archivos de relleno para generar costo | Costo, ruido | Mitigado (probado; Fase 8): requiere folio + clave válidos (bloqueo tras 5 fallos), 10 solicitudes/min por IP, máximo 3 fotos por reporte en 24 h, 5 MB por formulario (lo impone S3) y las subidas sin confirmar expiran en 1 día |
 | A24 | Reconocimiento con la documentación pública | Leer en el repo público el ID de la cuenta de AWS, alias de llaves o la postura de IAM para preparar ataques dirigidos (phishing, *bucket squatting*, abuso de llaves filtradas) | Facilitar otros ataques | Mitigado (revisión del árbol): el ID de cuenta salió de `versions.tf` (va en `backend.hcl`, ignorado por git) y la auditoría de cuenta ya no publica alias de llaves ni detalles de IAM. El historial anterior conserva el nombre del bucket de estado |
 
 ## 4. Detalle de los ataques principales
@@ -98,6 +99,12 @@ Estado: **Mitigado (probado)** = hay control y prueba automatizada · **Mitigado
 **Qué se hizo.** `auth/alcance.ts` calcula el alcance de cada petición (regionales: todos; enlace: `asignacion_municipio`). Bandeja, exportación, estadísticas, embudo y mapa agregan `r.id_municipio = ANY($n)` en SQL; detalle, cambios de estatus, notas, expediente, cercanos, duplicados y responsables verifican el municipio y responden el **mismo 404** que un reporte inexistente. Sin asignaciones no se ve nada.
 **Evidencia.** e2e "A3: el enlace no ve reportes de otro municipio: 404 uniforme…", "A3: bandeja, exportación y estadísticas solo cuentan sus municipios…", "un enlace sin municipios asignados no ve nada", "alerta de punto recurrente… solo visible para sus municipios" (corren como usuario maestro y como `rieti_app`).
 **Hueco conocido.** El filtro vive en la aplicación; Row Level Security en PostgreSQL sigue planeado como segunda barrera.
+
+### A7 / A8 — Archivos maliciosos y metadatos en fotos (Fase 8, D-42)
+**Escenario.** Quien reporta (o alguien con su folio y clave) sube un PDF o un ejecutable renombrado como `.jpg`, una imagen con código oculto al final, una "bomba" de descompresión o una foto con la ubicación GPS de su teléfono.
+**Qué se hizo.** La subida va a una zona de entrada privada con un POST prefirmado que S3 limita a 5 MB y a una clave exacta. Al confirmar, el servidor revisa los primeros bytes (solo JPEG, PNG o WebP), decodifica con un límite de 50 MP y vuelve a codificar a JPEG sin metadatos; lo que no pasa se borra. El nombre final es aleatorio. La app y la web reducen y quitan metadatos antes de subir; la captura de la cámara se borra del teléfono.
+**Evidencia.** `backend/test/fotos.spec.ts` (tipos por contenido, extensión falsa, EXIF y GPS eliminados, carga oculta descartada, imagen dañada, URL que caduca en 60 s, política de subida con tamaño y clave) y el bloque e2e "evidencia fotográfica (Fase 8)" (rechazos con limpieza de la entrada, JPEG guardado sin EXIF, límite de 3, 24 h, 404 para otro municipio, registro `foto` en la bitácora, nada en consulta, CSV ni estadísticas).
+**Hueco conocido.** Durante la ventana de validación (segundos) el archivo original vive en la zona de entrada privada; si nadie confirma, expira en 1 día. El POST prefirmado incluye el nombre del bucket (lleva el ID de la cuenta) y solo lo recibe el cliente que reporta.
 
 ### A11 — JWT manipulado
 **Evidencia.** `backend/test/jwt-falsificado.spec.ts` usa el verificador real (`aws-jwt-verify`) y comprueba que se rechazan `alg:none`, HS256 con secreto inventado, emisor de otro pool y basura.

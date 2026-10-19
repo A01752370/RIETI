@@ -44,6 +44,8 @@ Las columnas del personal aplican **dentro de su alcance territorial**. El Coord
 | Ver el panel de estadísticas, solo agregados (`estadisticas.ver`) | `GET /estadisticas/resumen`, `/distribuciones`, `/tiempos`, `/sin-atender`, `/mapa-calor` | — | — | ✅ | ✅ |
 | Exportar la bandeja filtrada a CSV, sin descripciones ni coordenadas (`reportes.exportar`) | `GET /reportes/exportar.csv` | — | — | ✅ | ✅ |
 | Editar los contactos de la red (`red.editar`) | `PUT /red-municipios/:municipioId` | — | — | — | ✅ |
+| Adjuntar hasta 3 fotos a su reporte en las 24 h siguientes (folio + clave; Fase 8) | `POST /reportes/fotos/solicitud`, `POST /reportes/fotos/confirmar` | ✅ (10/min por IP) | ✅ | ✅ | ✅ |
+| Ver las fotos de un reporte (URL de 60 s, queda en la bitácora de accesos; `reportes.ver`, Fase 8) | `GET /reportes/:id/fotos` | — | — | ✅ | ✅ |
 | Vincular un reporte a su cuenta (interruptor, apagado por defecto) | `POST /reportes` con `vincularCuenta: true` | — (400 `SESION_REQUERIDA`) | ✅ | — | — |
 | Registro, confirmación, reenvío de código, login, refresh, recuperación de contraseña | `POST /ciudadanos/registro`, `/confirmar`, `/reenviar-codigo`, `/login`, `/refresh`, `/olvide-contrasena`, `/restablecer-contrasena` | ✅ (5, 10, 3, 5, 20, 3 y 5 por minuto por IP; respuestas uniformes) | ✅ | ✅ (ruta pública; crea una cuenta de ciudadano aparte) | ✅ (ídem) |
 | Ver su cuenta (correo desde Cognito, fecha y número de reportes) | `GET /ciudadano/cuenta` | — | ✅ (solo la propia) | — | — |
