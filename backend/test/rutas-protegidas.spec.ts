@@ -40,6 +40,24 @@ const PERMISO_ESPERADO: Record<string, Permiso> = {
   'GET reportes/exportar.csv': 'reportes.exportar',
   'PUT red-municipios/:municipioId': 'red.editar',
   'GET auth/perfil': 'perfil.ver',
+  // Fase 7: expediente, alertas y administración.
+  'PATCH reportes/:id/expediente': 'expediente.editar',
+  'GET reportes/:id/cercanos': 'reportes.ver',
+  'POST reportes/:id/duplicado': 'expediente.editar',
+  'DELETE reportes/:id/duplicado': 'expediente.editar',
+  'GET reportes/:id/responsables': 'expediente.editar',
+  'GET catalogos/expediente': 'reportes.ver',
+  'GET estadisticas/embudo': 'estadisticas.ver',
+  'GET alertas': 'alertas.ver',
+  'PATCH alertas/:id': 'alertas.gestionar',
+  'GET admin/personal': 'personal.administrar',
+  'PUT admin/personal/:id/municipios': 'personal.administrar',
+  'GET admin/configuracion': 'configuracion.editar',
+  'PUT admin/configuracion': 'configuracion.editar',
+  'GET admin/dependencias': 'configuracion.editar',
+  'POST admin/dependencias': 'configuracion.editar',
+  'PATCH admin/dependencias/:id': 'configuracion.editar',
+  'GET admin/accesos': 'accesos.ver',
 };
 
 describe('inventario de rutas y matriz de permisos (D-18)', () => {
@@ -67,6 +85,15 @@ describe('inventario de rutas y matriz de permisos (D-18)', () => {
     for (const r of todas.filter((x) => !x.publica && !x.ciudadano)) {
       expect({ ruta: r.id, roles: r.roles }).toEqual({ ruta: r.id, roles: [...MATRIZ_PERMISOS[r.permiso!]] });
     }
+  });
+
+  it('solo el administrador asigna municipios, edita parámetros y ve la bitácora de accesos (Fase 7)', () => {
+    for (const p of ['personal.administrar', 'configuracion.editar', 'accesos.ver'] as Permiso[]) {
+      expect(permisosDe(['Administrador'])).toContain(p);
+      expect(permisosDe(['CoordinadorRegional'])).not.toContain(p);
+      expect(permisosDe(['PersonalSIPINNA'])).not.toContain(p);
+    }
+    expect(permisosDe(['CoordinadorRegional'])).toEqual(expect.arrayContaining(['reportes.ver', 'expediente.editar', 'alertas.ver']));
   });
 
   it('el enlace municipal (PersonalSIPINNA) no puede editar la red; el administrador sí', () => {

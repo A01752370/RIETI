@@ -7,9 +7,11 @@ import { RequestAutenticado } from './jwt.guard';
 /** Perfil y permisos del personal autenticado (D-18). */
 export interface PerfilDto {
   correo: string;
-  /** "Administrador" o "Enlace municipal". */
+  /** "Administrador", "Coordinador regional" o "Enlace municipal". */
   perfil: string;
   grupos: string[];
+  /** Municipios que puede ver; `null` = todos (perfiles regionales; Fase 7). */
+  municipios: { id: number; nombre: string }[] | null;
   permisos: { permiso: Permiso; descripcion: string }[];
 }
 import { LoginDto, LoginRespuestaDto } from './auth.dto';
@@ -37,11 +39,13 @@ export class AuthController {
   async perfil(@Req() req: RequestAutenticado): Promise<PerfilDto> {
     const { sub, grupos } = req.usuario!;
     const usuario = await this.auth.buscarPorSub(sub);
-    const principal = grupos.includes('Administrador') ? 'Administrador' : 'PersonalSIPINNA';
+    const principal = grupos.includes('Administrador') ? 'Administrador'
+      : grupos.includes('CoordinadorRegional') ? 'CoordinadorRegional' : 'PersonalSIPINNA';
     return {
       correo: usuario?.correo ?? '',
       perfil: GRUPO_A_PERFIL[principal],
       grupos,
+      municipios: await this.auth.municipiosDe(req.usuario!),
       permisos: permisosDe(grupos).map((p) => ({ permiso: p, descripcion: DESCRIPCION_PERMISO[p] })),
     };
   }

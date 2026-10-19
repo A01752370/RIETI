@@ -11,11 +11,13 @@ import { RedController } from '../../src/red/red.controller';
 import { EstadisticasController } from '../../src/estadisticas/estadisticas.controller';
 import { GeoController } from '../../src/geo/geo.controller';
 import { CuentaCiudadanoController, CuentasPublicasController } from '../../src/ciudadanos/ciudadanos.controller';
+import { ExpedienteController } from '../../src/expediente/expediente.controller';
+import { AdminController } from '../../src/admin/admin.controller';
 
 /** Todos los controladores del API. Un controlador nuevo se agrega aquí. */
 export const CONTROLADORES = [
   AuthController, ReportesController, HealthController, AvisosController, CatalogosController, RedController, EstadisticasController,
-  GeoController, CuentasPublicasController, CuentaCiudadanoController,
+  GeoController, CuentasPublicasController, CuentaCiudadanoController, ExpedienteController, AdminController,
 ];
 
 /** Ruta declarada en un controlador, con sus metadatos de acceso. */

@@ -122,6 +122,10 @@ export class Reporte {
   @Column({ type: 'varchar', length: 20, default: 'ciudadano' })
   origen: string;
 
+  /** Reporte principal si el personal lo marcó como posible duplicado (Fase 7). */
+  @Column({ name: 'duplicado_de', type: 'integer', nullable: true })
+  duplicadoDe: number | null;
+
   @CreateDateColumn({ name: 'fecha_creacion', type: 'timestamptz' })
   fechaCreacion: Date;
 
@@ -162,6 +166,49 @@ export class Caso {
   /** Motivo obligatorio cuando el estatus pasa a Descartado. */
   @Column({ name: 'motivo_descarte', type: 'text', nullable: true })
   motivoDescarte: string | null;
+
+  // ---------- Expediente (Fase 7) ----------
+
+  /** Persona del personal responsable del caso. */
+  @Column({ name: 'id_responsable', type: 'integer', nullable: true })
+  idResponsable: number | null;
+
+  /** Dependencia a la que se canalizó (catálogo `dependencia`). */
+  @Column({ name: 'id_dependencia', type: 'integer', nullable: true })
+  idDependencia: number | null;
+
+  /** Próxima fecha de seguimiento; vencida si ya pasó y el caso sigue abierto. */
+  @Column({ name: 'fecha_seguimiento', type: 'date', nullable: true })
+  fechaSeguimiento: string | null;
+
+  /** Resultado (obligatorio al concluir o cancelar). */
+  @Column({ type: 'varchar', length: 1000, nullable: true })
+  resultado: string | null;
+
+  /** Fecha de cierre (al concluir, cancelar o archivar). */
+  @Column({ name: 'fecha_cierre', type: 'timestamptz', nullable: true })
+  fechaCierre: Date | null;
+
+  /** Modalidad de trabajo infantil (la asigna el personal; catálogo `modalidad`). */
+  @Column({ name: 'id_modalidad', type: 'integer', nullable: true })
+  idModalidad: number | null;
+
+  /** Sin verificar → Verificado → Caso confirmado | No procede (independiente del estatus). */
+  @Column({ type: 'varchar', length: 20, default: 'Sin verificar' })
+  verificacion: string;
+
+  @Column({ name: 'nna_identificados', type: 'smallint', nullable: true })
+  nnaIdentificados: number | null;
+
+  @Column({ name: 'nna_canalizados', type: 'smallint', nullable: true })
+  nnaCanalizados: number | null;
+
+  /** Sexo capturado por el personal (opcional; nunca lo pide el ciudadano). */
+  @Column({ name: 'nna_ninas', type: 'smallint', nullable: true })
+  nnaNinas: number | null;
+
+  @Column({ name: 'nna_ninos', type: 'smallint', nullable: true })
+  nnaNinos: number | null;
 
   @CreateDateColumn({ name: 'fecha_apertura', type: 'timestamptz' })
   fechaApertura: Date;
@@ -208,6 +255,10 @@ export class Seguimiento {
 
   @Column({ type: 'text', nullable: true })
   comentario: string | null;
+
+  /** `nota`, `accion` o `expediente` (Fase 7); null en eventos anteriores (se clasifican por estatus). */
+  @Column({ type: 'varchar', length: 12, nullable: true })
+  tipo: string | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   fecha: Date;
