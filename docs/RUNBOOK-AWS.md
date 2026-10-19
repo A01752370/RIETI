@@ -111,6 +111,25 @@ aws cognito-idp admin-add-user-to-group --user-pool-id "$POOL" --username "$CORR
 
 Si la persona también será administradora, agrega además `--group-name Administrador` con el mismo comando.
 
+### Perfiles y municipios del personal (Fase 7, D-36)
+
+| Perfil | Grupo de Cognito | Qué ve |
+|---|---|---|
+| Enlace municipal | `PersonalSIPINNA` | Solo los municipios que tenga asignados en RIETI |
+| Coordinador regional | `CoordinadorRegional` | Todos los municipios; no administra personal ni parámetros |
+| Administrador | `Administrador` | Todos los municipios y la administración |
+
+```bash
+# Coordinador regional (en lugar de PersonalSIPINNA):
+aws cognito-idp admin-add-user-to-group --user-pool-id "$POOL" --username "$CORREO" --group-name CoordinadorRegional
+# Cambiar de perfil: quitar el grupo anterior.
+aws cognito-idp admin-remove-user-from-group --user-pool-id "$POOL" --username "$CORREO" --group-name PersonalSIPINNA
+```
+
+El perfil se sincroniza en el siguiente inicio de sesión (el access token vigente conserva los grupos anteriores hasta 60 min).
+
+**Asignar municipios a un enlace municipal:** después de su primer inicio de sesión, un Administrador entra a la web del personal → **Administración → Personal y municipios → Asignar municipios**, elige los municipios y guarda. Un enlace **sin municipios no ve ningún reporte** (negación por defecto). Los enlaces que ya existían antes de la Fase 7 quedaron asignados a su municipio registrado o, si no tenían, a Atizapán de Zaragoza. Cada cambio de asignación aplica en la siguiente petición.
+
 **Fila en la tabla `usuario`:** no hay que crearla a mano. El API la crea (o la actualiza) automáticamente en el primer inicio de sesión, con el `cognito_sub`, el correo y el rol.
 
 **Verificar:**
@@ -183,6 +202,18 @@ El script `infra/sql/01-rol-rieti-app.sql` crea un rol sin permisos de DDL, sin 
 4. Correr las migraciones futuras como tarea única con el usuario maestro.
 
 Se recomienda hacerlo después de la presentación, con calma.
+
+## Conservación de la bitácora de accesos (Fase 7, D-40)
+
+La tabla `acceso_expediente` registra quién consultó o exportó expedientes y es solo de inserción. Conservación por omisión: **365 días** (parámetro `accesos_conservacion_dias`, editable por el Administrador entre 90 y 3650 días en **Administración → Parámetros**). Para aplicarla, corre esta tarea única con las variables del paso 3 (por ejemplo, una vez al mes):
+
+```bash
+TAREA=$(aws ecs run-task --cluster "$CLUSTER" --launch-type FARGATE --task-definition "$TD"   --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}"   --overrides '{"containerOverrides":[{"name":"api","command":["node","dist/scripts/depurar-accesos.js","--confirmar"]}]}'   --query 'tasks[0].taskArn' --output text)
+aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TAREA"
+aws logs tail /ecs/rieti-prod-api --since 15m --filter-pattern '"Bitácora de accesos depurada"'
+```
+
+El script desactiva y reactiva el trigger dentro de una sola transacción (como `borrar-reporte`). La política definitiva la debe fijar el socio formador.
 
 ## Opcional — Catálogo de códigos postales de SEPOMEX (Fase 2)
 

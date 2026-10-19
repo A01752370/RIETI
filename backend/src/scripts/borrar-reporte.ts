@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { DataSource, EntityManager } from 'typeorm';
 import { opcionesTypeOrm } from '../config/typeorm.config';
+import { PATRON_FOLIO } from '../reportes/clasificacion';
 
 /**
  * Herramienta de ADMINISTRACIÓN (no es una ruta del API): borra un reporte y
@@ -14,6 +15,7 @@ import { opcionesTypeOrm } from '../config/typeorm.config';
  *
  * Uso (como tarea única de ECS; ver docs/RUNBOOK-AWS.md):
  *   node dist/scripts/borrar-reporte.js RIETI-2026-000001 --confirmar
+ *   node dist/scripts/borrar-reporte.js RIETI-ATZ-2026-000019 --confirmar   (folio con clave municipal, Fase 6)
  */
 
 /** Resumen de lo borrado (sin datos del reporte). */
@@ -57,8 +59,8 @@ export async function borrarReportePorFolio(m: EntityManager, folio: string): Pr
 
 async function main(): Promise<void> {
   const [folio, confirmar] = process.argv.slice(2);
-  if (!/^RIETI-\d{4}-\d{6}$/.test(folio ?? '') || confirmar !== '--confirmar') {
-    console.error('Uso: node dist/scripts/borrar-reporte.js RIETI-AAAA-NNNNNN --confirmar');
+  if (!PATRON_FOLIO.test(folio ?? '') || confirmar !== '--confirmar') {
+    console.error('Uso: node dist/scripts/borrar-reporte.js RIETI-[ATZ-]AAAA-NNNNNN --confirmar');
     process.exit(2);
   }
   const ds = await new DataSource({ ...opcionesTypeOrm(), migrationsRun: false }).initialize();

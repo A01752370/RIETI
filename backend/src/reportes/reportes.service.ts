@@ -12,10 +12,12 @@ import {
 import {
   AgregarSeguimientoDto, CambiarEstatusDto, ConsultaPublicaDto, CrearReporteDto, EventoPublicoDto,
   EventoSeguimientoDto, FiltrosBandejaDto, ListarReportesDto, PaginaDto, ReporteCreadoDto, ReporteDetalleDto, ReporteResumenDto,
-  TipoEventoSeguimiento,
+  TipoEventoSeguimiento, ActualizarExpedienteDto, ExpedienteDto, ReporteRelacionadoDto,
 } from './reporte.dto';
 import { generarClave, hashearClave, verificarClave } from './clave-consulta';
-import { ESTATUS, ESTATUS_INICIAL, ESTATUS_PENDIENTES, etiquetaEstatus, transicionesPermitidas, validarTransicion } from './estatus';
+import { ESTATUS, ESTATUS_CERRADOS, ESTATUS_INICIAL, ESTATUS_PENDIENTES, etiquetaEstatus, transicionesPermitidas, validarTransicion } from './estatus';
+import { Alcance, exigirAlcance, parametroAlcance, registrarAcceso } from '../auth/alcance';
+import { configuracion } from '../config/configuracion';
 import { calcularPrioridad, categoriaCantidad, formatearFolio } from './clasificacion';
 import { LimitadorIntentos } from './limitador-intentos';
 import { celdaCsv } from '../estadisticas/agregados';
@@ -47,16 +49,18 @@ export function lineaDeTiempoPublica(eventos: { estatus: string; fecha: Date }[]
  * el primero es el `registro`, un evento con estatus distinto al anterior es un
  * `cambio` y uno con el mismo estatus es una `nota` interna.
  */
-export function clasificarBitacora<T extends { estatus: string }>(eventos: T[]): (T & { tipo: TipoEventoSeguimiento })[] {
+export function clasificarBitacora<T extends { estatus: string; tipo?: string | null }>(eventos: T[]): (T & { tipo: TipoEventoSeguimiento })[] {
   return eventos.map((e, i) => ({
     ...e,
-    tipo: i === 0 ? 'registro' : e.estatus !== eventos[i - 1].estatus ? 'cambio' : 'nota',
+    // Fase 7: las acciones y los cambios de expediente vienen marcados; el resto se clasifica por estatus.
+    tipo: e.tipo === 'accion' || e.tipo === 'expediente' ? e.tipo
+      : i === 0 ? 'registro' : e.estatus !== eventos[i - 1].estatus ? 'cambio' : 'nota',
   }));
 }
 
 /** Fecha en que el caso entró a su estatus vigente: la del último registro o cambio (las notas no cuentan). */
 export function fechaEstatusActual(eventos: { tipo: TipoEventoSeguimiento; fecha: string }[], respaldo: string): string {
-  return [...eventos].reverse().find((e) => e.tipo !== 'nota')?.fecha ?? respaldo;
+  return [...eventos].reverse().find((e) => e.tipo === 'registro' || e.tipo === 'cambio')?.fecha ?? respaldo;
 }
 
 /** Error uniforme de la consulta pública: no revela si falló el folio o la clave (ataque A1). */
@@ -150,6 +154,9 @@ export class ReportesService {
       const folio = formatearFolio(anio, ultimo, dto.canal ? municipio.claveFolio : null);
       await m.save(m.create(Folio, { reporte, anio, consecutivo: ultimo, codigo: folio }));
 
+      // Fase 7: alerta de punto recurrente (varios reportes cerca en poco tiempo).
+      if (latitud !== null && longitud !== null) await this.evaluarAlerta(m, municipio.id, latitud, longitud);
+
       const caso = await m.save(m.create(Caso, { estatus }));
       await m.save(m.create(ReporteCaso, { idReporte: reporte.id, idCaso: caso.id }));
       await m.save(m.create(Seguimiento, { caso, estatus, comentario: null, usuario: null }));
@@ -203,7 +210,7 @@ export class ReportesService {
   }
 
   /**
-   * FROM/WHERE parametrizado de la bandeja y la exportación ($1…$11). El orden de
+   * FROM/WHERE parametrizado de la bandeja y la exportación ($1…$15; $12 es el alcance territorial). El orden de
    * los parámetros lo fija {@link parametrosBandeja}.
    */
   private static readonly DESDE_BANDEJA = `
@@ -223,19 +230,24 @@ export class ReportesService {
              AND c.fecha_actualizacion < now() - make_interval(days => $7::int)))
         AND ($8::text IS NULL OR EXISTS (SELECT 1 FROM riesgo ri0 WHERE ri0.id_riesgo = r.id_riesgo AND ri0.nombre = $8::text))
         AND ($9::boolean IS NOT TRUE OR e.nombre = ANY($11::text[]))
-        AND ($10::text IS NULL OR r.prioridad = $10::text)`;
+        AND ($10::text IS NULL OR r.prioridad = $10::text)
+        AND ($12::int[] IS NULL OR r.id_municipio = ANY($12::int[]))
+        AND ($13::boolean IS NOT TRUE OR (c.fecha_seguimiento < (now() AT TIME ZONE 'America/Mexico_City')::date
+             AND e.nombre <> ALL($14::text[])))
+        AND ($15::text IS NULL OR c.verificacion = $15::text)`;
 
-  private parametrosBandeja(f: FiltrosBandejaDto): unknown[] {
+  private parametrosBandeja(f: FiltrosBandejaDto, alcance: Alcance): unknown[] {
     // El folio ya viene validado (solo letras, dígitos y guiones), así que LIKE no recibe comodines.
     return [f.estatus ?? null, f.municipioId ?? null, f.actividad ?? null, f.desde ?? null, f.hasta ?? null,
-      f.folio ?? null, f.sinAtenderDias ?? null, f.riesgo ?? null, f.pendientes ?? null, f.prioridad ?? null, [...ESTATUS_PENDIENTES]];
+      f.folio ?? null, f.sinAtenderDias ?? null, f.riesgo ?? null, f.pendientes ?? null, f.prioridad ?? null, [...ESTATUS_PENDIENTES],
+      parametroAlcance(alcance), f.vencidos ?? null, [...ESTATUS_CERRADOS], f.verificacion ?? null];
   }
 
   /** CU-09: bandeja del personal con filtros, búsqueda por folio, orden y paginación. */
-  async listar(f: ListarReportesDto): Promise<PaginaDto<ReporteResumenDto>> {
+  async listar(f: ListarReportesDto, alcance: Alcance): Promise<PaginaDto<ReporteResumenDto>> {
     const { pagina, tamano } = f;
     const desde = ReportesService.DESDE_BANDEJA;
-    const params = this.parametrosBandeja(f);
+    const params = this.parametrosBandeja(f, alcance);
     const direccion = f.orden === 'antiguos' ? 'ASC' : 'DESC';
     // Con orden por prioridad: Alta, Media, Normal y, dentro de cada una, lo más reciente primero.
     const primero = f.orden === 'prioridad' ? 'rango_prioridad, ' : '';
@@ -244,7 +256,7 @@ export class ReportesService {
       `SELECT DISTINCT r.id_reporte AS id, r.fecha_creacion,
               CASE r.prioridad WHEN 'Alta' THEN 0 WHEN 'Media' THEN 1 ELSE 2 END AS rango_prioridad ${desde}
        ORDER BY ${primero}r.fecha_creacion ${direccion}, r.id_reporte ${direccion}
-       LIMIT $12 OFFSET $13`, [...params, tamano, (pagina - 1) * tamano]);
+       LIMIT $16 OFFSET $17`, [...params, tamano, (pagina - 1) * tamano]);
 
     const ids = filas.map((f) => Number(f.id));
     const reportes = ids.length === 0 ? [] : await this.ds.getRepository(Reporte).findBy({ id: In(ids) });
@@ -259,7 +271,7 @@ export class ReportesService {
    * coordenadas ni dirección exacta: solo la colonia). Celdas protegidas contra
    * inyección de fórmulas.
    */
-  async exportarCsv(f: FiltrosBandejaDto): Promise<string> {
+  async exportarCsv(f: FiltrosBandejaDto, alcance: Alcance): Promise<string> {
     const direccion = f.orden === 'antiguos' ? 'ASC' : 'DESC';
     const filas: Record<string, string | number | null>[] = await this.ds.query(
       `SELECT f.codigo AS folio,
@@ -274,7 +286,10 @@ export class ReportesService {
          JOIN riesgo ri ON ri.id_riesgo = r.id_riesgo
          LEFT JOIN municipio m ON m.id_municipio = r.id_municipio WHERE`)}
        ORDER BY r.fecha_creacion ${direccion}, r.id_reporte ${direccion}
-       LIMIT $12`, [...this.parametrosBandeja(f), MAX_EXPORTACION]);
+       LIMIT $16`, [...this.parametrosBandeja(f, alcance), MAX_EXPORTACION]);
+    // Bitácora de accesos (Fase 7): una entrada por exportación, con los filtros (sin datos personales).
+    const filtros = Object.entries(f).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => `${k}=${v}`).join('&');
+    await registrarAcceso(this.ds, alcance.idUsuario, 'exportar', null, `${filas.length} fila(s); ${filtros}`);
     const columnas = ['folio', 'fecha', 'estatus', 'municipio', 'colonia', 'actividad', 'menores', 'grupos', 'riesgo', 'actualizado'];
     const encabezado = ['Folio', 'Fecha', 'Estatus', 'Municipio', 'Colonia', 'Actividad', 'Menores', 'Grupos de edad', 'Riesgo percibido', 'Última actualización'];
     const lineas = [encabezado.map(celdaCsv).join(','), ...filas.map((x) => columnas.map((c) => celdaCsv(x[c])).join(','))];
@@ -282,15 +297,22 @@ export class ReportesService {
     return `\uFEFF${lineas.join('\r\n')}\r\n`;
   }
 
-  /** CU-09: detalle completo con bitácora y transiciones permitidas. */
-  async detalle(id: number): Promise<ReporteDetalleDto> {
+  /**
+   * CU-09: detalle completo con bitácora, transiciones permitidas y expediente (Fase 7).
+   *
+   * @param alcance alcance territorial de quien consulta; un reporte de otro municipio da el mismo 404
+   * @param registrar true para dejar constancia en la bitácora de accesos (consulta directa del personal)
+   */
+  async detalle(id: number, alcance: Alcance, registrar = false): Promise<ReporteDetalleDto> {
     const reporte = await this.ds.getRepository(Reporte).findOneBy({ id });
     if (!reporte) throw new NotFoundException('Reporte no encontrado');
+    exigirAlcance(alcance, reporte.municipio?.id);
     const [resumen] = await this.aplanar([reporte]);
     const rc = await this.ds.getRepository(ReporteCaso).findOneBy({ idReporte: id });
     const grupos = await this.ds.getRepository(GrupoMenores).find({ where: { idReporte: id } });
     const u = reporte.ubicacion;
     const historial = await this.bitacora(id);
+    if (registrar) await registrarAcceso(this.ds, alcance.idUsuario, 'ver', { id, folio: resumen.folio });
     const posicion = (r: string) => ORDEN_RANGOS.indexOf(r);
     return {
       ...resumen,
@@ -311,6 +333,10 @@ export class ReportesService {
       cantidadCategoria: reporte.cantidadCategoria,
       canal: reporte.canal,
       origen: reporte.origen,
+      expediente: await this.expediente(rc!.caso, resumen.estatus),
+      duplicadoDe: reporte.duplicadoDe ? (await this.relacionados([reporte.duplicadoDe]))[0] ?? null : null,
+      duplicados: await this.relacionados(
+        (await this.ds.query('SELECT id_reporte FROM reporte WHERE duplicado_de = $1 ORDER BY id_reporte', [id])).map((x: { id_reporte: number }) => Number(x.id_reporte))),
     };
   }
 
@@ -320,10 +346,12 @@ export class ReportesService {
    *
    * @throws UnprocessableEntityException transición inválida o falta motivo/comentario
    */
-  async cambiarEstatus(id: number, dto: CambiarEstatusDto, idUsuario: number): Promise<ReporteDetalleDto> {
+  async cambiarEstatus(id: number, dto: CambiarEstatusDto, alcance: Alcance): Promise<ReporteDetalleDto> {
+    const idUsuario = alcance.idUsuario;
     await this.ds.transaction(async (m) => {
       const rc = await m.findOne(ReporteCaso, { where: { idReporte: id } });
       if (!rc) throw new NotFoundException('Reporte no encontrado');
+      await this.exigirAlcanceReporte(m, alcance, id);
       // Bloquea la fila del caso para que dos personas no cambien el estatus a la vez.
       await m.query('SELECT 1 FROM caso WHERE id_caso = $1 FOR UPDATE', [rc.idCaso]);
       const caso = await m.findOneByOrFail(Caso, { id: rc.idCaso });
@@ -331,30 +359,295 @@ export class ReportesService {
       const error = validarTransicion(caso.estatus.nombre, dto.estatus, dto.comentario, dto.motivo);
       if (error) throw new UnprocessableEntityException(error);
 
+      // Fase 7: resultado y cierre obligatorios al concluir o cancelar.
+      const resultado = dto.estatus === ESTATUS.DESCARTADO ? dto.motivo : (dto.resultado || dto.comentario);
+      if (dto.estatus === ESTATUS.CONCLUIDO && !resultado?.trim()) {
+        throw new UnprocessableEntityException({ codigo: 'RESULTADO_REQUERIDO', mensaje: 'Para concluir un caso escribe el resultado' });
+      }
+
       const estatus = await this.catalogo(m, EstatusReporte, dto.estatus, 'estatus');
       caso.estatus = estatus;
       if (dto.estatus === ESTATUS.DESCARTADO) caso.motivoDescarte = dto.motivo!;
+      if (dto.estatus === ESTATUS.CONCLUIDO || dto.estatus === ESTATUS.DESCARTADO) {
+        caso.resultado = resultado!.trim().slice(0, 1000);
+        caso.fechaCierre = new Date();
+      } else if (dto.estatus === ESTATUS.ARCHIVADO) {
+        caso.fechaCierre = caso.fechaCierre ?? new Date();
+      } else {
+        caso.fechaCierre = null; // Reincidente o vuelta a atención: el caso se reabre
+      }
       await m.save(caso);
 
-      const nota = [dto.comentario, dto.estatus === ESTATUS.DESCARTADO ? `Motivo de descarte: ${dto.motivo}` : null]
-        .filter((t) => t?.trim()).join('\n') || null;
+      const nota = [
+        dto.comentario,
+        dto.estatus === ESTATUS.DESCARTADO ? `Motivo de cancelación: ${dto.motivo}` : null,
+        dto.estatus === ESTATUS.CONCLUIDO && dto.resultado && dto.resultado !== dto.comentario ? `Resultado: ${dto.resultado}` : null,
+      ].filter((t) => t?.trim()).join('\n') || null;
       await m.save(m.create(Seguimiento, { caso, estatus, comentario: nota, usuario: { id: idUsuario } as Usuario }));
       await m.update(Reporte, { id }, { fechaActualizacion: () => 'now()' });
     });
-    return this.detalle(id);
+    return this.detalle(id, alcance);
   }
 
-  /** Agrega una nota de seguimiento sin cambiar el estatus. */
-  async agregarSeguimiento(id: number, dto: AgregarSeguimientoDto, idUsuario: number): Promise<ReporteDetalleDto> {
+  /** Agrega una nota interna o una acción realizada (Fase 7) sin cambiar el estatus. */
+  async agregarSeguimiento(id: number, dto: AgregarSeguimientoDto, alcance: Alcance): Promise<ReporteDetalleDto> {
     await this.ds.transaction(async (m) => {
       const rc = await m.findOne(ReporteCaso, { where: { idReporte: id } });
       if (!rc) throw new NotFoundException('Reporte no encontrado');
+      await this.exigirAlcanceReporte(m, alcance, id);
       await m.save(m.create(Seguimiento, {
-        caso: rc.caso, estatus: rc.caso.estatus, comentario: dto.comentario, usuario: { id: idUsuario } as Usuario,
+        caso: rc.caso, estatus: rc.caso.estatus, comentario: dto.comentario, usuario: { id: alcance.idUsuario } as Usuario,
+        tipo: dto.tipo === 'accion' ? 'accion' : null,
       }));
       await m.update(Reporte, { id }, { fechaActualizacion: () => 'now()' });
     });
-    return this.detalle(id);
+    return this.detalle(id, alcance);
+  }
+
+  // ---------- Expediente, duplicados y alertas (Fase 7) ----------
+
+  /**
+   * Actualiza los campos del expediente y deja en la bitácora qué cambió, quién y cuándo.
+   *
+   * @throws BadRequestException responsable, dependencia o modalidad inexistentes
+   */
+  async actualizarExpediente(id: number, dto: ActualizarExpedienteDto, alcance: Alcance): Promise<ReporteDetalleDto> {
+    await this.ds.transaction(async (m) => {
+      const rc = await m.findOne(ReporteCaso, { where: { idReporte: id } });
+      if (!rc) throw new NotFoundException('Reporte no encontrado');
+      const idMunicipio = await this.exigirAlcanceReporte(m, alcance, id);
+      await m.query('SELECT 1 FROM caso WHERE id_caso = $1 FOR UPDATE', [rc.idCaso]);
+      const caso = await m.findOneByOrFail(Caso, { id: rc.idCaso });
+      const antes = await this.expediente(caso, caso.estatus.nombre, m);
+      const cambios: string[] = [];
+
+      if (dto.idResponsable !== undefined) {
+        if (dto.idResponsable !== null) await this.validarResponsable(m, dto.idResponsable, idMunicipio);
+        caso.idResponsable = dto.idResponsable;
+      }
+      if (dto.idDependencia !== undefined) {
+        if (dto.idDependencia !== null) await this.existe(m, 'dependencia', 'id_dependencia', dto.idDependencia, 'dependencia');
+        caso.idDependencia = dto.idDependencia;
+      }
+      if (dto.idModalidad !== undefined) {
+        if (dto.idModalidad !== null) await this.existe(m, 'modalidad', 'id_modalidad', dto.idModalidad, 'modalidad');
+        caso.idModalidad = dto.idModalidad;
+      }
+      if (dto.fechaSeguimiento !== undefined) caso.fechaSeguimiento = dto.fechaSeguimiento;
+      if (dto.verificacion !== undefined) caso.verificacion = dto.verificacion;
+      if (dto.nnaIdentificados !== undefined) caso.nnaIdentificados = dto.nnaIdentificados;
+      if (dto.nnaCanalizados !== undefined) caso.nnaCanalizados = dto.nnaCanalizados;
+      if (dto.nnaNinas !== undefined) caso.nnaNinas = dto.nnaNinas;
+      if (dto.nnaNinos !== undefined) caso.nnaNinos = dto.nnaNinos;
+      await m.save(caso);
+
+      const despues = await this.expediente(caso, caso.estatus.nombre, m);
+      const texto = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : typeof v === 'object' ? String((v as { nombre?: string; correo?: string }).nombre ?? (v as { correo?: string }).correo) : String(v));
+      const etiquetas: [keyof typeof antes, string][] = [
+        ['responsable', 'Responsable'], ['dependencia', 'Dependencia'], ['fechaSeguimiento', 'Fecha de seguimiento'],
+        ['modalidad', 'Modalidad'], ['verificacion', 'Verificación'], ['nnaIdentificados', 'NNA identificados'],
+        ['nnaCanalizados', 'NNA canalizados'], ['nnaNinas', 'Niñas'], ['nnaNinos', 'Niños'],
+      ];
+      for (const [campo, nombre] of etiquetas) {
+        if (texto(antes[campo]) !== texto(despues[campo])) cambios.push(`${nombre}: ${texto(antes[campo])} → ${texto(despues[campo])}`);
+      }
+      if (cambios.length > 0) {
+        await m.save(m.create(Seguimiento, {
+          caso, estatus: caso.estatus, comentario: cambios.join('\n'), usuario: { id: alcance.idUsuario } as Usuario, tipo: 'expediente',
+        }));
+        await m.update(Reporte, { id }, { fechaActualizacion: () => 'now()' });
+      }
+    });
+    return this.detalle(id, alcance);
+  }
+
+  /**
+   * Posibles duplicados: reportes del mismo municipio a menos del radio configurado y dentro
+   * de la ventana de días, que no estén ya vinculados. Solo sugerencias: no se fusiona nada.
+   */
+  async cercanos(id: number, alcance: Alcance): Promise<ReporteRelacionadoDto[]> {
+    const reporte = await this.ds.getRepository(Reporte).findOneBy({ id });
+    if (!reporte) throw new NotFoundException('Reporte no encontrado');
+    exigirAlcance(alcance, reporte.municipio?.id);
+    const u = reporte.ubicacion;
+    if (u.latitud === null || u.longitud === null || !reporte.municipio) return [];
+    const radio = await configuracion(this.ds, 'duplicados_radio_m', 150);
+    const dias = await configuracion(this.ds, 'duplicados_dias', 30);
+    const filas: { id: number; distancia: number }[] = await this.ds.query(
+      `SELECT r.id_reporte AS id,
+              round(ST_Distance(ST_SetSRID(ST_MakePoint(u.longitud, u.latitud), 4326)::geography,
+                                ST_SetSRID(ST_MakePoint($3, $2), 4326)::geography))::int AS distancia
+       FROM reporte r JOIN ubicacion u ON u.id_ubicacion = r.id_ubicacion
+       WHERE r.id_reporte <> $1 AND r.id_municipio = $4 AND r.duplicado_de IS NULL
+         AND u.latitud IS NOT NULL AND u.longitud IS NOT NULL
+         AND abs(extract(epoch FROM (r.fecha_creacion - $6::timestamptz))) <= $7 * 86400
+         AND ST_DWithin(ST_SetSRID(ST_MakePoint(u.longitud, u.latitud), 4326)::geography,
+                        ST_SetSRID(ST_MakePoint($3, $2), 4326)::geography, $5)
+         AND NOT EXISTS (SELECT 1 FROM reporte d WHERE d.id_reporte = $1 AND d.duplicado_de = r.id_reporte)
+       ORDER BY distancia, r.fecha_creacion DESC
+       LIMIT 20`,
+      [id, u.latitud, u.longitud, reporte.municipio.id, radio, reporte.fechaCreacion, dias]);
+    const datos = await this.relacionados(filas.map((f) => Number(f.id)));
+    const distancia = new Map(filas.map((f) => [Number(f.id), Number(f.distancia)]));
+    return datos.map((d) => ({ ...d, distanciaMetros: distancia.get(d.id) }));
+  }
+
+  /**
+   * Marca el reporte como posible duplicado de un principal (mismo municipio). El principal
+   * acumula el conteo; no se borra ni se fusiona nada y se puede deshacer.
+   *
+   * @throws UnprocessableEntityException `DUPLICADO_INVALIDO`
+   */
+  async vincularDuplicado(id: number, idPrincipal: number, alcance: Alcance): Promise<ReporteDetalleDto> {
+    await this.ds.transaction(async (m) => {
+      const [r, p] = await Promise.all([m.findOneBy(Reporte, { id }), m.findOneBy(Reporte, { id: idPrincipal })]);
+      if (!r || !p) throw new NotFoundException('Reporte no encontrado');
+      exigirAlcance(alcance, r.municipio?.id);
+      exigirAlcance(alcance, p.municipio?.id);
+      const invalido = (mensaje: string) => new UnprocessableEntityException({ codigo: 'DUPLICADO_INVALIDO', mensaje });
+      if (id === idPrincipal) throw invalido('Un reporte no puede ser duplicado de sí mismo');
+      if (r.municipio?.id !== p.municipio?.id) throw invalido('Solo se vinculan reportes del mismo municipio');
+      if (p.duplicadoDe) throw invalido('El reporte principal ya es un duplicado; vincúlalo a su principal');
+      const [{ n }] = await m.query('SELECT count(*)::int AS n FROM reporte WHERE duplicado_de = $1', [id]);
+      if (n > 0) throw invalido('Este reporte ya es principal de otros; no puede ser duplicado');
+      await m.update(Reporte, { id }, { duplicadoDe: idPrincipal });
+      const folio = await this.folioDe(m, idPrincipal);
+      await this.anotarExpediente(m, id, alcance.idUsuario, `Marcado como posible duplicado de ${folio}`);
+      await this.anotarExpediente(m, idPrincipal, alcance.idUsuario, `Se vinculó un posible duplicado: ${await this.folioDe(m, id)}`);
+    });
+    return this.detalle(id, alcance);
+  }
+
+  /** Deshace el vínculo de posible duplicado. */
+  async desvincularDuplicado(id: number, alcance: Alcance): Promise<ReporteDetalleDto> {
+    await this.ds.transaction(async (m) => {
+      const r = await m.findOneBy(Reporte, { id });
+      if (!r) throw new NotFoundException('Reporte no encontrado');
+      exigirAlcance(alcance, r.municipio?.id);
+      if (!r.duplicadoDe) return;
+      const principal = await this.folioDe(m, r.duplicadoDe);
+      await m.update(Reporte, { id }, { duplicadoDe: null });
+      await this.anotarExpediente(m, id, alcance.idUsuario, `Se quitó el vínculo de duplicado con ${principal}`);
+    });
+    return this.detalle(id, alcance);
+  }
+
+  /** Personal que puede ser responsable del reporte: activo y con acceso a su municipio. */
+  async responsables(id: number, alcance: Alcance): Promise<{ id: number; correo: string; perfil: string }[]> {
+    const reporte = await this.ds.getRepository(Reporte).findOneBy({ id });
+    if (!reporte) throw new NotFoundException('Reporte no encontrado');
+    exigirAlcance(alcance, reporte.municipio?.id);
+    const filas: { id: number; correo: string; perfil: string }[] = await this.ds.query(
+      `SELECT u.id_usuario AS id, u.correo, r.nombre AS perfil
+       FROM usuario u JOIN rol_usuario r ON r.id_rol = u.id_rol
+       WHERE u.activo AND r.es_personal
+         AND (r.nombre IN ('Administrador', 'Coordinador regional')
+              OR EXISTS (SELECT 1 FROM asignacion_municipio a WHERE a.id_usuario = u.id_usuario AND a.id_municipio = $1))
+       ORDER BY u.correo`, [reporte.municipio?.id ?? null]);
+    return filas.map((f) => ({ ...f, id: Number(f.id) }));
+  }
+
+  /**
+   * Alerta de punto recurrente: si en el radio y la ventana configurados hay al menos el mínimo
+   * de reportes del mismo municipio, abre una alerta (o actualiza la abierta más cercana).
+   */
+  private async evaluarAlerta(m: EntityManager, idMunicipio: number, lat: number, lng: number): Promise<void> {
+    const radio = await configuracion(m, 'alerta_radio_m', 150);
+    const dias = await configuracion(m, 'alerta_dias', 30);
+    const minimo = await configuracion(m, 'alerta_minimo', 3);
+    const punto = 'ST_SetSRID(ST_MakePoint($3, $2), 4326)::geography';
+    const [{ n }] = await m.query(
+      `SELECT count(*)::int AS n FROM reporte r JOIN ubicacion u ON u.id_ubicacion = r.id_ubicacion
+       WHERE r.id_municipio = $1 AND u.latitud IS NOT NULL AND r.fecha_creacion >= now() - make_interval(days => $5::int)
+         AND ST_DWithin(ST_SetSRID(ST_MakePoint(u.longitud, u.latitud), 4326)::geography, ${punto}, $4)`,
+      [idMunicipio, lat, lng, radio, dias]);
+    if (n < minimo) return;
+    const [abierta] = await m.query(
+      `SELECT id_alerta FROM alerta_territorial
+       WHERE id_municipio = $1 AND estatus = 'abierta'
+         AND ST_DWithin(ST_SetSRID(ST_MakePoint(longitud, latitud), 4326)::geography, ${punto}, $4)
+       ORDER BY fecha_creacion DESC LIMIT 1`, [idMunicipio, lat, lng, radio]);
+    if (abierta) {
+      await m.query('UPDATE alerta_territorial SET reportes = GREATEST(reportes, $2), fecha_actualizacion = now() WHERE id_alerta = $1', [abierta.id_alerta, n]);
+    } else {
+      await m.query('INSERT INTO alerta_territorial (id_municipio, latitud, longitud, reportes) VALUES ($1, $2, $3, $4)', [idMunicipio, lat, lng, n]);
+    }
+  }
+
+  /** Expediente del caso con nombres legibles. */
+  private async expediente(caso: Caso, estatus: string, m: EntityManager | DataSource = this.ds): Promise<ExpedienteDto> {
+    const uno = async (sql: string, idValor: number | null) =>
+      idValor === null ? null : ((await m.query(sql, [idValor]))[0] ?? null);
+    const responsable = await uno('SELECT id_usuario AS id, correo FROM usuario WHERE id_usuario = $1', caso.idResponsable);
+    const dependencia = await uno('SELECT id_dependencia AS id, nombre FROM dependencia WHERE id_dependencia = $1', caso.idDependencia);
+    const modalidad = await uno('SELECT id_modalidad AS id, nombre FROM modalidad WHERE id_modalidad = $1', caso.idModalidad);
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
+    return {
+      responsable: responsable && { id: Number(responsable.id), correo: responsable.correo },
+      dependencia: dependencia && { id: Number(dependencia.id), nombre: dependencia.nombre },
+      fechaSeguimiento: caso.fechaSeguimiento,
+      seguimientoVencido: Boolean(caso.fechaSeguimiento && caso.fechaSeguimiento < hoy && !(ESTATUS_CERRADOS as readonly string[]).includes(estatus)),
+      resultado: caso.resultado,
+      fechaCierre: caso.fechaCierre ? new Date(caso.fechaCierre).toISOString() : null,
+      modalidad: modalidad && { id: Number(modalidad.id), nombre: modalidad.nombre },
+      verificacion: caso.verificacion,
+      nnaIdentificados: caso.nnaIdentificados,
+      nnaCanalizados: caso.nnaCanalizados,
+      nnaNinas: caso.nnaNinas,
+      nnaNinos: caso.nnaNinos,
+    };
+  }
+
+  /** Resumen corto de reportes relacionados (duplicados o cercanos). */
+  private async relacionados(ids: number[]): Promise<ReporteRelacionadoDto[]> {
+    if (ids.length === 0) return [];
+    const filas: { id: number; folio: string; estatus: string; fecha: Date }[] = await this.ds.query(
+      `SELECT r.id_reporte AS id, f.codigo AS folio, e.nombre AS estatus, r.fecha_creacion AS fecha
+       FROM reporte r JOIN folio f ON f.id_reporte = r.id_reporte
+       JOIN reporte_caso rc ON rc.id_reporte = r.id_reporte JOIN caso c ON c.id_caso = rc.id_caso
+       JOIN estatus_reporte e ON e.id_estatus = c.id_estatus
+       WHERE r.id_reporte = ANY($1::int[])`, [ids]);
+    const porId = new Map(filas.map((f) => [Number(f.id), f]));
+    return ids.filter((i) => porId.has(i)).map((i) => {
+      const f = porId.get(i)!;
+      return { id: i, folio: f.folio, estatus: f.estatus, estatusEtiqueta: etiquetaEstatus(f.estatus), fechaCreacion: new Date(f.fecha).toISOString() };
+    });
+  }
+
+  /** Verifica el alcance sobre un reporte dentro de una transacción; devuelve su municipio. */
+  private async exigirAlcanceReporte(m: EntityManager, alcance: Alcance, id: number): Promise<number | null> {
+    const [fila] = await m.query('SELECT id_municipio FROM reporte WHERE id_reporte = $1', [id]);
+    if (!fila) throw new NotFoundException('Reporte no encontrado');
+    exigirAlcance(alcance, fila.id_municipio);
+    return fila.id_municipio === null ? null : Number(fila.id_municipio);
+  }
+
+  /** El responsable debe ser personal activo con acceso al municipio del reporte. */
+  private async validarResponsable(m: EntityManager, idUsuario: number, idMunicipio: number | null): Promise<void> {
+    const [fila] = await m.query(
+      `SELECT 1 FROM usuario u JOIN rol_usuario r ON r.id_rol = u.id_rol
+       WHERE u.id_usuario = $1 AND u.activo AND r.es_personal
+         AND (r.nombre IN ('Administrador', 'Coordinador regional')
+              OR EXISTS (SELECT 1 FROM asignacion_municipio a WHERE a.id_usuario = u.id_usuario AND a.id_municipio = $2))`,
+      [idUsuario, idMunicipio]);
+    if (!fila) throw new BadRequestException({ codigo: 'VALOR_NO_VALIDO', mensaje: 'La persona responsable no tiene acceso a este municipio' });
+  }
+
+  /** 400 si el id no existe en el catálogo. */
+  private async existe(m: EntityManager, tabla: 'dependencia' | 'modalidad', columna: string, valor: number, campo: string): Promise<void> {
+    const [fila] = await m.query(`SELECT 1 FROM ${tabla} WHERE ${columna} = $1`, [valor]);
+    if (!fila) throw new BadRequestException({ codigo: 'VALOR_NO_VALIDO', mensaje: `Valor no válido para ${campo}` });
+  }
+
+  private async folioDe(m: EntityManager, id: number): Promise<string> {
+    return (await m.query('SELECT codigo FROM folio WHERE id_reporte = $1', [id]))[0]?.codigo ?? `#${id}`;
+  }
+
+  /** Entrada de bitácora de tipo `expediente` en el caso de un reporte. */
+  private async anotarExpediente(m: EntityManager, idReporte: number, idUsuario: number, texto: string): Promise<void> {
+    const rc = await m.findOneByOrFail(ReporteCaso, { idReporte });
+    await m.save(m.create(Seguimiento, { caso: rc.caso, estatus: rc.caso.estatus, comentario: texto, usuario: { id: idUsuario } as Usuario, tipo: 'expediente' }));
+    await m.update(Reporte, { id: idReporte }, { fechaActualizacion: () => 'now()' });
   }
 
   /** Municipio activo del catálogo; 400 si no existe o está inactivo (D-16). */
@@ -422,8 +715,8 @@ export class ReportesService {
 
   /** Bitácora del caso de un reporte, del más antiguo al más reciente. */
   private async bitacora(idReporte: number): Promise<EventoSeguimientoDto[]> {
-    const filas: { estatus: string; comentario: string | null; autor: string | null; fecha: Date }[] = await this.ds.query(
-      `SELECT e.nombre AS estatus, s.comentario, u.correo AS autor, s.fecha
+    const filas: { estatus: string; comentario: string | null; autor: string | null; fecha: Date; tipo: string | null }[] = await this.ds.query(
+      `SELECT e.nombre AS estatus, s.comentario, u.correo AS autor, s.fecha, s.tipo
        FROM reporte_caso rc
        JOIN seguimiento s ON s.id_caso = rc.id_caso
        JOIN estatus_reporte e ON e.id_estatus = s.id_estatus
@@ -444,6 +737,9 @@ export class ReportesService {
     ]);
     const folioPor = new Map(folios.map((f) => [f.reporte.id, f.codigo]));
     const casoPor = new Map(relaciones.map((rc) => [rc.idReporte, rc.caso]));
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
+    const vencido = (c: Caso | undefined) => Boolean(c?.fechaSeguimiento && c.fechaSeguimiento < hoy
+      && !(ESTATUS_CERRADOS as readonly string[]).includes(c.estatus.nombre));
 
     return reportes.map((r) => ({
       id: r.id,
@@ -452,6 +748,9 @@ export class ReportesService {
       estatusEtiqueta: etiquetaEstatus(casoPor.get(r.id)?.estatus.nombre ?? ESTATUS_INICIAL),
       prioridad: r.prioridad,
       peligroInmediato: r.peligroInmediato,
+      verificacion: casoPor.get(r.id)?.verificacion ?? 'Sin verificar',
+      esDuplicado: r.duplicadoDe !== null && r.duplicadoDe !== undefined,
+      seguimientoVencido: vencido(casoPor.get(r.id)),
       ubicacion: r.ubicacion.descripcion,
       municipio: r.municipio?.nombre ?? null,
       actividad: r.actividad.nombre,

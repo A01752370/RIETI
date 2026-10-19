@@ -1,10 +1,12 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, Req } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 import { DataSource } from 'typeorm';
 import { Requiere } from '../auth/roles';
-import { ESTATUS, ESTATUS_ORDENADOS, ESTATUS_PENDIENTES } from '../reportes/estatus';
+import { RequestAutenticado } from '../auth/jwt.guard';
+import { Alcance, alcanceDe, parametroAlcance } from '../auth/alcance';
+import { ESTATUS, ESTATUS_CERRADOS, ESTATUS_ORDENADOS, ESTATUS_PENDIENTES } from '../reportes/estatus';
 import { PRIORIDADES } from '../reportes/clasificacion';
 import {
   celdasDeCalor, CeldaCalorDto, ConteoProtegidoDto, minimoCasosTiempo, proteger, TAMANO_CELDA_GRADOS, tiempoHastaHito, TiempoHitoDto,
@@ -131,6 +133,27 @@ export interface MapaCalorDto {
   sinUbicacion: number;
 }
 
+/** Respuesta de `GET /api/v1/estadisticas/embudo` (Fase 7). Solo conteos. */
+export interface EmbudoDto {
+  /** Reportes recibidos sin contar los marcados como posibles duplicados. */
+  recibidos: number;
+  /** Con verificación "Verificado" o "Caso confirmado". */
+  verificados: number;
+  /** Con verificación "Caso confirmado". */
+  casosIdentificados: number;
+  /** Suma de NNA identificados que capturó el personal. */
+  nnaIdentificados: number;
+  /** Suma de NNA canalizados que capturó el personal. */
+  nnaCanalizados: number;
+  /** Reportes marcados como posibles duplicados (no cuentan en el embudo). */
+  duplicadosDescontados: number;
+  prioridadAltaPendientes: number;
+  /** Casos abiertos con la fecha de seguimiento vencida. */
+  seguimientosVencidos: number;
+  /** Alertas de punto recurrente abiertas. */
+  alertasAbiertas: number;
+}
+
 /** Zona horaria de referencia para agrupar por día y mes. */
 const ZONA = 'America/Mexico_City';
 
@@ -139,7 +162,8 @@ const PENDIENTES = [...ESTATUS_PENDIENTES];
 
 /**
  * Cláusula FROM/WHERE común a todas las estadísticas (consultas parametrizadas:
- * $1 desde, $2 hasta, $3 municipio, $4 zona, $5 estatus, $6 actividad).
+ * $1 desde, $2 hasta, $3 municipio, $4 zona, $5 estatus, $6 actividad, $7 prioridad,
+ * $8 alcance territorial: `null` o los municipios asignados; Fase 7).
  */
 const DESDE_FILTRADO = `
   FROM reporte r
@@ -152,10 +176,12 @@ const DESDE_FILTRADO = `
     AND ($3::int IS NULL OR r.id_municipio = $3::int)
     AND ($5::text IS NULL OR e.nombre = $5::text)
     AND ($6::text IS NULL OR a.nombre = $6::text)
-    AND ($7::text IS NULL OR r.prioridad = $7::text)`;
+    AND ($7::text IS NULL OR r.prioridad = $7::text)
+    AND ($8::int[] IS NULL OR r.id_municipio = ANY($8::int[]))`;
 
-const parametros = (f: FiltrosEstadisticasDto) =>
-  [f.desde ?? null, f.hasta ?? null, f.municipioId ?? null, ZONA, f.estatus ?? null, f.actividad ?? null, f.prioridad ?? null];
+const parametros = (f: FiltrosEstadisticasDto, a: Alcance) =>
+  [f.desde ?? null, f.hasta ?? null, f.municipioId ?? null, ZONA, f.estatus ?? null, f.actividad ?? null, f.prioridad ?? null,
+    parametroAlcance(a)];
 
 /**
  * Panel de estadísticas del personal (`estadisticas.ver`). Solo datos agregados,
@@ -165,19 +191,23 @@ const parametros = (f: FiltrosEstadisticasDto) =>
 export class EstadisticasController {
   constructor(@InjectDataSource() private readonly ds: DataSource) {}
 
+  private alcance(req: RequestAutenticado): Promise<Alcance> {
+    return alcanceDe(this.ds, req.usuario!);
+  }
+
   /** Tarjetas, conteo por estatus y serie mensual con los filtros indicados. */
   @Requiere('estadisticas.ver')
   @Get('resumen')
-  async resumen(@Query() f: FiltrosEstadisticasDto): Promise<ResumenEstadisticasDto> {
-    const params = parametros(f);
+  async resumen(@Query() f: FiltrosEstadisticasDto, @Req() req: RequestAutenticado): Promise<ResumenEstadisticasDto> {
+    const params = parametros(f, await this.alcance(req));
     const [[tarjetas], estatus, meses] = await Promise.all([
       this.ds.query(
         `SELECT count(*)::int AS total,
                 count(*) FILTER (WHERE r.fecha_creacion >= now() - interval '7 days')::int AS nuevos,
                 count(*) FILTER (WHERE r.id_municipio IS NULL)::int AS sin_municipio,
-                count(*) FILTER (WHERE e.nombre = ANY($8::text[]))::int AS pendientes,
-                count(*) FILTER (WHERE e.nombre = ANY($8::text[]) AND ri.nombre = 'Sí')::int AS riesgo_alto,
-                count(*) FILTER (WHERE e.nombre = ANY($8::text[]) AND r.prioridad = 'Alta')::int AS prioridad_alta
+                count(*) FILTER (WHERE e.nombre = ANY($9::text[]))::int AS pendientes,
+                count(*) FILTER (WHERE e.nombre = ANY($9::text[]) AND ri.nombre = 'Sí')::int AS riesgo_alto,
+                count(*) FILTER (WHERE e.nombre = ANY($9::text[]) AND r.prioridad = 'Alta')::int AS prioridad_alta
          ${DESDE_FILTRADO.replace('WHERE', 'JOIN riesgo ri ON ri.id_riesgo = r.id_riesgo WHERE')}`, [...params, PENDIENTES]),
       this.ds.query(`SELECT e.nombre AS etiqueta, count(*)::int AS total ${DESDE_FILTRADO} GROUP BY e.nombre`, params),
       this.ds.query(
@@ -201,8 +231,8 @@ export class EstadisticasController {
   /** Distribución por municipio, actividad y grupo de edad (celdas pequeñas ocultas). */
   @Requiere('estadisticas.ver')
   @Get('distribuciones')
-  async distribuciones(@Query() f: FiltrosEstadisticasDto): Promise<DistribucionesDto> {
-    const params = parametros(f);
+  async distribuciones(@Query() f: FiltrosEstadisticasDto, @Req() req: RequestAutenticado): Promise<DistribucionesDto> {
+    const params = parametros(f, await this.alcance(req));
     const umbral = umbralMinimo();
     const [municipios, actividades, edades] = await Promise.all([
       this.ds.query(
@@ -227,13 +257,13 @@ export class EstadisticasController {
   /** Tiempo promedio en cada estatus, calculado con la bitácora. */
   @Requiere('estadisticas.ver')
   @Get('tiempos')
-  async tiempos(@Query() f: FiltrosEstadisticasDto): Promise<TiemposDto> {
+  async tiempos(@Query() f: FiltrosEstadisticasDto, @Req() req: RequestAutenticado): Promise<TiemposDto> {
     const umbral = umbralMinimo();
     const filas: { id_caso: number; estatus: string; fecha: Date }[] = await this.ds.query(
       `SELECT s.id_caso, es.nombre AS estatus, s.fecha
        FROM seguimiento s JOIN estatus_reporte es ON es.id_estatus = s.id_estatus
        WHERE s.id_caso IN (SELECT c.id_caso ${DESDE_FILTRADO})
-       ORDER BY s.id_caso, s.fecha, s.id_seguimiento`, parametros(f));
+       ORDER BY s.id_caso, s.fecha, s.id_seguimiento`, parametros(f, await this.alcance(req)));
     const eventos = filas.map((x) => ({ idCaso: Number(x.id_caso), estatus: x.estatus, fecha: new Date(x.fecha) }));
     const minimo = minimoCasosTiempo(umbral);
     return {
@@ -247,24 +277,61 @@ export class EstadisticasController {
   /** Casos pendientes (Recibido o En revisión) sin cambios en más de N días. */
   @Requiere('estadisticas.ver')
   @Get('sin-atender')
-  async sinAtender(@Query() f: SinAtenderDto): Promise<SinAtenderRespuestaDto> {
+  async sinAtender(@Query() f: SinAtenderDto, @Req() req: RequestAutenticado): Promise<SinAtenderRespuestaDto> {
     const umbral = umbralMinimo();
     const filas: ConteoDto[] = await this.ds.query(
       `SELECT coalesce(m.nombre, 'Sin municipio') AS etiqueta, count(*)::int AS total
        ${DESDE_FILTRADO.replace('WHERE', 'LEFT JOIN municipio m ON m.id_municipio = r.id_municipio WHERE')}
-         AND e.nombre = ANY($8::text[]) AND c.fecha_actualizacion < now() - make_interval(days => $9::int)
-       GROUP BY 1 ORDER BY 2 DESC, 1`, [...parametros(f), PENDIENTES, f.dias]);
+         AND e.nombre = ANY($9::text[]) AND c.fecha_actualizacion < now() - make_interval(days => $10::int)
+       GROUP BY 1 ORDER BY 2 DESC, 1`, [...parametros(f, await this.alcance(req)), PENDIENTES, f.dias]);
     return { dias: f.dias, total: filas.reduce((s, x) => s + x.total, 0), umbral, porMunicipio: proteger(filas, umbral) };
+  }
+
+  /**
+   * Fase 7: embudo de atención (recibidos → verificados → casos identificados → NNA
+   * canalizados), sin contar los posibles duplicados, más los indicadores de control.
+   */
+  @Requiere('estadisticas.ver')
+  @Get('embudo')
+  async embudo(@Query() f: FiltrosEstadisticasDto, @Req() req: RequestAutenticado): Promise<EmbudoDto> {
+    const alcance = await this.alcance(req);
+    const [[fila]] = await Promise.all([
+      this.ds.query(
+        `SELECT count(*) FILTER (WHERE r.duplicado_de IS NULL)::int AS recibidos,
+                count(*) FILTER (WHERE r.duplicado_de IS NOT NULL)::int AS duplicados,
+                count(*) FILTER (WHERE r.duplicado_de IS NULL AND c.verificacion IN ('Verificado', 'Caso confirmado'))::int AS verificados,
+                count(*) FILTER (WHERE r.duplicado_de IS NULL AND c.verificacion = 'Caso confirmado')::int AS casos,
+                coalesce(sum(c.nna_identificados) FILTER (WHERE r.duplicado_de IS NULL), 0)::int AS nna_identificados,
+                coalesce(sum(c.nna_canalizados) FILTER (WHERE r.duplicado_de IS NULL), 0)::int AS nna_canalizados,
+                count(*) FILTER (WHERE r.duplicado_de IS NULL AND r.prioridad = 'Alta' AND e.nombre = ANY($9::text[]))::int AS alta_pendientes,
+                count(*) FILTER (WHERE c.fecha_seguimiento < (now() AT TIME ZONE $4)::date AND e.nombre <> ALL($10::text[]))::int AS vencidos
+         ${DESDE_FILTRADO}`, [...parametros(f, alcance), PENDIENTES, [...ESTATUS_CERRADOS]]),
+    ]);
+    const [{ alertas }] = await this.ds.query(
+      `SELECT count(*)::int AS alertas FROM alerta_territorial
+       WHERE estatus = 'abierta' AND ($1::int[] IS NULL OR id_municipio = ANY($1::int[]))
+         AND ($2::int IS NULL OR id_municipio = $2::int)`, [parametroAlcance(alcance), f.municipioId ?? null]);
+    return {
+      recibidos: fila.recibidos,
+      verificados: fila.verificados,
+      casosIdentificados: fila.casos,
+      nnaIdentificados: fila.nna_identificados,
+      nnaCanalizados: fila.nna_canalizados,
+      duplicadosDescontados: fila.duplicados,
+      prioridadAltaPendientes: fila.alta_pendientes,
+      seguimientosVencidos: fila.vencidos,
+      alertasAbiertas: alertas,
+    };
   }
 
   /** Mapa de calor: conteos por celda de ≈ 550 m; celdas con pocos reportes ocultas. */
   @Requiere('estadisticas.ver')
   @Get('mapa-calor')
-  async mapaCalor(@Query() f: FiltrosEstadisticasDto): Promise<MapaCalorDto> {
+  async mapaCalor(@Query() f: FiltrosEstadisticasDto, @Req() req: RequestAutenticado): Promise<MapaCalorDto> {
     const umbral = umbralMinimo();
     const filas: { lat: string | null; lng: string | null }[] = await this.ds.query(
       `SELECT u.latitud AS lat, u.longitud AS lng
-       ${DESDE_FILTRADO.replace('WHERE', 'JOIN ubicacion u ON u.id_ubicacion = r.id_ubicacion WHERE')}`, parametros(f));
+       ${DESDE_FILTRADO.replace('WHERE', 'JOIN ubicacion u ON u.id_ubicacion = r.id_ubicacion WHERE')}`, parametros(f, await this.alcance(req)));
     const puntos = filas.filter((x) => x.lat !== null && x.lng !== null).map((x) => ({ lat: Number(x.lat), lng: Number(x.lng) }));
     const { celdas, ocultas } = celdasDeCalor(puntos, umbral);
     return { umbral, tamanoCelda: TAMANO_CELDA_GRADOS, celdas, ocultas, sinUbicacion: filas.length - puntos.length };

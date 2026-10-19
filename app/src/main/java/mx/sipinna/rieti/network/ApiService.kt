@@ -6,6 +6,8 @@ import mx.sipinna.rieti.model.AvisoPrivacidad
 import mx.sipinna.rieti.model.CambiarEstatusRequest
 import mx.sipinna.rieti.model.ConsultaPublica
 import mx.sipinna.rieti.model.ConsultaRequest
+import mx.sipinna.rieti.model.Embudo
+import mx.sipinna.rieti.model.Responsable
 import mx.sipinna.rieti.model.CrearReporteRequest
 import mx.sipinna.rieti.model.GeoReversa
 import mx.sipinna.rieti.model.LoginRequest
@@ -142,8 +144,21 @@ interface ApiService {
         @Query("riesgo") riesgo: String? = null,
         @Query("pendientes") pendientes: Boolean? = null,
         @Query("prioridad") prioridad: String? = null,
-        @Query("orden") orden: String? = null
+        @Query("orden") orden: String? = null,
+        @Query("vencidos") vencidos: Boolean? = null
     ): Pagina<ReporteResumen>
+
+    /** Fase 7: embudo y controles (vencidos, alertas) para el inicio del personal (requiere sesión). */
+    @GET("api/v1/estadisticas/embudo")
+    suspend fun embudo(): Embudo
+
+    /** Fase 7: edita el expediente; solo se envían los campos que cambian (requiere sesión). */
+    @PATCH("api/v1/reportes/{id}/expediente")
+    suspend fun actualizarExpediente(@Path("id") id: Int, @Body cambios: Map<String, @JvmSuppressWildcards Any?>): ReporteDetalle
+
+    /** Fase 7: personal que puede ser responsable del reporte (requiere sesión). */
+    @GET("api/v1/reportes/{id}/responsables")
+    suspend fun responsables(@Path("id") id: Int): List<Responsable>
 
     /** Resumen agregado para el inicio del personal (requiere sesión). */
     @GET("api/v1/estadisticas/resumen")

@@ -7,7 +7,8 @@ import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import { Repository } from 'typeorm';
 import { RolUsuario } from '../catalogos/catalogo.entities';
 import { Usuario } from './usuario.entity';
-import { LoginDto, LoginRespuestaDto } from './auth.dto';
+import { LoginDto, LoginRespuestaDto, UsuarioAutenticado } from './auth.dto';
+import { alcanceDe } from './alcance';
 import { GRUPO_A_ROL, GRUPOS_PERSONAL } from './roles';
 
 /**
@@ -28,6 +29,15 @@ export class AuthService {
     @InjectRepository(Usuario) private readonly usuarios: Repository<Usuario>,
     @InjectRepository(RolUsuario) private readonly roles: Repository<RolUsuario>,
   ) {}
+
+  /** Municipios que puede ver la persona; `null` = todos (perfiles regionales; Fase 7). */
+  async municipiosDe(u: UsuarioAutenticado): Promise<{ id: number; nombre: string }[] | null> {
+    const alcance = await alcanceDe(this.usuarios.manager, u);
+    if (alcance.municipios === null) return null;
+    const filas: { id: number; nombre: string }[] = await this.usuarios.manager.query(
+      'SELECT id_municipio AS id, nombre FROM municipio WHERE id_municipio = ANY($1::int[]) ORDER BY nombre', [alcance.municipios]);
+    return filas.map((f) => ({ id: Number(f.id), nombre: f.nombre }));
+  }
 
   /**
    * Autentica con `USER_PASSWORD_AUTH` y sincroniza la fila `usuario`.
@@ -94,6 +104,7 @@ export class AuthService {
   /** Crea o actualiza la fila `usuario` a partir de la identidad de Cognito. */
   private async sincronizarUsuario(sub: string, correo: string, grupos: string[]): Promise<Usuario> {
     const nombreRol = grupos.includes('Administrador') ? GRUPO_A_ROL.Administrador
+      : grupos.includes('CoordinadorRegional') ? GRUPO_A_ROL.CoordinadorRegional
       : grupos.includes('PersonalSIPINNA') ? GRUPO_A_ROL.PersonalSIPINNA : 'Ciudadano';
     const rol = await this.roles.findOneByOrFail({ nombre: nombreRol });
 

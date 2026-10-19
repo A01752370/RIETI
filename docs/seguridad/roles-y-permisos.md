@@ -1,6 +1,6 @@
 # Roles y permisos (D-18)
 
-> Estado al 15-oct-2026 (Fase 4). Solo se afirma lo que el código hace; lo demás está en [Planeado](#planeado).
+> Estado al 18-oct-2026 (Fase 7). Solo se afirma lo que el código hace; lo demás está en [Planeado](#planeado).
 
 ## Cómo se aplica en el código
 
@@ -8,7 +8,8 @@
 - Cada ruta del personal declara su acción con `@Requiere('<permiso>')`, que aplica exactamente los grupos de la matriz.
 - El guard global (`backend/src/auth/jwt.guard.ts`) **deniega por defecto**. Toda ruta exige un JWT válido de Cognito, salvo las marcadas `@Publico()`. Además verifica que el usuario exista en la tabla `usuario` y esté **activo**.
 - Las rutas de la cuenta de ciudadano llevan `@Ciudadano()`: exigen un JWT del pool de ciudadanos (otro emisor y otro `client_id`) y no aceptan el del personal; las rutas del personal no aceptan el de ciudadano. `POST /reportes` lleva `@CiudadanoOpcional()`: el token solo se usa si el cuerpo trae `vincularCuenta: true`.
-- La web del personal muestra el perfil y sus permisos con `GET /api/v1/auth/perfil`, que calcula los permisos con la misma matriz.
+- La web del personal muestra el perfil y sus permisos con `GET /api/v1/auth/perfil`, que calcula los permisos con la misma matriz e incluye los municipios que la persona puede ver.
+- **Alcance territorial (Fase 7, D-36):** además del permiso, cada consulta del personal se limita a sus municipios (`backend/src/auth/alcance.ts`). Administrador y Coordinador regional ven todos; el enlace municipal solo los de `asignacion_municipio`. Fuera del alcance, la respuesta es el mismo 404 que un reporte inexistente.
 
 ## Perfiles
 
@@ -17,13 +18,15 @@
 | Ciudadano anónimo | Sin sesión | **Implementado** |
 | Ciudadano con cuenta (opcional, D-19) | JWT del pool de Cognito `rieti-prod-ciudadanos` (separado del personal) | **Implementado.** Solo ve sus propios reportes vinculados (estatus e historial público); no tiene ningún permiso del personal. |
 | Ciudadano con contacto | — | **Planeado.** La opción aparece como "no disponible" en la web: guardar datos de contacto requiere cifrarlos primero. |
-| Enlace municipal | Grupo de Cognito `PersonalSIPINNA` | **Implementado**, sin filtro por municipio (ve los reportes de todos los municipios). |
-| Coordinador | — | **Planeado.** No existe grupo en Cognito; crearlo es un cambio de infraestructura. |
-| Administrador | Grupo de Cognito `Administrador` | **Implementado.** |
+| Enlace municipal | Grupo de Cognito `PersonalSIPINNA` | **Implementado.** Solo ve los municipios que el Administrador le asigna (Fase 7). |
+| Coordinador regional | Grupo de Cognito `CoordinadorRegional` | **Implementado (Fase 7).** Ve todos los municipios y gestiona casos; no administra personal, parámetros ni la bitácora de accesos. |
+| Administrador | Grupo de Cognito `Administrador` | **Implementado.** Todos los municipios y la administración. |
 
 ## Matriz implementada hoy
 
 ✅ = permitido · — = no permitido
+
+Las columnas del personal aplican **dentro de su alcance territorial**. El Coordinador regional tiene los mismos permisos que el enlace municipal (con alcance de todos los municipios) más lo indicado en la tabla de la Fase 7.
 
 | Acción | Ruta | Ciudadano anónimo | Ciudadano con cuenta | Enlace municipal | Administrador |
 |---|---|---|---|---|---|
@@ -48,25 +51,39 @@
 | Cambiar contraseña / cerrar sesión en todos los dispositivos | `POST /ciudadano/cuenta/contrasena`, `POST /ciudadano/cuenta/cerrar-sesion` | — | ✅ | — | — |
 | Eliminar su cuenta (los reportes se conservan sin vínculo) | `DELETE /ciudadano/cuenta` | — | ✅ (3/min) | — | — |
 
+### Fase 7: expediente, alertas y administración
+
+| Acción (permiso) | Ruta | Enlace municipal | Coordinador regional | Administrador |
+|---|---|---|---|---|
+| Editar el expediente, vincular o quitar duplicados, ver responsables (`expediente.editar`) | `PATCH /reportes/:id/expediente`, `POST`/`DELETE /reportes/:id/duplicado`, `GET /reportes/:id/responsables` | ✅ | ✅ | ✅ |
+| Ver posibles duplicados y catálogos del expediente (`reportes.ver`) | `GET /reportes/:id/cercanos`, `GET /catalogos/expediente` | ✅ | ✅ | ✅ |
+| Embudo de atención (`estadisticas.ver`) | `GET /estadisticas/embudo` | ✅ | ✅ | ✅ |
+| Ver alertas de punto recurrente (`alertas.ver`) y atenderlas (`alertas.gestionar`) | `GET /alertas`, `PATCH /alertas/:id` | ✅ | ✅ | ✅ |
+| Asignar municipios al personal (`personal.administrar`) | `GET /admin/personal`, `PUT /admin/personal/:id/municipios` | — | — | ✅ |
+| Parámetros y dependencias (`configuracion.editar`) | `GET`/`PUT /admin/configuracion`, `GET`/`POST /admin/dependencias`, `PATCH /admin/dependencias/:id` | — | — | ✅ |
+| Bitácora de accesos (`accesos.ver`) | `GET /admin/accesos` | — | — | ✅ |
+
 Reglas que aplican a todos los perfiles:
-- Los cambios de estatus siguen la tabla de transiciones de la Etapa 1. Descartar exige motivo; reabrir un caso concluido exige comentario.
+- Los cambios de estatus siguen la máquina de estados (D-30). Cancelar exige motivo; marcar Reincidente exige comentario; concluir exige el resultado (Fase 7).
+- Consultar un detalle o exportar queda en la bitácora de accesos (append-only).
 - La bitácora `seguimiento` es solo de inserción: ningún perfil puede editarla ni borrarla.
 - Ningún perfil del personal ve datos personales del denunciante: no existen en la base (RIETI guarda solo el `sub` de Cognito de las cuentas, nunca el correo) y la bandeja y el detalle no muestran si un reporte está vinculado a una cuenta.
-- **Alta y baja de personal:** no hay endpoint. Se hace por la CLI de AWS, según `docs/RUNBOOK-AWS.md`, y lo ejecuta quien administra la cuenta. Desactivar a una persona (`usuario.activo = false`) le bloquea el acceso en la siguiente petición.
+- **Alta y baja de personal y perfil:** no hay endpoint. Se hace por la CLI de AWS (grupo de Cognito), según `docs/RUNBOOK-AWS.md`. Los municipios del enlace se asignan en la web (Administración). Desactivar a una persona (`usuario.activo = false`) le bloquea el acceso en la siguiente petición.
 
 ## Cómo se verifica
 
 | Prueba | Qué comprueba |
 |---|---|
 | `backend/test/rutas-protegidas.spec.ts` | La lista cerrada de rutas públicas. Cada ruta del personal tiene exactamente el permiso de la tabla de arriba y los grupos de `MATRIZ_PERMISOS`. El enlace municipal no tiene `red.editar`. |
+| `backend/test/e2e/api.e2e.spec.ts` (Fase 7) | Aislamiento por municipio en detalle, cambios, expediente, bandeja, exportación, estadísticas, mapa y alertas; enlace sin asignaciones no ve nada; administración solo para el Administrador (403 para coordinador y enlace); perfil con municipios. |
 | `backend/test/e2e/api.e2e.spec.ts` | Contra PostgreSQL real: token de ciudadano → 401 en rutas del personal y token del personal → 401 en `/ciudadano/*`; una cuenta no ve reportes de otra; sin token → 401; sin grupo → 403; usuario desactivado → 403; enlace municipal → 403 al editar la red; administrador → 200; el perfil del enlace no incluye `red.editar` y el del administrador sí. |
 
 ## Planeado
 
 | Tema | Qué falta |
 |---|---|
-| Coordinador | Grupo en Cognito (Terraform) y permisos en la matriz; propuesta: lectura de todos los municipios y panel completo, sin editar la red. |
-| Filtro por municipio del enlace | Asignar `usuario.id_municipio` a cada enlace y filtrar bandeja, detalle y panel por ese municipio (y después aplicar RLS en PostgreSQL). Hoy ningún usuario tiene municipio asignado. |
+| RLS por municipio | Segunda barrera en PostgreSQL además del filtro de la aplicación. |
+| Coordinador con solo agregados | Si el socio lo pide, un perfil regional de solo lectura de agregados (hoy el coordinador ve el detalle para coordinar la canalización). |
 | Ciudadano con contacto | Cifrado de los datos de contacto a nivel aplicación con una llave en Secrets Manager (cambio de infraestructura). |
 | Alta de personal desde la plataforma | `POST /usuarios` (solo administrador) con `AdminCreateUser`; hoy es por CLI. |
 | MFA obligatorio | Hosted UI + PKCE (D-06). |

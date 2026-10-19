@@ -674,6 +674,28 @@
                 "Normal"
               ]
             }
+          },
+          {
+            "name": "vencidos",
+            "in": "query",
+            "description": "Solo casos abiertos con seguimiento vencido (Fase 7).",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "verificacion",
+            "in": "query",
+            "description": "Verificación del expediente (Fase 7).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sin verificar",
+                "Verificado",
+                "Caso confirmado",
+                "No procede"
+              ]
+            }
           }
         ],
         "responses": {
@@ -795,7 +817,7 @@
         "tags": [
           "Personal SIPINNA"
         ],
-        "summary": "CU-09: detalle con bitácora y transiciones permitidas.",
+        "summary": "CU-09: detalle con bitácora y transiciones permitidas. Queda en la bitácora de accesos (Fase 7).",
         "security": [
           {
             "cognito": []
@@ -950,7 +972,7 @@
             }
           },
           "422": {
-            "description": "TRANSICION_INVALIDA, MOTIVO_REQUERIDO o COMENTARIO_REQUERIDO",
+            "description": "TRANSICION_INVALIDA, MOTIVO_REQUERIDO, COMENTARIO_REQUERIDO o RESULTADO_REQUERIDO (Fase 7)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1841,6 +1863,28 @@
                 "Normal"
               ]
             }
+          },
+          {
+            "name": "vencidos",
+            "in": "query",
+            "description": "Solo casos abiertos con seguimiento vencido (Fase 7).",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "verificacion",
+            "in": "query",
+            "description": "Verificación del expediente (Fase 7).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Sin verificar",
+                "Verificado",
+                "Caso confirmado",
+                "No procede"
+              ]
+            }
           }
         ],
         "responses": {
@@ -2477,6 +2521,1438 @@
           }
         }
       }
+    },
+    "/api/v1/reportes/{id}/expediente": {
+      "patch": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Edita el expediente; cada cambio queda en la bitácora (expediente.editar; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActualizarExpediente"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReporteDetalle"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDACION o VALOR_NO_VALIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NO_ENCONTRADO: no existe o es de un municipio fuera del alcance (respuesta uniforme)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reportes/{id}/cercanos": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Posibles duplicados: mismo municipio, radio y ventana configurados; solo sugerencias (reportes.ver; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReporteRelacionado"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NO_ENCONTRADO: no existe o es de un municipio fuera del alcance (respuesta uniforme)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reportes/{id}/duplicado": {
+      "post": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Marca el reporte como posible duplicado de otro del mismo municipio; nunca se fusiona ni se borra (expediente.editar; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VincularDuplicado"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReporteDetalle"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDACION o VALOR_NO_VALIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NO_ENCONTRADO: no existe o es de un municipio fuera del alcance (respuesta uniforme)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "DUPLICADO_INVALIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Quita el vínculo de posible duplicado (expediente.editar; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReporteDetalle"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NO_ENCONTRADO: no existe o es de un municipio fuera del alcance (respuesta uniforme)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reportes/{id}/responsables": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Personal activo con acceso al municipio del reporte (expediente.editar; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Responsable"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NO_ENCONTRADO: no existe o es de un municipio fuera del alcance (respuesta uniforme)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/catalogos/expediente": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Dependencias, modalidades, verificaciones y tipos de acción (reportes.ver; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogosExpediente"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/estadisticas/embudo": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Embudo recibidos → verificados → casos → NNA canalizados, sin duplicados, y controles (estadisticas.ver; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "desde",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "municipioId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "estatus",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actividad",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          },
+          {
+            "name": "prioridad",
+            "in": "query",
+            "description": "Prioridad (Alta, Media, Normal; Fase 6).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Alta",
+                "Media",
+                "Normal"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Embudo"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDACION o VALOR_NO_VALIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/alertas": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Alertas de punto recurrente de los municipios de quien consulta (alertas.ver; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "estatus",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "abierta",
+                "atendida",
+                "todas"
+              ],
+              "default": "abierta"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Alerta"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDACION o VALOR_NO_VALIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/alertas/{id}": {
+      "patch": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Marca la alerta como atendida o la reabre (alertas.gestionar; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AtenderAlerta"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "estatus"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "estatus": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDACION o VALOR_NO_VALIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NO_ENCONTRADO (también si es de otro municipio)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/personal": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Personal con sus municipios asignados (personal.administrar; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Personal"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/personal/{id}/municipios": {
+      "put": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Reemplaza los municipios asignados (personal.administrar; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AsignarMunicipios"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Personal"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDACION o VALOR_NO_VALIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NO_ENCONTRADO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/configuracion": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Parámetros de duplicados, alertas y conservación (configuracion.editar; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Parametro"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Cambia parámetros dentro de sus límites (configuracion.editar; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActualizarConfiguracion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Parametro"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDACION o VALOR_NO_VALIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/dependencias": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Catálogo completo de dependencias (configuracion.editar; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Dependencia"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Agrega una dependencia (configuracion.editar; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearDependencia"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dependencia"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDACION o VALOR_NO_VALIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/dependencias/{id}": {
+      "patch": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Renombra o desactiva una dependencia; no se borran (configuracion.editar; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditarDependencia"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dependencia"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDACION o VALOR_NO_VALIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NO_ENCONTRADO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/accesos": {
+      "get": {
+        "tags": [
+          "Personal SIPINNA"
+        ],
+        "summary": "Bitácora de accesos a expedientes, solo lectura (accesos.ver; Fase 7).",
+        "security": [
+          {
+            "cognito": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "idUsuario",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "folio",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z0-9-]{4,30}$"
+            }
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "tamano",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaAccesos"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDACION o VALOR_NO_VALIDO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin token o token inválido (NO_AUTENTICADO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sin el permiso requerido o usuario desactivado (PROHIBIDO, USUARIO_INACTIVO)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de tasa (DEMASIADOS_INTENTOS)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2485,7 +3961,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "Access token de Amazon Cognito (grupos Administrador o PersonalSIPINNA)."
+        "description": "Access token de Amazon Cognito (grupos Administrador, CoordinadorRegional o PersonalSIPINNA)."
       },
       "ciudadanoJwt": {
         "type": "http",
@@ -2701,8 +4177,9 @@
         "type": "object",
         "required": [
           "correo",
-          "perfil",
           "grupos",
+          "municipios",
+          "perfil",
           "permisos"
         ],
         "properties": {
@@ -2713,6 +4190,7 @@
             "type": "string",
             "enum": [
               "Administrador",
+              "Coordinador regional",
               "Enlace municipal"
             ]
           },
@@ -2736,9 +4214,16 @@
                   "enum": [
                     "reportes.ver",
                     "reportes.gestionar",
+                    "reportes.exportar",
                     "estadisticas.ver",
                     "red.editar",
-                    "perfil.ver"
+                    "perfil.ver",
+                    "expediente.editar",
+                    "alertas.ver",
+                    "alertas.gestionar",
+                    "personal.administrar",
+                    "configuracion.editar",
+                    "accesos.ver"
                   ]
                 },
                 "descripcion": {
@@ -2747,6 +4232,14 @@
               },
               "additionalProperties": false
             }
+          },
+          "municipios": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/IdNombre"
+            },
+            "description": "Municipios visibles; null = todos (Fase 7)"
           }
         },
         "additionalProperties": false
@@ -3038,7 +4531,14 @@
           "estatus": {
             "type": "string",
             "enum": [
-              "Recibido"
+              "Recibido",
+              "En revisión",
+              "En atención",
+              "Canalizado",
+              "Concluido",
+              "Descartado",
+              "Archivado",
+              "Reincidente"
             ]
           },
           "fechaCreacion": {
@@ -3089,7 +4589,9 @@
               "En atención",
               "Canalizado",
               "Concluido",
-              "Descartado"
+              "Descartado",
+              "Archivado",
+              "Reincidente"
             ]
           },
           "fechaCreacion": {
@@ -3156,7 +4658,10 @@
           "fechaActualizacion",
           "estatusEtiqueta",
           "prioridad",
-          "peligroInmediato"
+          "peligroInmediato",
+          "verificacion",
+          "esDuplicado",
+          "seguimientoVencido"
         ],
         "properties": {
           "id": {
@@ -3173,7 +4678,9 @@
               "En atención",
               "Canalizado",
               "Concluido",
-              "Descartado"
+              "Descartado",
+              "Archivado",
+              "Reincidente"
             ]
           },
           "ubicacion": {
@@ -3224,6 +4731,21 @@
               "No sé"
             ],
             "nullable": true
+          },
+          "verificacion": {
+            "type": "string",
+            "enum": [
+              "Sin verificar",
+              "Verificado",
+              "Caso confirmado",
+              "No procede"
+            ]
+          },
+          "esDuplicado": {
+            "type": "boolean"
+          },
+          "seguimientoVencido": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -3271,9 +4793,11 @@
             "enum": [
               "registro",
               "cambio",
-              "nota"
+              "nota",
+              "accion",
+              "expediente"
             ],
-            "description": "registro = alta automática; cambio = cambio de estatus (con su comentario, si lo hubo); nota = nota interna sin cambio de estatus (Fase 5)."
+            "description": "registro = alta automática; cambio = cambio de estatus; nota = nota interna; accion = acción realizada (Fase 7); expediente = cambio en el expediente o en duplicados (Fase 7)."
           },
           "estatus": {
             "type": "string",
@@ -3283,7 +4807,9 @@
               "En atención",
               "Canalizado",
               "Concluido",
-              "Descartado"
+              "Descartado",
+              "Archivado",
+              "Reincidente"
             ]
           },
           "comentario": {
@@ -3326,7 +4852,10 @@
               "fechaEstatusActual",
               "cantidadCategoria",
               "canal",
-              "origen"
+              "origen",
+              "expediente",
+              "duplicadoDe",
+              "duplicados"
             ],
             "properties": {
               "latitud": {
@@ -3417,6 +4946,23 @@
                   "ciudadano",
                   "institucional"
                 ]
+              },
+              "expediente": {
+                "$ref": "#/components/schemas/Expediente"
+              },
+              "duplicadoDe": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/ReporteRelacionado"
+                  }
+                ],
+                "nullable": true
+              },
+              "duplicados": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ReporteRelacionado"
+                }
               }
             }
           }
@@ -3436,7 +4982,9 @@
               "En atención",
               "Canalizado",
               "Concluido",
-              "Descartado"
+              "Descartado",
+              "Archivado",
+              "Reincidente"
             ]
           },
           "comentario": {
@@ -3447,6 +4995,11 @@
             "type": "string",
             "maxLength": 500,
             "description": "Obligatorio si estatus = Descartado"
+          },
+          "resultado": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Obligatorio al concluir (si falta se usa el comentario; si tampoco hay, 422 RESULTADO_REQUERIDO). Al cancelar, el resultado es el motivo (Fase 7)."
           }
         },
         "additionalProperties": false
@@ -3460,6 +5013,15 @@
           "comentario": {
             "type": "string",
             "maxLength": 2000
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "nota",
+              "accion"
+            ],
+            "default": "nota",
+            "description": "accion = acción realizada (Fase 7)"
           }
         },
         "additionalProperties": false
@@ -4122,6 +5684,662 @@
             "description": "Casos necesarios para publicar el promedio."
           }
         }
+      },
+      "IdNombre": {
+        "type": "object",
+        "required": [
+          "id",
+          "nombre"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "nombre": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReporteRelacionado": {
+        "type": "object",
+        "required": [
+          "id",
+          "folio",
+          "estatus",
+          "estatusEtiqueta",
+          "fechaCreacion"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "folio": {
+            "type": "string"
+          },
+          "estatus": {
+            "type": "string",
+            "enum": [
+              "Recibido",
+              "En revisión",
+              "En atención",
+              "Canalizado",
+              "Concluido",
+              "Descartado",
+              "Archivado",
+              "Reincidente"
+            ]
+          },
+          "estatusEtiqueta": {
+            "type": "string"
+          },
+          "fechaCreacion": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "distanciaMetros": {
+            "type": "integer",
+            "description": "Solo en GET /reportes/{id}/cercanos"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Expediente": {
+        "type": "object",
+        "description": "Expediente interno del caso (Fase 7). Solo personal.",
+        "required": [
+          "responsable",
+          "dependencia",
+          "fechaSeguimiento",
+          "seguimientoVencido",
+          "resultado",
+          "fechaCierre",
+          "modalidad",
+          "verificacion",
+          "nnaIdentificados",
+          "nnaCanalizados",
+          "nnaNinas",
+          "nnaNinos"
+        ],
+        "properties": {
+          "responsable": {
+            "type": "object",
+            "nullable": true,
+            "required": [
+              "id",
+              "correo"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "correo": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "dependencia": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/IdNombre"
+              }
+            ],
+            "nullable": true
+          },
+          "modalidad": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/IdNombre"
+              }
+            ],
+            "nullable": true
+          },
+          "fechaSeguimiento": {
+            "type": "string",
+            "nullable": true,
+            "format": "date"
+          },
+          "seguimientoVencido": {
+            "type": "boolean",
+            "description": "La fecha de seguimiento ya pasó y el caso sigue abierto"
+          },
+          "resultado": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          },
+          "fechaCierre": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "verificacion": {
+            "type": "string",
+            "enum": [
+              "Sin verificar",
+              "Verificado",
+              "Caso confirmado",
+              "No procede"
+            ]
+          },
+          "nnaIdentificados": {
+            "type": "integer",
+            "nullable": true
+          },
+          "nnaCanalizados": {
+            "type": "integer",
+            "nullable": true
+          },
+          "nnaNinas": {
+            "type": "integer",
+            "nullable": true
+          },
+          "nnaNinos": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ActualizarExpediente": {
+        "type": "object",
+        "description": "Todos opcionales; null borra el valor. Cada cambio queda en la bitácora (tipo expediente).",
+        "properties": {
+          "idResponsable": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true,
+            "description": "Personal activo con acceso al municipio"
+          },
+          "idDependencia": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true
+          },
+          "fechaSeguimiento": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "nullable": true
+          },
+          "idModalidad": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true
+          },
+          "verificacion": {
+            "type": "string",
+            "enum": [
+              "Sin verificar",
+              "Verificado",
+              "Caso confirmado",
+              "No procede"
+            ]
+          },
+          "nnaIdentificados": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99,
+            "nullable": true
+          },
+          "nnaCanalizados": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99,
+            "nullable": true
+          },
+          "nnaNinas": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99,
+            "nullable": true
+          },
+          "nnaNinos": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99,
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "VincularDuplicado": {
+        "type": "object",
+        "required": [
+          "idPrincipal"
+        ],
+        "properties": {
+          "idPrincipal": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "Responsable": {
+        "type": "object",
+        "required": [
+          "id",
+          "correo",
+          "perfil"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "correo": {
+            "type": "string"
+          },
+          "perfil": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CatalogosExpediente": {
+        "type": "object",
+        "required": [
+          "dependencias",
+          "modalidades",
+          "verificaciones",
+          "tiposAccion"
+        ],
+        "properties": {
+          "dependencias": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IdNombre"
+            }
+          },
+          "modalidades": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IdNombre"
+            }
+          },
+          "verificaciones": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Sin verificar",
+                "Verificado",
+                "Caso confirmado",
+                "No procede"
+              ]
+            }
+          },
+          "tiposAccion": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "Embudo": {
+        "type": "object",
+        "description": "Solo conteos; los posibles duplicados no cuentan (Fase 7).",
+        "required": [
+          "recibidos",
+          "verificados",
+          "casosIdentificados",
+          "nnaIdentificados",
+          "nnaCanalizados",
+          "duplicadosDescontados",
+          "prioridadAltaPendientes",
+          "seguimientosVencidos",
+          "alertasAbiertas"
+        ],
+        "properties": {
+          "recibidos": {
+            "type": "integer"
+          },
+          "verificados": {
+            "type": "integer"
+          },
+          "casosIdentificados": {
+            "type": "integer"
+          },
+          "nnaIdentificados": {
+            "type": "integer"
+          },
+          "nnaCanalizados": {
+            "type": "integer"
+          },
+          "duplicadosDescontados": {
+            "type": "integer"
+          },
+          "prioridadAltaPendientes": {
+            "type": "integer"
+          },
+          "seguimientosVencidos": {
+            "type": "integer"
+          },
+          "alertasAbiertas": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Alerta": {
+        "type": "object",
+        "description": "Punto recurrente: varios reportes cerca en poco tiempo. Coordenadas aproximadas (5 decimales).",
+        "required": [
+          "id",
+          "municipio",
+          "latitud",
+          "longitud",
+          "reportes",
+          "estatus",
+          "fechaCreacion",
+          "fechaActualizacion",
+          "comentario",
+          "relacionados"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "municipio": {
+            "type": "string",
+            "nullable": true
+          },
+          "latitud": {
+            "type": "number"
+          },
+          "longitud": {
+            "type": "number"
+          },
+          "reportes": {
+            "type": "integer"
+          },
+          "estatus": {
+            "type": "string",
+            "enum": [
+              "abierta",
+              "atendida"
+            ]
+          },
+          "fechaCreacion": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fechaActualizacion": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "comentario": {
+            "type": "string",
+            "nullable": true
+          },
+          "relacionados": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "folio"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "folio": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "AtenderAlerta": {
+        "type": "object",
+        "required": [
+          "estatus"
+        ],
+        "properties": {
+          "estatus": {
+            "type": "string",
+            "enum": [
+              "atendida",
+              "abierta"
+            ]
+          },
+          "comentario": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "additionalProperties": false
+      },
+      "Personal": {
+        "type": "object",
+        "required": [
+          "id",
+          "correo",
+          "perfil",
+          "activo",
+          "regional",
+          "municipios"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "correo": {
+            "type": "string"
+          },
+          "perfil": {
+            "type": "string",
+            "enum": [
+              "Administrador",
+              "Coordinador regional",
+              "Enlace municipal"
+            ]
+          },
+          "activo": {
+            "type": "boolean"
+          },
+          "regional": {
+            "type": "boolean",
+            "description": "Ve todos los municipios"
+          },
+          "municipios": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IdNombre"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "AsignarMunicipios": {
+        "type": "object",
+        "required": [
+          "municipios"
+        ],
+        "properties": {
+          "municipios": {
+            "type": "array",
+            "maxItems": 125,
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "Parametro": {
+        "type": "object",
+        "required": [
+          "clave",
+          "valor",
+          "descripcion",
+          "minimo",
+          "maximo",
+          "fechaActualizacion"
+        ],
+        "properties": {
+          "clave": {
+            "type": "string",
+            "enum": [
+              "accesos_conservacion_dias",
+              "alerta_dias",
+              "alerta_minimo",
+              "alerta_radio_m",
+              "duplicados_dias",
+              "duplicados_radio_m"
+            ]
+          },
+          "valor": {
+            "type": "integer"
+          },
+          "descripcion": {
+            "type": "string"
+          },
+          "minimo": {
+            "type": "integer"
+          },
+          "maximo": {
+            "type": "integer"
+          },
+          "fechaActualizacion": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ActualizarConfiguracion": {
+        "type": "object",
+        "required": [
+          "valores"
+        ],
+        "properties": {
+          "valores": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "clave → valor entero dentro de [minimo, maximo]"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Dependencia": {
+        "type": "object",
+        "required": [
+          "id",
+          "nombre",
+          "activo"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "activo": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CrearDependencia": {
+        "type": "object",
+        "required": [
+          "nombre"
+        ],
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "additionalProperties": false
+      },
+      "EditarDependencia": {
+        "type": "object",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "activo": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaginaAccesos": {
+        "type": "object",
+        "required": [
+          "total",
+          "pagina",
+          "tamano",
+          "elementos"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "pagina": {
+            "type": "integer"
+          },
+          "tamano": {
+            "type": "integer"
+          },
+          "elementos": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "usuario",
+                "accion",
+                "folio",
+                "detalle",
+                "fecha"
+              ],
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "usuario": {
+                  "type": "string"
+                },
+                "accion": {
+                  "type": "string",
+                  "enum": [
+                    "ver",
+                    "exportar",
+                    "foto"
+                  ]
+                },
+                "folio": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "detalle": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "fecha": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
       }
     }
   }

@@ -1,3 +1,4 @@
+import { applyDecorators } from '@nestjs/common';
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize, ArrayMinSize, Equals, IsArray, IsBoolean, IsIn, IsInt, IsLatitude, IsLongitude, IsNotEmpty, IsOptional, IsString,
@@ -9,6 +10,9 @@ import { ESTATUS_ORDENADOS } from './estatus';
 
 /** Respuestas del catálogo `riesgo`, en su orden. */
 export const RIESGOS = ['Sí', 'No', 'No sé'] as const;
+
+/** Verificación del expediente, independiente del estatus (Fase 7). */
+export const VERIFICACIONES = ['Sin verificar', 'Verificado', 'Caso confirmado', 'No procede'] as const;
 
 /** Quita espacios al inicio y al final de los textos recibidos. */
 const recortar = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
@@ -293,6 +297,17 @@ export class FiltrosBandejaDto {
   @IsIn(RIESGOS)
   riesgo?: string;
 
+  /** Solo casos abiertos con la fecha de seguimiento vencida (Fase 7). */
+  @IsOptional()
+  @Transform(({ value }) => (value === 'true' || value === true ? true : value === 'false' || value === false ? false : value))
+  @IsBoolean()
+  vencidos?: boolean;
+
+  /** Filtra por verificación (Fase 7). */
+  @IsOptional()
+  @IsIn(VERIFICACIONES)
+  verificacion?: string;
+
   /** Filtra por prioridad (`Alta`, `Media`, `Normal`; Fase 6). */
   @IsOptional()
   @IsIn(PRIORIDADES)
@@ -354,6 +369,12 @@ export interface ReporteResumenDto {
   prioridad: string;
   /** ¿Peligro inmediato? (null en reportes anteriores a la Fase 6). */
   peligroInmediato: string | null;
+  /** Verificación del expediente (Fase 7). */
+  verificacion: string;
+  /** true si es un posible duplicado de otro reporte (Fase 7). */
+  esDuplicado: boolean;
+  /** true si la fecha de seguimiento ya pasó y el caso sigue abierto (Fase 7). */
+  seguimientoVencido: boolean;
   ubicacion: string;
   /** Municipio donde ocurre, o null si el reporte no lo indicó. */
   municipio: string | null;
@@ -390,7 +411,7 @@ export interface EventoSeguimientoDto {
 }
 
 /** Clase de un evento de la bitácora. */
-export type TipoEventoSeguimiento = 'registro' | 'cambio' | 'nota';
+export type TipoEventoSeguimiento = 'registro' | 'cambio' | 'nota' | 'accion' | 'expediente';
 
 /** Detalle de un reporte para el personal (`GET /api/v1/reportes/:id`). */
 export interface ReporteDetalleDto extends ReporteResumenDto {
@@ -416,6 +437,12 @@ export interface ReporteDetalleDto extends ReporteResumenDto {
   canal: string | null;
   /** `ciudadano` o `institucional`. */
   origen: string;
+  /** Expediente interno (Fase 7). */
+  expediente: ExpedienteDto;
+  /** Reporte principal si este es un posible duplicado (Fase 7). */
+  duplicadoDe: ReporteRelacionadoDto | null;
+  /** Reportes marcados como duplicados de este (Fase 7). */
+  duplicados: ReporteRelacionadoDto[];
 }
 
 /** Cuerpo de `PATCH /api/v1/reportes/:id/estatus`. */
@@ -437,14 +464,116 @@ export class CambiarEstatusDto {
   @IsString()
   @MaxLength(500)
   motivo?: string;
+
+  /**
+   * Resultado del caso (Fase 7): obligatorio al concluir. Si no se envía, se usa el
+   * comentario (compatibilidad con la app anterior); al cancelar, el resultado es el motivo.
+   */
+  @IsOptional()
+  @Transform(recortar)
+  @IsString()
+  @MaxLength(1000)
+  resultado?: string;
 }
 
-/** Cuerpo de `POST /api/v1/reportes/:id/seguimientos` (nota sin cambiar estatus). */
+/** Cuerpo de `POST /api/v1/reportes/:id/seguimientos`: nota interna o acción realizada (Fase 7). */
 export class AgregarSeguimientoDto {
-  /** Texto de la nota. */
+  /** Texto de la nota o descripción de la acción. */
   @Transform(recortar)
   @IsString()
   @IsNotEmpty()
   @MaxLength(2000)
   comentario: string;
+
+  /** `nota` (por omisión) o `accion` (acción realizada: visita, llamada, entrevista, canalización…). */
+  @IsOptional()
+  @IsIn(['nota', 'accion'])
+  tipo?: 'nota' | 'accion';
+}
+
+
+/** Conteo de NNA que captura el personal (0 a 99), o null para borrarlo. */
+const conteoNna = () => applyDecorators(IsOptional(), ValidateIf((_o, v) => v !== null), Type(() => Number), IsInt(), Min(0), Max(99));
+
+/**
+ * Cuerpo de `PATCH /api/v1/reportes/:id/expediente` (Fase 7). Todos los campos son
+ * opcionales; `null` borra el valor. Cada cambio queda en la bitácora (quién, cuándo, qué).
+ */
+export class ActualizarExpedienteDto {
+  /** Persona del personal responsable (`usuario.id_usuario`). */
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  idResponsable?: number | null;
+
+  /** Dependencia canalizada (`GET /catalogos/expediente`). */
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  idDependencia?: number | null;
+
+  /** Próxima fecha de seguimiento `AAAA-MM-DD`. */
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'fechaSeguimiento debe tener el formato AAAA-MM-DD' })
+  fechaSeguimiento?: string | null;
+
+  /** Modalidad (la asigna el personal, nunca el ciudadano). */
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  idModalidad?: number | null;
+
+  @IsOptional()
+  @IsIn(VERIFICACIONES)
+  verificacion?: string;
+
+  @conteoNna() nnaIdentificados?: number | null;
+  @conteoNna() nnaCanalizados?: number | null;
+  /** Sexo (opcional; solo lo captura el personal y solo se usa en agregados con umbral). */
+  @conteoNna() nnaNinas?: number | null;
+  @conteoNna() nnaNinos?: number | null;
+}
+
+/** Cuerpo de `POST /api/v1/reportes/:id/duplicado` (Fase 7). */
+export class VincularDuplicadoDto {
+  /** Reporte principal del que este es un posible duplicado. */
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  idPrincipal: number;
+}
+
+/** Resumen de un reporte relacionado (duplicado o cercano). */
+export interface ReporteRelacionadoDto {
+  id: number;
+  folio: string;
+  estatus: string;
+  estatusEtiqueta: string;
+  fechaCreacion: string;
+  /** Distancia en metros al reporte consultado (solo en sugerencias). */
+  distanciaMetros?: number;
+}
+
+/** Expediente interno del caso (Fase 7). Solo personal. */
+export interface ExpedienteDto {
+  responsable: { id: number; correo: string } | null;
+  dependencia: { id: number; nombre: string } | null;
+  fechaSeguimiento: string | null;
+  /** true si la fecha de seguimiento ya pasó y el caso sigue abierto. */
+  seguimientoVencido: boolean;
+  resultado: string | null;
+  fechaCierre: string | null;
+  modalidad: { id: number; nombre: string } | null;
+  verificacion: string;
+  nnaIdentificados: number | null;
+  nnaCanalizados: number | null;
+  nnaNinas: number | null;
+  nnaNinos: number | null;
 }

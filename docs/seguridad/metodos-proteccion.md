@@ -1,6 +1,6 @@
 # Métodos de protección — RIETI
 
-> Etapa 3 · Fecha de corte: 10-oct-2026 · Rama `integracion-final`.
+> Etapa 3 · Fecha de corte: 10-oct-2026, actualizado al cierre de la Fase 7 (18-oct-2026).
 > Cada control indica **dónde vive** y **cómo se verificó**. Lo que no está implementado aparece en la sección [Planeado](#planeado) y no se presenta como hecho.
 
 ## Cómo se verificó
@@ -142,6 +142,19 @@ Las pruebas e2e corrieron en una máquina de desarrollo con PostgreSQL local. **
 | Folio nuevo con clave municipal pero **consecutivo global**: no revela el volumen por municipio; la consulta sigue exigiendo folio + clave (A1) | `clasificacion.ts` | A1, reidentificación por volumen | e2e de folios nuevos y heredados |
 | Cantidad coherente con los grupos de edad (`CANTIDAD_INCOHERENTE`) y catálogos validados contra la base | `clasificacion.ts`, `formulario.ts` | Datos inválidos | `clasificacion.spec.ts`, e2e |
 
+### Expediente y control territorial (Fase 7)
+
+| Control | Dónde | Mitiga | Verificación |
+|---|---|---|---|
+| Alcance por municipio en el servicio (regionales: todos; enlace: asignaciones; sin asignación: nada) y 404 uniforme | `auth/alcance.ts`, `reportes.service.ts`, `estadisticas.controller.ts`, `expediente.controller.ts` | A3 | e2e de aislamiento (maestro y `rieti_app`) |
+| Bitácora de accesos append-only (`ver`, `exportar`), solo lectura para el Administrador | tabla `acceso_expediente` con trigger, `infra/sql/01-rol-rieti-app.sql` (sin UPDATE/DELETE), `admin.controller.ts` | A38 | e2e "bitácora de accesos…" (UPDATE/DELETE rechazados) |
+| Cambios del expediente registrados como eventos `expediente` con "antes → después" y autor | `reportes.service.ts` (`actualizarExpediente`) | Alteración silenciosa del caso | e2e "expediente: … bitácora de quién/qué" |
+| Responsable validado: personal activo con acceso al municipio | `reportes.service.ts` (`validarResponsable`) | A3, asignaciones indebidas | e2e (responsable de otro municipio → 400) |
+| Duplicados: vínculo reversible, mismo municipio, sin cadenas, nunca borra | `reportes.service.ts` (`vincularDuplicado`) | A39 | e2e "posible duplicidad…" |
+| Parámetros con claves cerradas y límites en el servidor; solo Administrador | `admin.controller.ts` (`LIMITES_CONFIGURACION`) | A40 | e2e "administración…" |
+| `rieti_app` con permisos por columna para el expediente (sin DELETE en `caso` ni en `reporte`) | `infra/sql/01-rol-rieti-app.sql` | A5, A21 | e2e como `rieti_app` |
+| Resultado obligatorio al concluir y motivo al cancelar | `reportes.service.ts` | Cierres sin sustento | e2e "Reincidente…" (422 `RESULTADO_REQUERIDO`) |
+
 ### App Android
 
 | Control | Dónde | Mitiga | Verificación |
@@ -160,7 +173,7 @@ Estos controles **no están implementados**. Están ordenados por prioridad.
 | Control | Mitiga | Qué falta |
 |---|---|---|
 | API conectada con el rol `rieti_app` de mínimo privilegio (D-08) | A5, A21 | El script `infra/sql/01-rol-rieti-app.sql` está **preparado y probado en local** (las 36 pruebas e2e pasan conectadas con ese rol). Falta crear su credencial en Secrets Manager (o activar la autenticación IAM de RDS), cambiar la task definition y correr las migraciones con el usuario maestro (`DB_MIGRAR_AL_INICIAR=false`). |
-| Row Level Security por municipio | A3 | Requiere que el reporte guarde municipio (D-14) y `SET LOCAL` del municipio del usuario en cada transacción. |
+| Row Level Security por municipio (segunda barrera) | A3 | El filtro por municipio ya está en la aplicación (Fase 7). Falta `SET LOCAL` del alcance en cada transacción y políticas RLS en `reporte`, `caso` y `seguimiento`. |
 | MFA TOTP obligatorio con Cognito Hosted UI + PKCE (D-06) | A10 | Hoy el MFA es opcional y la app no soporta el reto, por lo que las cuentas se crean con contraseña permanente. |
 | Ofuscación R8 en release | A18 | Requiere reglas `keep` para los modelos de Gson y una prueba de la APK minificada. |
 | Logs de WAF con IP enmascarada o retención mínima | A16 | Hoy no hay logs de WAF; solo las muestras de AWS (3 h). |

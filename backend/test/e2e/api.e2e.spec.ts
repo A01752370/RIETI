@@ -24,6 +24,8 @@ const SUB_PERSONAL = '11111111-1111-4111-8111-111111111111';
 const SUB_SIN_ROL = '22222222-2222-4222-8222-222222222222';
 const SUB_INACTIVO = '33333333-3333-4333-8333-333333333333';
 const SUB_ADMIN = '44444444-4444-4444-8444-444444444444';
+const SUB_COORD = '77777777-7777-4777-8777-777777777777';
+const SUB_ENLACE_NAU = '88888888-8888-4888-8888-888888888888';
 
 /** Doble del verificador de Cognito: solo conoce estos tokens. */
 const TOKENS: Record<string, { sub: string; 'cognito:groups'?: string[] }> = {
@@ -31,6 +33,8 @@ const TOKENS: Record<string, { sub: string; 'cognito:groups'?: string[] }> = {
   'token-sin-rol': { sub: SUB_SIN_ROL, 'cognito:groups': [] },
   'token-inactivo': { sub: SUB_INACTIVO, 'cognito:groups': ['PersonalSIPINNA'] },
   'token-admin': { sub: SUB_ADMIN, 'cognito:groups': ['Administrador'] },
+  'token-coordinador': { sub: SUB_COORD, 'cognito:groups': ['CoordinadorRegional'] },
+  'token-enlace-nau': { sub: SUB_ENLACE_NAU, 'cognito:groups': ['PersonalSIPINNA'] },
 };
 
 /** Doble de la fuente geográfica externa: cuenta las llamadas y nunca sale a internet. */
@@ -168,8 +172,15 @@ describeBd('API RIETI (e2e)', () => {
     await adminDs.query(
       `INSERT INTO usuario (correo, cognito_sub, id_rol, activo) VALUES
        ('enlace@ejemplo.mx', $1, $4, true), ('sinrol@ejemplo.mx', $2, $5, true), ('baja@ejemplo.mx', $3, $4, false),
-       ('admin@ejemplo.mx', $6, $7, true)`,
-      [SUB_PERSONAL, SUB_SIN_ROL, SUB_INACTIVO, personal, await rol('Ciudadano'), SUB_ADMIN, await rol('Administrador')]);
+       ('admin@ejemplo.mx', $6, $7, true), ('coordinacion@ejemplo.mx', $8, $9, true), ('enlace-nau@ejemplo.mx', $10, $4, true)`,
+      [SUB_PERSONAL, SUB_SIN_ROL, SUB_INACTIVO, personal, await rol('Ciudadano'), SUB_ADMIN, await rol('Administrador'),
+        SUB_COORD, await rol('Coordinador regional'), SUB_ENLACE_NAU]);
+    // Fase 7: el enlace de prueba atiende Atizapán (id 1); el otro enlace, solo Naucalpan.
+    await adminDs.query(
+      `INSERT INTO asignacion_municipio (id_usuario, id_municipio)
+       SELECT u.id_usuario, m.id_municipio FROM usuario u, municipio m
+       WHERE (u.cognito_sub = $1 AND m.id_municipio = 1) OR (u.cognito_sub = $2 AND m.clave_inegi = '15057')`,
+      [SUB_PERSONAL, SUB_ENLACE_NAU]);
   }, 120_000);
 
   afterAll(async () => {
@@ -712,17 +723,230 @@ describeBd('API RIETI (e2e)', () => {
       const cambiar = (estatus: string, extra: object = {}) => http().patch(`/api/v1/reportes/${id}/estatus`).set(personal).send({ estatus, ...extra });
       await cambiar('En revisión').expect(200);
       await cambiar('En atención').expect(200);
-      const concl = await cambiar('Concluido').expect(200);
+      expect((await cambiar('Concluido').expect(422)).body.codigo).toBe('RESULTADO_REQUERIDO');
+      const concl = await cambiar('Concluido', { resultado: 'Se canalizó al DIF municipal' }).expect(200);
       expect(concl.body.transicionesPermitidas).toEqual(['Archivado', 'Reincidente']);
+      expect(concl.body.expediente.resultado).toBe('Se canalizó al DIF municipal');
+      expect(concl.body.expediente.fechaCierre).toEqual(expect.any(String));
       expect((await cambiar('Reincidente').expect(422)).body.codigo).toBe('COMENTARIO_REQUERIDO');
       const re = await cambiar('Reincidente', { comentario: 'Se volvió a observar en el mismo crucero' }).expect(200);
       expect(re.body).toMatchObject({ estatus: 'Reincidente', estatusEtiqueta: 'Reincidente', transicionesPermitidas: ['En revisión', 'En atención'] });
+      expect(re.body.expediente.fechaCierre).toBeNull(); // el caso se reabre
       const pend = await http().get('/api/v1/reportes?pendientes=true&tamano=100').set(personal).expect(200);
       expect(pend.body.elementos.map((e: { id: number }) => e.id)).toContain(Number(id)); // Reincidente cuenta como pendiente
       await cambiar('En atención').expect(200);
-      await cambiar('Concluido').expect(200);
+      await cambiar('Concluido', { comentario: 'Se atendió de nuevo' }).expect(200); // compatibilidad: el comentario sirve de resultado
       const arch = await cambiar('Archivado').expect(200);
       expect(arch.body.transicionesPermitidas).toEqual([]);
+    });
+  });
+
+  describe('expediente y control territorial (Fase 7)', () => {
+    const enlace = { Authorization: 'Bearer token-personal' }; // Atizapán
+    const enlaceNau = { Authorization: 'Bearer token-enlace-nau' }; // solo Naucalpan
+    const coord = { Authorization: 'Bearer token-coordinador' };
+    const admin = { Authorization: 'Bearer token-admin' };
+    // Naucalpan (15057): un punto dentro del municipio.
+    const NAU = { latitud: 19.4785, longitud: -99.2396 };
+    let idNau: number;
+    let idAtz: number;
+    let idAtz2: number;
+    let folioAtz: string;
+
+    const crear = async (extra: object = {}) => {
+      const r = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send({ ...reporteValido(), ...extra }).expect(201);
+      const [{ id }] = await adminDs.query('SELECT id_reporte AS id FROM folio WHERE codigo = $1', [r.body.folio]);
+      return { id: Number(id), folio: r.body.folio as string };
+    };
+
+    beforeAll(async () => {
+      const [{ id: nau }] = await adminDs.query("SELECT id_municipio AS id FROM municipio WHERE clave_inegi = '15057'");
+      idNau = (await crear({ municipioId: Number(nau), ...NAU, ubicacion: 'Naucalpan, prueba de aislamiento' })).id;
+      // Dos reportes de Atizapán a ~20 m (posible duplicado).
+      ({ id: idAtz, folio: folioAtz } = await crear({ latitud: 19.56010, longitud: -99.25200 }));
+      idAtz2 = (await crear({ latitud: 19.56025, longitud: -99.25210 })).id;
+    });
+
+    it('A3: el enlace no ve reportes de otro municipio: 404 uniforme en detalle, cambios y expediente', async () => {
+      const inexistente = await http().get('/api/v1/reportes/999999').set(enlace).expect(404);
+      const ajeno = await http().get(`/api/v1/reportes/${idNau}`).set(enlace).expect(404);
+      expect(ajeno.body).toEqual(inexistente.body);
+      await http().patch(`/api/v1/reportes/${idNau}/estatus`).set(enlace).send({ estatus: 'En revisión' }).expect(404);
+      await http().post(`/api/v1/reportes/${idNau}/seguimientos`).set(enlace).send({ comentario: 'x' }).expect(404);
+      await http().patch(`/api/v1/reportes/${idNau}/expediente`).set(enlace).send({ verificacion: 'Verificado' }).expect(404);
+      await http().get(`/api/v1/reportes/${idNau}/cercanos`).set(enlace).expect(404);
+      // Y al revés: el enlace de Naucalpan no ve Atizapán.
+      await http().get(`/api/v1/reportes/${idAtz}`).set(enlaceNau).expect(404);
+      await http().get(`/api/v1/reportes/${idNau}`).set(enlaceNau).expect(200);
+    });
+
+    it('A3: bandeja, exportación y estadísticas solo cuentan sus municipios; el coordinador ve todo', async () => {
+      const lista = await http().get('/api/v1/reportes?tamano=100').set(enlace).expect(200);
+      expect(lista.body.elementos.map((e: { id: number }) => e.id)).not.toContain(idNau);
+      const filtroAjeno = await http().get(`/api/v1/reportes?municipioId=${(await adminDs.query("SELECT id_municipio AS id FROM municipio WHERE clave_inegi = '15057'"))[0].id}`).set(enlace).expect(200);
+      expect(filtroAjeno.body.total).toBe(0);
+      const csv = await http().get('/api/v1/reportes/exportar.csv').set(enlace).expect(200);
+      expect(csv.text).not.toContain('Naucalpan');
+      const nau = await http().get('/api/v1/reportes?tamano=100').set(enlaceNau).expect(200);
+      expect(nau.body.elementos.map((e: { id: number }) => e.id)).toEqual([idNau]);
+      const resumenNau = await http().get('/api/v1/estadisticas/resumen').set(enlaceNau).expect(200);
+      expect(resumenNau.body.total).toBe(1);
+      const mapa = await http().get('/api/v1/estadisticas/mapa-calor').set(enlaceNau).expect(200);
+      expect(mapa.body.celdas).toEqual([]); // 1 reporte: por debajo del umbral
+      const todos = await http().get('/api/v1/reportes?tamano=100').set(coord).expect(200);
+      expect(todos.body.elementos.map((e: { id: number }) => e.id)).toEqual(expect.arrayContaining([idNau, idAtz]));
+    });
+
+    it('un enlace sin municipios asignados no ve nada (negación por defecto)', async () => {
+      await adminDs.query("DELETE FROM asignacion_municipio WHERE id_usuario = (SELECT id_usuario FROM usuario WHERE cognito_sub = $1)", [SUB_ENLACE_NAU]);
+      const r = await http().get('/api/v1/reportes').set(enlaceNau).expect(200);
+      expect(r.body.total).toBe(0);
+      await http().get(`/api/v1/reportes/${idNau}`).set(enlaceNau).expect(404);
+      await adminDs.query(
+        "INSERT INTO asignacion_municipio (id_usuario, id_municipio) SELECT u.id_usuario, m.id_municipio FROM usuario u, municipio m WHERE u.cognito_sub = $1 AND m.clave_inegi = '15057'",
+        [SUB_ENLACE_NAU]);
+    });
+
+    it('expediente: catálogos, edición con bitácora de quién/qué y validación del responsable', async () => {
+      const cat = await http().get('/api/v1/catalogos/expediente').set(enlace).expect(200);
+      expect(cat.body.verificaciones).toEqual(['Sin verificar', 'Verificado', 'Caso confirmado', 'No procede']);
+      const dif = cat.body.dependencias.find((d: { nombre: string }) => d.nombre === 'DIF municipal');
+      const resp = await http().get(`/api/v1/reportes/${idAtz}/responsables`).set(enlace).expect(200);
+      const correos = resp.body.map((p: { correo: string }) => p.correo);
+      expect(correos).toEqual(expect.arrayContaining(['enlace@ejemplo.mx', 'admin@ejemplo.mx', 'coordinacion@ejemplo.mx']));
+      expect(correos).not.toContain('enlace-nau@ejemplo.mx'); // sin acceso a Atizapán
+      const yo = resp.body.find((p: { correo: string }) => p.correo === 'enlace@ejemplo.mx');
+      const nau = (await adminDs.query("SELECT id_usuario AS id FROM usuario WHERE cognito_sub = $1", [SUB_ENLACE_NAU]))[0].id;
+      expect((await http().patch(`/api/v1/reportes/${idAtz}/expediente`).set(enlace).send({ idResponsable: Number(nau) }).expect(400)).body.codigo).toBe('VALOR_NO_VALIDO');
+
+      const r = await http().patch(`/api/v1/reportes/${idAtz}/expediente`).set(enlace).send({
+        idResponsable: yo.id, idDependencia: dif.id, fechaSeguimiento: '2026-01-15', verificacion: 'Caso confirmado',
+        nnaIdentificados: 2, nnaCanalizados: 1, nnaNinas: 1, nnaNinos: 1,
+      }).expect(200);
+      expect(r.body.expediente).toMatchObject({
+        responsable: { correo: 'enlace@ejemplo.mx' }, dependencia: { nombre: 'DIF municipal' }, fechaSeguimiento: '2026-01-15',
+        seguimientoVencido: true, verificacion: 'Caso confirmado', nnaIdentificados: 2, nnaCanalizados: 1,
+      });
+      const ev = r.body.historial.at(-1);
+      expect(ev).toMatchObject({ tipo: 'expediente', autor: 'enlace@ejemplo.mx' });
+      expect(ev.comentario).toContain('Verificación: Sin verificar → Caso confirmado');
+      // Sin cambios reales no se escribe otra entrada.
+      const igual = await http().patch(`/api/v1/reportes/${idAtz}/expediente`).set(enlace).send({ verificacion: 'Caso confirmado' }).expect(200);
+      expect(igual.body.historial).toHaveLength(r.body.historial.length);
+      await http().patch(`/api/v1/reportes/${idAtz}/expediente`).set(enlace).send({ nnaNinas: 100 }).expect(400);
+      await http().patch(`/api/v1/reportes/${idAtz}/expediente`).set(enlace).send({ verificacion: 'Quizá' }).expect(400);
+      await http().patch(`/api/v1/reportes/${idAtz}/expediente`).set(enlace).send({ modalidad: 'texto libre' }).expect(400);
+    });
+
+    it('acciones tipadas en la bitácora y filtro de seguimientos vencidos', async () => {
+      const r = await http().post(`/api/v1/reportes/${idAtz}/seguimientos`).set(enlace)
+        .send({ comentario: 'Visita: se habló con la familia', tipo: 'accion' }).expect(201);
+      expect(r.body.historial.at(-1)).toMatchObject({ tipo: 'accion', comentario: 'Visita: se habló con la familia' });
+      await http().post(`/api/v1/reportes/${idAtz}/seguimientos`).set(enlace).send({ comentario: 'x', tipo: 'expediente' }).expect(400);
+      const venc = await http().get('/api/v1/reportes?vencidos=true&tamano=100').set(enlace).expect(200);
+      expect(venc.body.elementos.map((e: { id: number }) => e.id)).toContain(idAtz);
+      expect(venc.body.elementos.every((e: { seguimientoVencido: boolean }) => e.seguimientoVencido)).toBe(true);
+      const conf = await http().get(`/api/v1/reportes?verificacion=${encodeURIComponent('Caso confirmado')}`).set(enlace).expect(200);
+      expect(conf.body.elementos.map((e: { id: number }) => e.id)).toEqual([idAtz]);
+    });
+
+    it('posible duplicidad: sugerencias por radio y vínculo reversible, sin fusionar', async () => {
+      const cerca = await http().get(`/api/v1/reportes/${idAtz2}/cercanos`).set(enlace).expect(200);
+      const sugerido = cerca.body.find((c: { id: number }) => c.id === idAtz);
+      expect(sugerido).toMatchObject({ folio: folioAtz, distanciaMetros: expect.any(Number) });
+      expect(sugerido.distanciaMetros).toBeLessThan(150);
+      expect(cerca.body.map((c: { id: number }) => c.id)).not.toContain(idNau); // otro municipio, nunca se sugiere
+
+      await http().post(`/api/v1/reportes/${idAtz2}/duplicado`).set(enlace).send({ idPrincipal: idAtz2 }).expect(422);
+      await http().post(`/api/v1/reportes/${idAtz2}/duplicado`).set(enlace).send({ idPrincipal: idNau }).expect(404);
+      const v = await http().post(`/api/v1/reportes/${idAtz2}/duplicado`).set(enlace).send({ idPrincipal: idAtz }).expect(200);
+      expect(v.body.duplicadoDe).toMatchObject({ id: idAtz, folio: folioAtz });
+      const principal = await http().get(`/api/v1/reportes/${idAtz}`).set(enlace).expect(200);
+      expect(principal.body.duplicados.map((d: { id: number }) => d.id)).toEqual([idAtz2]);
+      expect(principal.body.historial.at(-1).comentario).toMatch(/posible duplicado/);
+      // El principal no puede volverse duplicado de otro mientras tenga duplicados.
+      expect((await http().post(`/api/v1/reportes/${idAtz}/duplicado`).set(enlace).send({ idPrincipal: idAtz2 }).expect(422)).body.codigo).toBe('DUPLICADO_INVALIDO');
+      const lista = await http().get('/api/v1/reportes?tamano=100').set(enlace).expect(200);
+      expect(lista.body.elementos.find((e: { id: number }) => e.id === idAtz2).esDuplicado).toBe(true);
+
+      const embudo = await http().get('/api/v1/estadisticas/embudo').set(enlace).expect(200);
+      expect(embudo.body.duplicadosDescontados).toBe(1);
+      expect(embudo.body.casosIdentificados).toBeGreaterThanOrEqual(1);
+      expect(embudo.body.nnaCanalizados).toBeGreaterThanOrEqual(1);
+      expect(embudo.body.seguimientosVencidos).toBeGreaterThanOrEqual(1);
+      expect(JSON.stringify(embudo.body)).not.toMatch(/RIETI-/);
+
+      const d = await http().delete(`/api/v1/reportes/${idAtz2}/duplicado`).set(enlace).expect(200);
+      expect(d.body.duplicadoDe).toBeNull();
+      // Nada se borró: ambos reportes siguen en la base.
+      expect(await adminDs.query('SELECT 1 FROM reporte WHERE id_reporte = ANY($1::int[])', [[idAtz, idAtz2]])).toHaveLength(2);
+    });
+
+    it('alerta de punto recurrente: 3 reportes en 150 m abren una alerta, solo visible para sus municipios', async () => {
+      await crear({ latitud: 19.56015, longitud: -99.25205 }); // tercero en el radio
+      const a = await http().get('/api/v1/alertas').set(enlace).expect(200);
+      const alerta = a.body.find((x: { latitud: number }) => Math.abs(x.latitud - 19.5601) < 0.002);
+      expect(alerta).toMatchObject({ estatus: 'abierta', municipio: 'Atizapán de Zaragoza' });
+      expect(alerta.reportes).toBeGreaterThanOrEqual(3);
+      expect(alerta.relacionados.map((r: { id: number }) => r.id)).toEqual(expect.arrayContaining([idAtz, idAtz2]));
+      const nau = await http().get('/api/v1/alertas').set(enlaceNau).expect(200);
+      expect(nau.body.map((x: { id: number }) => x.id)).not.toContain(alerta.id);
+      await http().patch(`/api/v1/alertas/${alerta.id}`).set(enlaceNau).send({ estatus: 'atendida' }).expect(404);
+      await http().patch(`/api/v1/alertas/${alerta.id}`).set(enlace).send({ estatus: 'atendida', comentario: 'Recorrido programado' }).expect(200);
+      const abiertas = await http().get('/api/v1/alertas').set(enlace).expect(200);
+      expect(abiertas.body.map((x: { id: number }) => x.id)).not.toContain(alerta.id);
+    });
+
+    it('bitácora de accesos: registra consultas y exportaciones, es append-only y solo la ve el administrador', async () => {
+      await http().get(`/api/v1/reportes/${idAtz}`).set(enlace).expect(200);
+      await http().get('/api/v1/reportes/exportar.csv?pendientes=true').set(enlace).expect(200);
+      await http().get('/api/v1/admin/accesos').set(enlace).expect(403);
+      await http().get('/api/v1/admin/accesos').set(coord).expect(403);
+      const r = await http().get(`/api/v1/admin/accesos?folio=${folioAtz}`).set(admin).expect(200);
+      expect(r.body.elementos[0]).toMatchObject({ usuario: 'enlace@ejemplo.mx', accion: 'ver', folio: folioAtz });
+      const exp = await http().get('/api/v1/admin/accesos?tamano=100').set(admin).expect(200);
+      expect(exp.body.elementos.find((e: { accion: string }) => e.accion === 'exportar').detalle).toContain('pendientes=true');
+      const rechazo = COMO_RIETI_APP ? /permission denied/ : /append-only/;
+      await expect(ds.query('UPDATE acceso_expediente SET folio = NULL')).rejects.toThrow(rechazo);
+      await expect(ds.query('DELETE FROM acceso_expediente')).rejects.toThrow(rechazo);
+      await expect(adminDs.query('DELETE FROM acceso_expediente')).rejects.toThrow(/append-only/);
+    });
+
+    it('administración: asignar municipios, parámetros con límites y dependencias editables', async () => {
+      await http().get('/api/v1/admin/personal').set(enlace).expect(403);
+      const lista = await http().get('/api/v1/admin/personal').set(admin).expect(200);
+      const enl = lista.body.find((p: { correo: string }) => p.correo === 'enlace@ejemplo.mx');
+      expect(enl).toMatchObject({ perfil: 'Enlace municipal', regional: false, municipios: [{ id: 1, nombre: 'Atizapán de Zaragoza' }] });
+      expect(lista.body.find((p: { correo: string }) => p.correo === 'coordinacion@ejemplo.mx')).toMatchObject({ perfil: 'Coordinador regional', regional: true });
+      const [{ id: nau }] = await adminDs.query("SELECT id_municipio AS id FROM municipio WHERE clave_inegi = '15057'");
+      const asig = await http().put(`/api/v1/admin/personal/${enl.id}/municipios`).set(admin).send({ municipios: [1, Number(nau)] }).expect(200);
+      expect(asig.body.municipios).toHaveLength(2);
+      await http().get(`/api/v1/reportes/${idNau}`).set(enlace).expect(200); // ya lo ve
+      await http().put(`/api/v1/admin/personal/${enl.id}/municipios`).set(admin).send({ municipios: [1] }).expect(200);
+      await http().get(`/api/v1/reportes/${idNau}`).set(enlace).expect(404);
+      await http().put(`/api/v1/admin/personal/${enl.id}/municipios`).set(admin).send({ municipios: [99999] }).expect(400);
+
+      const conf = await http().get('/api/v1/admin/configuracion').set(admin).expect(200);
+      expect(conf.body.find((p: { clave: string }) => p.clave === 'alerta_minimo')).toMatchObject({ valor: 3 });
+      await http().put('/api/v1/admin/configuracion').set(admin).send({ valores: { alerta_minimo: 1 } }).expect(400);
+      await http().put('/api/v1/admin/configuracion').set(admin).send({ valores: { inventada: 5 } }).expect(400);
+      await http().put('/api/v1/admin/configuracion').set(coord).send({ valores: { alerta_minimo: 4 } }).expect(403);
+      const nuevo = await http().put('/api/v1/admin/configuracion').set(admin).send({ valores: { duplicados_radio_m: 200 } }).expect(200);
+      expect(nuevo.body.find((p: { clave: string }) => p.clave === 'duplicados_radio_m').valor).toBe(200);
+      await http().put('/api/v1/admin/configuracion').set(admin).send({ valores: { duplicados_radio_m: 150 } }).expect(200);
+
+      const dep = await http().post('/api/v1/admin/dependencias').set(admin).send({ nombre: 'Centro de salud municipal' }).expect(201);
+      await http().post('/api/v1/admin/dependencias').set(admin).send({ nombre: 'centro de salud municipal' }).expect(400);
+      await http().patch(`/api/v1/admin/dependencias/${dep.body.id}`).set(admin).send({ activo: false }).expect(200);
+      const cat = await http().get('/api/v1/catalogos/expediente').set(enlace).expect(200);
+      expect(cat.body.dependencias.map((d: { nombre: string }) => d.nombre)).not.toContain('Centro de salud municipal');
+    });
+
+    it('perfil: el enlace ve sus municipios; los regionales, todos (null)', async () => {
+      expect((await http().get('/api/v1/auth/perfil').set(enlace).expect(200)).body.municipios).toEqual([{ id: 1, nombre: 'Atizapán de Zaragoza' }]);
+      const c = await http().get('/api/v1/auth/perfil').set(coord).expect(200);
+      expect(c.body).toMatchObject({ perfil: 'Coordinador regional', municipios: null });
+      expect(c.body.permisos.map((p: { permiso: string }) => p.permiso)).not.toContain('accesos.ver');
     });
   });
 
@@ -1034,6 +1258,19 @@ describeBd('API RIETI (e2e)', () => {
 
       // El trigger volvió a quedar activo.
       await expect(adminDs.query('DELETE FROM seguimiento')).rejects.toThrow(/append-only/);
+    });
+
+    it('acepta folios con clave municipal y la depuración de accesos respeta la conservación (Fase 7)', async () => {
+      const { borrarReportePorFolio } = await import('../../src/scripts/borrar-reporte');
+      const { depurarAccesos } = await import('../../src/scripts/depurar-accesos');
+      const r = await http().post('/api/v1/reportes').set('X-Forwarded-For', nuevaIp()).send({ ...reporteValido(), canal: 'app' }).expect(201);
+      expect(r.body.folio).toMatch(/^RIETI-ATZ-/);
+      await adminDs.transaction((m) => borrarReportePorFolio(m, r.body.folio));
+      const antes = Number((await adminDs.query('SELECT count(*) AS n FROM acceso_expediente'))[0].n);
+      const res = await adminDs.transaction((m) => depurarAccesos(m));
+      expect(res).toEqual({ dias: 365, borradas: 0 }); // todo es de hoy
+      expect(Number((await adminDs.query('SELECT count(*) AS n FROM acceso_expediente'))[0].n)).toBe(antes);
+      await expect(adminDs.query('DELETE FROM acceso_expediente')).rejects.toThrow(/append-only/);
     });
 
     it('si el folio no existe no cambia nada', async () => {

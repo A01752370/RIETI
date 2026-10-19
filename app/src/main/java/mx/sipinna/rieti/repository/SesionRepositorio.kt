@@ -19,14 +19,21 @@ class SesionRepositorio(private val api: ApiService = ServicioRemoto.api) {
     /** Inicia sesión y, si sale bien, deja el token listo para las siguientes peticiones. */
     suspend fun iniciarSesion(correo: String, password: String): Resultado<LoginResponse> {
         val r = ejecutar { api.login(LoginRequest(correo.trim(), password)) }
-        if (r is Resultado.Exito) ServicioRemoto.accessToken = r.datos.accessToken
+        if (r is Resultado.Exito) {
+            ServicioRemoto.accessToken = r.datos.accessToken
+            ServicioRemoto.correoPersonal = r.datos.correo
+        }
         return r
     }
 
     /** Descarta el token de la sesión actual. */
     fun cerrarSesion() {
         ServicioRemoto.accessToken = null
+        ServicioRemoto.correoPersonal = null
     }
+
+    /** Correo de la sesión (en memoria), para "Asignarme" (Fase 7). */
+    fun correo(): String? = ServicioRemoto.correoPersonal
 
     /** true si hay un token en memoria (puede estar vencido; el servidor decide). */
     fun haySesion(): Boolean = ServicioRemoto.accessToken != null

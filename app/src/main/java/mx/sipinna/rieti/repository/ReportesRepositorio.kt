@@ -8,6 +8,7 @@ import mx.sipinna.rieti.model.CambiarEstatusRequest
 import mx.sipinna.rieti.model.ConsultaPublica
 import mx.sipinna.rieti.model.ConsultaRequest
 import mx.sipinna.rieti.model.CrearReporteRequest
+import mx.sipinna.rieti.model.Embudo
 import mx.sipinna.rieti.model.Municipio
 import mx.sipinna.rieti.model.Pagina
 import mx.sipinna.rieti.model.ReporteCreado
@@ -75,28 +76,48 @@ class ReportesRepositorio(private val api: ApiService = ServicioRemoto.api) {
         prioridadAlta: Boolean,
         pendientes: Boolean,
         pagina: Int = 1,
-        tamano: Int = 50
+        tamano: Int = 50,
+        vencidos: Boolean = false
     ): Resultado<Pagina<ReporteResumen>> = ejecutar {
         // Fase 6: la bandeja de la app se ordena por prioridad (Alta primero).
         api.listarReportes(
             estatus, pagina, tamano, sinAtenderDias,
-            pendientes = if (pendientes) true else null, prioridad = if (prioridadAlta) "Alta" else null, orden = "prioridad"
+            pendientes = if (pendientes) true else null, prioridad = if (prioridadAlta) "Alta" else null, orden = "prioridad",
+            vencidos = if (vencidos) true else null
         )
     }
+
+    /** Embudo y controles del inicio (Fase 7). */
+    suspend fun embudo(): Resultado<Embudo> = ejecutar { api.embudo() }
+
+    /** Cambia campos del expediente (Fase 7); `null` borra el valor. */
+    suspend fun actualizarExpediente(id: Int, cambios: Map<String, Any?>): Resultado<ReporteDetalle> =
+        ejecutar { api.actualizarExpediente(id, cambios) }
+
+    /** Se asigna como responsable a quien tiene la sesión (Fase 7). */
+    suspend fun asignarme(id: Int, correo: String): Resultado<ReporteDetalle> =
+        when (val lista = ejecutar { api.responsables(id) }) {
+            is Resultado.Error -> lista
+            is Resultado.Exito -> lista.datos.firstOrNull { it.correo.equals(correo, ignoreCase = true) }
+                ?.let { yo -> ejecutar { api.actualizarExpediente(id, mapOf("idResponsable" to yo.id)) } }
+                ?: Resultado.Error("SIN_ACCESO", "No encontramos tu cuenta entre el personal de este municipio.")
+        }
 
     /** Detalle de un reporte para el personal. */
     suspend fun detalle(id: Int): Resultado<ReporteDetalle> = ejecutar { api.detalle(id) }
 
     /** Cambia el estatus; el servidor valida la transición. */
-    suspend fun cambiarEstatus(id: Int, estatus: String, comentario: String?, motivo: String?): Resultado<ReporteDetalle> =
+    suspend fun cambiarEstatus(id: Int, estatus: String, comentario: String?, motivo: String?, resultado: String? = null): Resultado<ReporteDetalle> =
         ejecutar {
             api.cambiarEstatus(
                 id,
-                CambiarEstatusRequest(estatus, comentario?.takeIf { it.isNotBlank() }, motivo?.takeIf { it.isNotBlank() })
+                CambiarEstatusRequest(
+                    estatus, comentario?.takeIf { it.isNotBlank() }, motivo?.takeIf { it.isNotBlank() }, resultado?.takeIf { it.isNotBlank() }
+                )
             )
         }
 
-    /** Agrega una nota de seguimiento sin cambiar el estatus. */
-    suspend fun agregarSeguimiento(id: Int, comentario: String): Resultado<ReporteDetalle> =
-        ejecutar { api.agregarSeguimiento(id, AgregarSeguimientoRequest(comentario)) }
+    /** Agrega una nota (o una acción realizada, Fase 7) sin cambiar el estatus. */
+    suspend fun agregarSeguimiento(id: Int, comentario: String, accion: Boolean = false): Resultado<ReporteDetalle> =
+        ejecutar { api.agregarSeguimiento(id, AgregarSeguimientoRequest(comentario, if (accion) "accion" else null)) }
 }

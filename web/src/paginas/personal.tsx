@@ -1,7 +1,7 @@
 import { FormEvent, lazy, ReactNode, RefObject, Suspense, useEffect, useRef, useState } from 'react';
 import {
-  api, ConteoProtegido, descargarCsv, DireccionRespuesta, EventoBitacora, fijarSesion, FiltrosBandeja, FiltrosPanel, GrupoMenores,
-  Municipio, ReporteDetalle, TiempoHito,
+  api, CambiosExpediente, ConteoProtegido, descargarCsv, DireccionRespuesta, Embudo, EventoBitacora, Expediente, fijarSesion, FiltrosBandeja,
+  FiltrosPanel, GrupoMenores, Municipio, obtenerSesion, ReporteDetalle, ReporteRelacionado, TiempoHito, TipoEvento,
 } from '../api';
 import { Esqueleto, Marco, MensajeError, useCarga, useSesion, Vacio } from '../componentes';
 import { Enlace, navegar, useTitulo } from '../enrutador';
@@ -22,7 +22,7 @@ function Acceso() {
     try {
       const r = await api.login(correo.trim(), password);
       setPassword('');
-      fijarSesion({ token: r.accessToken, correo: r.correo });
+      fijarSesion({ token: r.accessToken, correo: r.correo, esAdministrador: r.esAdministrador === true });
     } catch (err) { setError(err); } finally { setEnviando(false); }
   };
 
@@ -45,7 +45,7 @@ function Acceso() {
 }
 
 /** Envuelve las páginas del personal: si no hay sesión, muestra el acceso. */
-function ConSesion({ titulo, children }: { titulo: string; children: ReactNode }) {
+export function ConSesion({ titulo, children }: { titulo: string; children: ReactNode }) {
   useTitulo(titulo);
   const sesion = useSesion();
   return <Marco personal>{sesion ? children : <Acceso />}</Marco>;
@@ -68,6 +68,7 @@ export function filtrosDesdeUrl(search: string): FiltrosUrl {
     estatus: texto('estatus'), municipioId: entero('municipioId'), actividad: texto('actividad'),
     desde: texto('desde'), hasta: texto('hasta'), folio: texto('folio'), sinAtenderDias: entero('sinAtenderDias'),
     riesgo: texto('riesgo'), pendientes: q.get('pendientes') === 'true' || undefined, prioridad: texto('prioridad'),
+    vencidos: q.get('vencidos') === 'true' || undefined, verificacion: texto('verificacion'),
     // Fase 6: por omisión la bandeja se ordena por prioridad (Alta primero).
     orden: q.get('orden') === 'antiguos' ? 'antiguos' : q.get('orden') === 'recientes' ? 'recientes' : 'prioridad', pagina: entero('pagina') ?? 1,
   };
@@ -80,6 +81,7 @@ export function urlDeFiltros(f: FiltrosUrl): string {
   poner('estatus', f.estatus); poner('municipioId', f.municipioId); poner('actividad', f.actividad);
   poner('desde', f.desde); poner('hasta', f.hasta); poner('folio', f.folio); poner('sinAtenderDias', f.sinAtenderDias);
   poner('riesgo', f.riesgo); poner('pendientes', f.pendientes); poner('prioridad', f.prioridad);
+  poner('vencidos', f.vencidos); poner('verificacion', f.verificacion);
   if (f.orden && f.orden !== 'prioridad') poner('orden', f.orden);
   if (f.pagina > 1) poner('pagina', f.pagina);
   const s = p.toString();
@@ -112,15 +114,64 @@ export function transcurrido(desdeIso: string, ahora: Date = new Date()): string
 }
 
 /** Clase del evento; si el servidor es anterior a la Fase 5 se calcula con la misma regla que el servidor. */
-export function tipoEvento(historial: EventoBitacora[], i: number): 'registro' | 'cambio' | 'nota' {
+export function tipoEvento(historial: EventoBitacora[], i: number): TipoEvento {
   return historial[i].tipo ?? (i === 0 ? 'registro' : historial[i].estatus !== historial[i - 1].estatus ? 'cambio' : 'nota');
 }
 
 /** Fecha en que el caso entró a su estatus vigente (del servidor o calculada con la bitácora). */
 export function fechaEstatusActual(r: ReporteDetalle): string {
   if (r.fechaEstatusActual) return r.fechaEstatusActual;
-  for (let i = r.historial.length - 1; i >= 0; i--) if (tipoEvento(r.historial, i) !== 'nota') return r.historial[i].fecha;
+  for (let i = r.historial.length - 1; i >= 0; i--) if (esCambio(tipoEvento(r.historial, i))) return r.historial[i].fecha;
   return r.fechaCreacion;
+}
+
+/** ¿El evento movió el estatus? (las notas, acciones y cambios de expediente no). */
+export const esCambio = (t: TipoEvento): boolean => t === 'registro' || t === 'cambio';
+
+/** Fecha `AAAA-MM-DD` de hoy en la Ciudad de México. */
+export function hoyMx(ahora: Date = new Date()): string {
+  return ahora.toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
+}
+
+/** "15 ene 2026" a partir de `AAAA-MM-DD` (sin desfase de zona horaria). */
+export function fechaCorta(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const [a, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(a, m - 1, d).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/**
+ * Diferencia entre el expediente actual y el formulario: solo lo que cambió, con `null`
+ * para borrar. Pura (probada): así no se escribe en la bitácora un cambio que no existe.
+ */
+export function cambiosExpediente(e: Expediente, f: FormularioExpediente): CambiosExpediente {
+  const c: CambiosExpediente = {};
+  const num = (v: string): number | null => (v === '' ? null : Number(v));
+  if (num(f.idResponsable) !== (e.responsable?.id ?? null)) c.idResponsable = num(f.idResponsable);
+  if (num(f.idDependencia) !== (e.dependencia?.id ?? null)) c.idDependencia = num(f.idDependencia);
+  if (num(f.idModalidad) !== (e.modalidad?.id ?? null)) c.idModalidad = num(f.idModalidad);
+  if ((f.fechaSeguimiento || null) !== e.fechaSeguimiento) c.fechaSeguimiento = f.fechaSeguimiento || null;
+  if (f.verificacion !== e.verificacion) c.verificacion = f.verificacion;
+  for (const k of ['nnaIdentificados', 'nnaCanalizados', 'nnaNinas', 'nnaNinos'] as const) {
+    if (num(f[k]) !== e[k]) c[k] = num(f[k]);
+  }
+  return c;
+}
+
+/** Valores del formulario del expediente (texto, como los controles). */
+export interface FormularioExpediente {
+  idResponsable: string; idDependencia: string; idModalidad: string; fechaSeguimiento: string; verificacion: string;
+  nnaIdentificados: string; nnaCanalizados: string; nnaNinas: string; nnaNinos: string;
+}
+
+/** Formulario inicial a partir del expediente. */
+export function formularioDe(e: Expediente): FormularioExpediente {
+  const t = (v: number | null | undefined) => (v === null || v === undefined ? '' : String(v));
+  return {
+    idResponsable: t(e.responsable?.id), idDependencia: t(e.dependencia?.id), idModalidad: t(e.modalidad?.id),
+    fechaSeguimiento: e.fechaSeguimiento ?? '', verificacion: e.verificacion,
+    nnaIdentificados: t(e.nnaIdentificados), nnaCanalizados: t(e.nnaCanalizados), nnaNinas: t(e.nnaNinas), nnaNinos: t(e.nnaNinos),
+  };
 }
 
 /** Texto de un tiempo hasta un hito; con pocos casos dice "datos insuficientes" en lugar de un promedio engañoso. */
@@ -153,7 +204,8 @@ function ContenidoBandeja() {
   /** Cambia un filtro y regresa a la primera página. */
   const fijar = (cambio: Partial<FiltrosUrl>) => setF((x) => ({ ...x, ...cambio, pagina: cambio.pagina ?? 1 }));
   const municipio = municipios.datos?.find((m) => m.id === f.municipioId) ?? null;
-  const hayFiltros = Boolean(f.estatus || f.municipioId || f.actividad || f.desde || f.hasta || f.folio || f.sinAtenderDias || f.riesgo || f.pendientes || f.prioridad);
+  const hayFiltros = Boolean(f.estatus || f.municipioId || f.actividad || f.desde || f.hasta || f.folio || f.sinAtenderDias || f.riesgo
+    || f.pendientes || f.prioridad || f.vencidos || f.verificacion);
 
   const exportar = async () => {
     setExportando(true); setErrorExportar(null);
@@ -227,9 +279,20 @@ function ContenidoBandeja() {
             <option value="antiguos">Más antiguos primero</option>
           </select>
         </div>
+        <div className="campo">
+          <label htmlFor="filtro-verificacion">Verificación</label>
+          <select id="filtro-verificacion" value={f.verificacion ?? ''} onChange={(e) => fijar({ verificacion: e.target.value || undefined })}>
+            <option value="">Todas</option>
+            {VERIFICACIONES.map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
         <label className="opcion">
           <input type="checkbox" checked={Boolean(f.pendientes)} onChange={(e) => fijar({ pendientes: e.target.checked || undefined })} />
-          <span>Solo pendientes (Recibido o En revisión)</span>
+          <span>Solo pendientes (registrados, en revisión o reincidentes)</span>
+        </label>
+        <label className="opcion">
+          <input type="checkbox" checked={Boolean(f.vencidos)} onChange={(e) => fijar({ vencidos: e.target.checked || undefined })} />
+          <span>Solo con fecha de seguimiento vencida</span>
         </label>
         <div className="acciones">
           {hayFiltros && (
@@ -261,6 +324,9 @@ function ContenidoBandeja() {
                         <span className="insignias">
                           {r.prioridad === 'Alta' && <span className="insignia-prioridad">Prioridad alta</span>}
                           {r.situacionRiesgo === 'Sí' && <span className="insignia-riesgo">Riesgo percibido</span>}
+                          {r.seguimientoVencido && <span className="insignia-vencido">Seguimiento vencido</span>}
+                          {r.esDuplicado && <span className="insignia-neutra">Posible duplicado</span>}
+                          {r.verificacion && r.verificacion !== 'Sin verificar' && <span className="insignia-neutra">{r.verificacion}</span>}
                         </span>
                       </div>
                     </Enlace>
@@ -303,7 +369,10 @@ function Acciones({ r, alGuardar, refNota }: { r: ReporteDetalle; alGuardar: (d:
   const [destino, setDestino] = useState('');
   const [comentario, setComentario] = useState('');
   const [motivo, setMotivo] = useState('');
+  const [resultado, setResultado] = useState('');
   const [nota, setNota] = useState('');
+  const [tipoNota, setTipoNota] = useState<'nota' | 'accion'>('nota');
+  const [tipoAccion, setTipoAccion] = useState(TIPOS_ACCION[0]);
   const [error, setError] = useState<unknown>(null);
   const [enviando, setEnviando] = useState(false);
   // Fase 6: marcar un caso como Reincidente exige comentario (el servidor lo vuelve a validar).
@@ -315,14 +384,17 @@ function Acciones({ r, alGuardar, refNota }: { r: ReporteDetalle; alGuardar: (d:
   };
   const cambiar = (e: FormEvent) => {
     e.preventDefault();
-    void ejecutar(() => api.cambiarEstatus(r.id, destino, comentario, motivo), `Estatus cambiado a “${etiquetaEstatus(destino)}”.`,
-      () => { setDestino(''); setComentario(''); setMotivo(''); });
+    void ejecutar(() => api.cambiarEstatus(r.id, destino, comentario, motivo, concluir ? resultado.trim() : undefined),
+      `Estatus cambiado a “${etiquetaEstatus(destino)}”.`, () => { setDestino(''); setComentario(''); setMotivo(''); setResultado(''); });
   };
   const guardarNota = (e: FormEvent) => {
     e.preventDefault();
-    void ejecutar(() => api.agregarNota(r.id, nota.trim()), 'Nota agregada.', () => setNota(''));
+    const texto = tipoNota === 'accion' ? `${tipoAccion}: ${nota.trim()}` : nota.trim();
+    void ejecutar(() => api.agregarNota(r.id, texto, tipoNota), tipoNota === 'accion' ? 'Acción registrada.' : 'Nota agregada.', () => setNota(''));
   };
-  const faltaDato = (destino === 'Descartado' && !motivo.trim()) || (reabrir && !comentario.trim());
+  // Fase 7: al concluir se exige el resultado (el servidor lo vuelve a validar).
+  const concluir = destino === 'Concluido';
+  const faltaDato = (destino === 'Descartado' && !motivo.trim()) || (reabrir && !comentario.trim()) || (concluir && !resultado.trim());
 
   return (
     <section className="tarjeta no-imprimir" aria-labelledby="titulo-acciones">
@@ -350,6 +422,13 @@ function Acciones({ r, alGuardar, refNota }: { r: ReporteDetalle; alGuardar: (d:
               <input id="motivo" type="text" maxLength={500} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
             </div>
           )}
+          {concluir && (
+            <div className="campo">
+              <label htmlFor="resultado">Resultado del caso (obligatorio)</label>
+              <span id="ayuda-resultado" className="ayuda">Qué se logró o en qué terminó la atención. Solo lo ve el personal.</span>
+              <textarea id="resultado" maxLength={1000} value={resultado} aria-describedby="ayuda-resultado" onChange={(e) => setResultado(e.target.value)} />
+            </div>
+          )}
           <div className="campo">
             <label htmlFor="comentario">{reabrir ? 'Comentario: por qué volvió a requerir atención (obligatorio)' : 'Comentario del cambio (opcional)'}</label>
             <textarea id="comentario" maxLength={2000} value={comentario} onChange={(e) => setComentario(e.target.value)} />
@@ -361,12 +440,27 @@ function Acciones({ r, alGuardar, refNota }: { r: ReporteDetalle; alGuardar: (d:
         </form>
       )}
       <form onSubmit={guardarNota} noValidate className="formulario-nota">
+        <fieldset className="grupo-opciones">
+          <legend>Registrar en la bitácora</legend>
+          <label className="opcion"><input type="radio" name="tipo-nota" checked={tipoNota === 'nota'} onChange={() => setTipoNota('nota')} /><span>Nota interna</span></label>
+          <label className="opcion"><input type="radio" name="tipo-nota" checked={tipoNota === 'accion'} onChange={() => setTipoNota('accion')} /><span>Acción realizada</span></label>
+        </fieldset>
+        {tipoNota === 'accion' && (
+          <div className="campo">
+            <label htmlFor="tipo-accion">Tipo de acción</label>
+            <select id="tipo-accion" value={tipoAccion} onChange={(e) => setTipoAccion(e.target.value)}>
+              {TIPOS_ACCION.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        )}
         <div className="campo">
-          <label htmlFor="nota">Nota interna</label>
+          <label htmlFor="nota">{tipoNota === 'accion' ? 'Qué se hizo' : 'Nota interna'}</label>
           <span id="ayuda-nota" className="ayuda">Solo la ve el personal. No cambia el estatus.</span>
-          <textarea id="nota" ref={refNota} maxLength={2000} value={nota} aria-describedby="ayuda-nota" onChange={(e) => setNota(e.target.value)} />
+          <textarea id="nota" ref={refNota} maxLength={1900} value={nota} aria-describedby="ayuda-nota" onChange={(e) => setNota(e.target.value)} />
         </div>
-        <button type="submit" className="boton boton-secundario" disabled={enviando || !nota.trim()}>{enviando ? 'Guardando…' : 'Agregar nota'}</button>
+        <button type="submit" className="boton boton-secundario" disabled={enviando || !nota.trim()}>
+          {enviando ? 'Guardando…' : tipoNota === 'accion' ? 'Registrar acción' : 'Agregar nota'}
+        </button>
       </form>
       {!!error && <MensajeError error={error} />}
     </section>
@@ -396,6 +490,192 @@ export function BarrasMenores({ grupos }: { grupos: GrupoMenores[] }) {
   );
 }
 
+/** Título de cada tipo de evento (el cambio de estatus se arma con el estatus). */
+const TITULO_EVENTO: Partial<Record<TipoEvento, string>> = {
+  registro: 'Reporte recibido', nota: 'Nota interna', accion: 'Acción realizada', expediente: 'Cambio en el expediente',
+};
+
+/** Verificación del expediente (Fase 7). */
+export const VERIFICACIONES = ['Sin verificar', 'Verificado', 'Caso confirmado', 'No procede'];
+/** Tipos de acción sugeridos; el servidor manda los vigentes en el catálogo del expediente. */
+const TIPOS_ACCION = ['Visita', 'Llamada', 'Entrevista', 'Canalización', 'Coordinación interinstitucional', 'Otra'];
+
+/**
+ * Expediente interno (Fase 7): responsable, dependencia, seguimiento, verificación,
+ * modalidad y conteos de NNA. Solo se envía lo que cambió y el servidor lo deja en la bitácora.
+ */
+function TarjetaExpediente({ r, alGuardar }: { r: ReporteDetalle; alGuardar: (d: ReporteDetalle, mensaje: string) => void }) {
+  const e = r.expediente!;
+  const [editando, setEditando] = useState(false);
+  const [f, setF] = useState<FormularioExpediente>(() => formularioDe(e));
+  const [error, setError] = useState<unknown>(null);
+  const [enviando, setEnviando] = useState(false);
+  const catalogos = useCarga(() => (editando ? api.catalogosExpediente() : Promise.resolve(null)), [editando]);
+  const responsables = useCarga(() => (editando ? api.responsables(r.id) : Promise.resolve(null)), [editando, r.id]);
+  useEffect(() => { setF(formularioDe(e)); }, [r]);
+  const cambios = cambiosExpediente(e, f);
+  const hayCambios = Object.keys(cambios).length > 0;
+  const poner = (k: keyof FormularioExpediente) => (ev: { target: { value: string } }) => setF((x) => ({ ...x, [k]: ev.target.value }));
+
+  const guardar = async (ev: FormEvent) => {
+    ev.preventDefault();
+    setEnviando(true); setError(null);
+    try { alGuardar(await api.actualizarExpediente(r.id, cambios), 'Expediente actualizado.'); setEditando(false); }
+    catch (err) { setError(err); } finally { setEnviando(false); }
+  };
+  const asignarme = async () => {
+    setEnviando(true); setError(null);
+    try {
+      const yo = (await api.responsables(r.id)).find((p) => p.correo === obtenerSesion()?.correo);
+      if (!yo) throw new Error('No encontramos tu cuenta entre el personal de este municipio.');
+      alGuardar(await api.actualizarExpediente(r.id, { idResponsable: yo.id }), 'Ahora eres responsable del caso.');
+    } catch (err) { setError(err); } finally { setEnviando(false); }
+  };
+  const conteo = (v: number | null) => (v === null ? '—' : String(v));
+
+  return (
+    <section className="tarjeta" aria-labelledby="t-expediente">
+      <div className="fila-titulo">
+        <h2 id="t-expediente">Expediente</h2>
+        {!editando && <button type="button" className="boton-texto no-imprimir" onClick={() => setEditando(true)}>Editar</button>}
+      </div>
+      {!editando ? (
+        <>
+          <dl>
+            <dt>Responsable</dt><dd>{e.responsable?.correo ?? 'Sin asignar'}</dd>
+            <dt>Verificación</dt><dd>{e.verificacion}</dd>
+            <dt>Dependencia</dt><dd>{e.dependencia?.nombre ?? '—'}</dd>
+            <dt>Próximo seguimiento</dt>
+            <dd>{fechaCorta(e.fechaSeguimiento)}{e.seguimientoVencido && <> <span className="insignia-vencido">Vencido</span></>}</dd>
+            <dt>Modalidad</dt><dd>{e.modalidad?.nombre ?? '—'}</dd>
+            <dt>NNA identificados / canalizados</dt><dd>{conteo(e.nnaIdentificados)} / {conteo(e.nnaCanalizados)}</dd>
+            {(e.nnaNinas !== null || e.nnaNinos !== null) && (<><dt>Niñas / niños</dt><dd>{conteo(e.nnaNinas)} / {conteo(e.nnaNinos)}</dd></>)}
+            {e.resultado && (<><dt>Resultado</dt><dd className="texto-largo">{e.resultado}</dd></>)}
+            {e.fechaCierre && (<><dt>Cierre</dt><dd>{formatearFecha(e.fechaCierre)}</dd></>)}
+          </dl>
+          {!e.responsable && (
+            <button type="button" className="boton boton-secundario no-imprimir" onClick={asignarme} disabled={enviando}>Asignarme este caso</button>
+          )}
+        </>
+      ) : (
+        <form onSubmit={guardar} noValidate className="formulario-expediente">
+          {(catalogos.cargando || responsables.cargando) && <Esqueleto filas={2} />}
+          <div className="campo">
+            <label htmlFor="exp-responsable">Responsable</label>
+            <select id="exp-responsable" value={f.idResponsable} onChange={poner('idResponsable')}>
+              <option value="">Sin asignar</option>
+              {e.responsable && !responsables.datos?.some((p) => p.id === e.responsable!.id) && <option value={e.responsable.id}>{e.responsable.correo}</option>}
+              {responsables.datos?.map((p) => <option key={p.id} value={p.id}>{p.correo} ({p.perfil})</option>)}
+            </select>
+          </div>
+          <div className="campo">
+            <label htmlFor="exp-verificacion">Verificación</label>
+            <select id="exp-verificacion" value={f.verificacion} onChange={poner('verificacion')}>
+              {(catalogos.datos?.verificaciones ?? VERIFICACIONES).map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+          <div className="campo">
+            <label htmlFor="exp-dependencia">Dependencia a la que se canalizó</label>
+            <select id="exp-dependencia" value={f.idDependencia} onChange={poner('idDependencia')}>
+              <option value="">Ninguna</option>
+              {e.dependencia && !catalogos.datos?.dependencias.some((d) => d.id === e.dependencia!.id) && <option value={e.dependencia.id}>{e.dependencia.nombre}</option>}
+              {catalogos.datos?.dependencias.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+            </select>
+          </div>
+          <div className="campo">
+            <label htmlFor="exp-fecha">Próxima fecha de seguimiento</label>
+            <input id="exp-fecha" type="date" value={f.fechaSeguimiento} onChange={poner('fechaSeguimiento')} />
+          </div>
+          <div className="campo">
+            <label htmlFor="exp-modalidad">Modalidad (la asigna el personal)</label>
+            <select id="exp-modalidad" value={f.idModalidad} onChange={poner('idModalidad')}>
+              <option value="">Sin determinar</option>
+              {catalogos.datos?.modalidades.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+            </select>
+          </div>
+          <div className="rejilla-conteos">
+            {([['nnaIdentificados', 'NNA identificados'], ['nnaCanalizados', 'NNA canalizados'], ['nnaNinas', 'Niñas'], ['nnaNinos', 'Niños']] as const).map(([k, t]) => (
+              <div className="campo" key={k}>
+                <label htmlFor={`exp-${k}`}>{t}</label>
+                <input id={`exp-${k}`} type="number" inputMode="numeric" min={0} max={99} value={f[k]} onChange={poner(k)} />
+              </div>
+            ))}
+          </div>
+          <p className="ayuda">El sexo es opcional, lo captura solo el personal y únicamente se usa en conteos agregados.</p>
+          {!!error && <MensajeError error={error} />}
+          <div className="acciones">
+            <button type="submit" className="boton" disabled={enviando || !hayCambios}>{enviando ? 'Guardando…' : 'Guardar expediente'}</button>
+            <button type="button" className="boton boton-secundario" onClick={() => { setEditando(false); setF(formularioDe(e)); setError(null); }}>Cancelar</button>
+          </div>
+        </form>
+      )}
+      {!editando && !!error && <MensajeError error={error} />}
+    </section>
+  );
+}
+
+/**
+ * Posible duplicidad (Fase 7): sugerencias del servidor por radio y ventana de días,
+ * vínculo manual y reversible. Nunca se fusiona ni se borra un reporte.
+ */
+function TarjetaDuplicados({ r, alGuardar }: { r: ReporteDetalle; alGuardar: (d: ReporteDetalle, mensaje: string) => void }) {
+  const [buscar, setBuscar] = useState(false);
+  const cercanos = useCarga(() => (buscar ? api.cercanos(r.id) : Promise.resolve(null)), [buscar, r.id]);
+  const [error, setError] = useState<unknown>(null);
+  const [enviando, setEnviando] = useState(false);
+  const ejecutar = async (accion: () => Promise<ReporteDetalle>, mensaje: string) => {
+    setEnviando(true); setError(null);
+    try { alGuardar(await accion(), mensaje); setBuscar(false); } catch (err) { setError(err); } finally { setEnviando(false); }
+  };
+  const fila = (x: ReporteRelacionado) => (
+    <><Enlace a={`/personal/reportes/${x.id}`}>{x.folio}</Enlace> · {x.estatusEtiqueta} · {formatearFecha(x.fechaCreacion)}{x.distanciaMetros !== undefined && ` · a ${x.distanciaMetros} m`}</>
+  );
+  const duplicados = r.duplicados ?? [];
+
+  return (
+    <section className="tarjeta no-imprimir" aria-labelledby="t-duplicados">
+      <h2 id="t-duplicados">Posible duplicidad</h2>
+      {r.duplicadoDe ? (
+        <>
+          <p>Marcado como posible duplicado de {fila(r.duplicadoDe)}.</p>
+          <button type="button" className="boton boton-secundario" disabled={enviando}
+            onClick={() => ejecutar(() => api.desvincularDuplicado(r.id), 'Se quitó el vínculo de duplicado.')}>Quitar vínculo</button>
+        </>
+      ) : duplicados.length > 0 ? (
+        <>
+          <p>Reportes marcados como posibles duplicados de este:</p>
+          <ul>{duplicados.map((d) => <li key={d.id}>{fila(d)}</li>)}</ul>
+        </>
+      ) : (
+        <p className="pequeno texto-secundario">Se sugieren reportes cercanos del mismo municipio. Marcar un duplicado no borra ni fusiona nada y se puede deshacer.</p>
+      )}
+      {!r.duplicadoDe && duplicados.length === 0 && !buscar && (
+        <button type="button" className="boton boton-secundario" onClick={() => setBuscar(true)}>Buscar posibles duplicados</button>
+      )}
+      {buscar && cercanos.cargando && <Esqueleto filas={2} />}
+      {buscar && !!cercanos.error && <MensajeError error={cercanos.error} alReintentar={cercanos.recargar} />}
+      {buscar && cercanos.datos && (
+        cercanos.datos.length === 0
+          ? <Vacio>No hay reportes cercanos en el radio y la ventana configurados.</Vacio>
+          : (
+            <ul className="lista-cercanos">
+              {cercanos.datos.map((c) => (
+                <li key={c.id}>
+                  <span>{fila(c)}</span>
+                  <button type="button" className="boton-texto" disabled={enviando}
+                    onClick={() => ejecutar(() => api.vincularDuplicado(r.id, c.id), `Marcado como posible duplicado de ${c.folio}.`)}>
+                    Este reporte es duplicado de {c.folio}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )
+      )}
+      {!!error && <MensajeError error={error} />}
+    </section>
+  );
+}
+
 /** Bitácora como línea de tiempo vertical, lo más reciente arriba, distinguiendo registro, cambio de estatus y nota. */
 function Bitacora({ historial }: { historial: EventoBitacora[] }) {
   const eventos = historial.map((h, i) => ({ ...h, tipo: tipoEvento(historial, i) })).reverse();
@@ -405,11 +685,11 @@ function Bitacora({ historial }: { historial: EventoBitacora[] }) {
       <ol className="bitacora">
         {eventos.map((h, i) => (
           <li key={i} className={`evento evento-${h.tipo}`}>
-            <span className={h.tipo === 'nota' ? 'marca marca-nota' : `marca relleno-fondo-${claseEstatus(h.estatus)}`} aria-hidden="true">
-              {h.tipo === 'nota' ? '✎' : <IconoEstatus estatus={h.estatus} tamano={16} />}
+            <span className={esCambio(h.tipo) ? `marca relleno-fondo-${claseEstatus(h.estatus)}` : `marca marca-${h.tipo}`} aria-hidden="true">
+              {h.tipo === 'nota' ? '✎' : h.tipo === 'accion' ? '✓' : h.tipo === 'expediente' ? '≡' : <IconoEstatus estatus={h.estatus} tamano={16} />}
             </span>
             <div>
-              <strong>{h.tipo === 'registro' ? 'Reporte recibido' : h.tipo === 'cambio' ? `Cambio de estatus a “${etiquetaEstatus(h.estatus)}”` : 'Nota interna'}</strong>
+              <strong>{TITULO_EVENTO[h.tipo] ?? `Cambio de estatus a “${etiquetaEstatus(h.estatus)}”`}</strong>
               <span className="pequeno texto-secundario"> {formatearFecha(h.fecha)}<span className="no-imprimir"> · {h.autor ?? 'Registro automático'}</span></span>
               {h.comentario && <p className="texto-largo">{h.comentario}</p>}
             </div>
@@ -454,7 +734,7 @@ function ContenidoDetalle({ id }: { id: number }) {
 
   const desdeAlta = transcurrido(r.fechaCreacion);
   const enEstatus = transcurrido(fechaEstatusActual(r));
-  const cambios = r.historial.filter((_, i) => tipoEvento(r.historial, i) !== 'nota');
+  const cambios = r.historial.filter((_, i) => esCambio(tipoEvento(r.historial, i)));
   const grupos = r.grupos?.length ? r.grupos : [{ rango: r.edadAproximada, cantidad: r.cantidadNinos }];
   const direccion = textoDireccion(r.direccion);
   const larga = r.descripcion.length > DESCRIPCION_CORTA;
@@ -484,6 +764,8 @@ function ContenidoDetalle({ id }: { id: number }) {
           <EtiquetaEstatus estatus={r.estatus} />
           {r.prioridad === 'Alta' && <span className="insignia-prioridad">Prioridad alta</span>}
           {r.situacionRiesgo === 'Sí' && <span className="insignia-riesgo">Riesgo percibido</span>}
+          {r.expediente?.seguimientoVencido && <span className="insignia-vencido">Seguimiento vencido</span>}
+          {r.duplicadoDe && <span className="insignia-neutra">Posible duplicado</span>}
         </div>
         <p><strong>{r.municipio ?? 'Municipio no indicado'}</strong></p>
         <p className="pequeno">Alta: {formatearFecha(r.fechaCreacion)}{desdeAlta && ` · hace ${desdeAlta}`}</p>
@@ -542,6 +824,8 @@ function ContenidoDetalle({ id }: { id: number }) {
             <LineaProgreso linea={calcularLinea(r.estatus, cambios, r.fechaCreacion)} conSignificado={false} titulo="Avance del caso" />
           </section>
           <Acciones r={r} refNota={refNota} alGuardar={(d, m) => { setActual(d); setMensaje(m); }} />
+          {r.expediente && <TarjetaExpediente r={r} alGuardar={(d, m) => { setActual(d); setMensaje(m); }} />}
+          {r.expediente && <TarjetaDuplicados r={r} alGuardar={(d, m) => { setActual(d); setMensaje(m); }} />}
           <Bitacora historial={r.historial} />
           <details className="pequeno no-imprimir">
             <summary>Atajos de teclado</summary>
@@ -711,6 +995,8 @@ function ContenidoPanel() {
   const f: FiltrosPanel = { desde: desde || undefined, hasta: hasta || undefined, municipioId: municipio?.id, estatus: estatus || undefined, actividad: actividad || undefined };
   const clave = JSON.stringify(f);
   const datos = useCarga(() => Promise.all([api.estadisticas(f), api.distribuciones(f), api.tiempos(f), api.mapaCalor(f)]), [clave]);
+  // Fase 7: embudo de atención (un servidor anterior responde 404 y el panel sigue sin él).
+  const embudo = useCarga(() => api.embudo(f).catch(() => null), [clave]);
   const sinAtender = useCarga(() => api.sinAtender({ ...f, dias }), [clave, dias]);
   const hayFiltros = Boolean(desde || hasta || municipio || estatus || actividad);
   const filtrosBandeja = (extra: Partial<FiltrosUrl>) => `/personal${urlDeFiltros({ ...f, orden: 'prioridad', pagina: 1, ...extra })}`;
@@ -781,6 +1067,7 @@ function ContenidoPanel() {
                 <Cifra valor={d.nuevosUltimos7Dias} titulo="Nuevos en los últimos 7 días" ayuda={`${d.total} reporte(s) en total con estos filtros.`} />
               </div>
             </section>
+            {embudo.datos && <SeccionEmbudo e={embudo.datos} enlaceBandeja={filtrosBandeja} />}
             {d.sinMunicipio > 0 && <p className="pequeno texto-secundario">{d.sinMunicipio} reporte(s) no indican municipio (se enviaron antes del selector de municipios).</p>}
 
             <section aria-labelledby="t-tiempos">
@@ -851,6 +1138,43 @@ function ContenidoPanel() {
   );
 }
 
+/** Pasos del embudo con su porcentaje respecto del paso anterior (pura, probada). */
+export function pasosEmbudo(e: Embudo): { titulo: string; valor: number; porcentaje: number | null; ayuda: string }[] {
+  const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : null);
+  return [
+    { titulo: 'Reportes recibidos', valor: e.recibidos, porcentaje: null, ayuda: `Sin contar ${e.duplicadosDescontados} posible(s) duplicado(s).` },
+    { titulo: 'Verificados', valor: e.verificados, porcentaje: pct(e.verificados, e.recibidos), ayuda: 'Verificación “Verificado” o “Caso confirmado”.' },
+    { titulo: 'Casos identificados', valor: e.casosIdentificados, porcentaje: pct(e.casosIdentificados, e.verificados), ayuda: 'Verificación “Caso confirmado”.' },
+    { titulo: 'NNA canalizados', valor: e.nnaCanalizados, porcentaje: null, ayuda: `De ${e.nnaIdentificados} NNA identificados que capturó el personal.` },
+  ];
+}
+
+/** Embudo de atención y controles del expediente (Fase 7). Solo conteos. */
+function SeccionEmbudo({ e, enlaceBandeja }: { e: Embudo; enlaceBandeja: (extra: Partial<FiltrosUrl>) => string }) {
+  return (
+    <section aria-labelledby="t-embudo">
+      <h2 id="t-embudo">Embudo de atención</h2>
+      <ol className="embudo">
+        {pasosEmbudo(e).map((p) => (
+          <li key={p.titulo} className="tarjeta tarjeta-cifra">
+            <span className="cifra">{p.valor}</span>
+            <p className="titulo-cifra">{p.titulo}</p>
+            {p.porcentaje !== null && <p className="pequeno">{p.porcentaje}% del paso anterior</p>}
+            <p className="pequeno texto-secundario">{p.ayuda}</p>
+          </li>
+        ))}
+      </ol>
+      <div className="tarjetas-cifras">
+        <Cifra valor={e.seguimientosVencidos} titulo="Seguimientos vencidos" destacada={e.seguimientosVencidos > 0}
+          ayuda="Casos abiertos cuya fecha de seguimiento ya pasó." enlace={enlaceBandeja({ vencidos: true })} />
+        <Cifra valor={e.alertasAbiertas} titulo="Alertas de punto recurrente" destacada={e.alertasAbiertas > 0} ayuda="Varios reportes cerca en poco tiempo.">
+          <Enlace a="/personal/alertas">Ver alertas</Enlace>
+        </Cifra>
+      </div>
+    </section>
+  );
+}
+
 /** Página del panel. */
 export function Panel() {
   return <ConSesion titulo="Panel"><ContenidoPanel /></ConSesion>;
@@ -867,6 +1191,9 @@ function ContenidoPerfil() {
       <h1>Mi perfil</h1>
       <p><strong>{p.correo}</strong></p>
       <p>Perfil: <strong>{p.perfil}</strong></p>
+      {p.municipios !== undefined && (
+        <p>Municipios que atiendes: <strong>{p.municipios === null ? 'todos los municipios participantes' : p.municipios.length === 0 ? 'ninguno asignado (pide a la administración que te asigne)' : p.municipios.map((m) => m.nombre).join(', ')}</strong></p>
+      )}
       <h2>Lo que puedes hacer</h2>
       <ul>{p.permisos.map((x) => <li key={x.permiso}>{x.descripcion}</li>)}</ul>
       <p className="pequeno texto-secundario">Los permisos de cada perfil están descritos en la matriz de roles y permisos del proyecto.</p>

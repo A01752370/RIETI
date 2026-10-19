@@ -3,19 +3,26 @@ import { applyDecorators, SetMetadata } from '@nestjs/common';
 /** Grupos de Cognito → nombre del rol en la tabla `rol_usuario`. */
 export const GRUPO_A_ROL: Record<string, string> = {
   Administrador: 'Administrador',
+  CoordinadorRegional: 'Coordinador regional',
   PersonalSIPINNA: 'Personal SIPINNA',
 };
+
+/**
+ * Grupos que ven **todos** los municipios participantes (Fase 7). El resto del personal
+ * (enlace municipal) solo ve los municipios que tiene asignados en `asignacion_municipio`.
+ */
+export const GRUPOS_REGIONALES = ['Administrador', 'CoordinadorRegional'];
 
 /** Grupos de Cognito que corresponden a personal SIPINNA. */
 export const GRUPOS_PERSONAL = Object.keys(GRUPO_A_ROL);
 
 /**
- * Nombre del perfil que ve la persona (D-18). Hoy el grupo `PersonalSIPINNA`
- * corresponde al perfil "Enlace municipal"; "Coordinador" está planeado y no
- * tiene grupo en Cognito (ver docs/seguridad/roles-y-permisos.md).
+ * Nombre del perfil que ve la persona (D-18, Fase 7): el grupo `PersonalSIPINNA` es el
+ * "Enlace municipal" (solo sus municipios) y `CoordinadorRegional` ve todos los municipios.
  */
 export const GRUPO_A_PERFIL: Record<string, string> = {
   Administrador: 'Administrador',
+  CoordinadorRegional: 'Coordinador regional',
   PersonalSIPINNA: 'Enlace municipal',
 };
 
@@ -26,7 +33,13 @@ export type Permiso =
   | 'reportes.exportar'
   | 'estadisticas.ver'
   | 'red.editar'
-  | 'perfil.ver';
+  | 'perfil.ver'
+  | 'expediente.editar'
+  | 'alertas.ver'
+  | 'alertas.gestionar'
+  | 'personal.administrar'
+  | 'configuracion.editar'
+  | 'accesos.ver';
 
 /**
  * Matriz de permisos (D-18): qué grupos de Cognito pueden ejecutar cada acción.
@@ -34,12 +47,18 @@ export type Permiso =
  * y `test/rutas-protegidas.spec.ts` verifica que cada ruta use el permiso esperado.
  */
 export const MATRIZ_PERMISOS: Readonly<Record<Permiso, readonly string[]>> = {
-  'reportes.ver': ['Administrador', 'PersonalSIPINNA'],
-  'reportes.gestionar': ['Administrador', 'PersonalSIPINNA'],
-  'reportes.exportar': ['Administrador', 'PersonalSIPINNA'],
-  'estadisticas.ver': ['Administrador', 'PersonalSIPINNA'],
+  'reportes.ver': ['Administrador', 'CoordinadorRegional', 'PersonalSIPINNA'],
+  'reportes.gestionar': ['Administrador', 'CoordinadorRegional', 'PersonalSIPINNA'],
+  'reportes.exportar': ['Administrador', 'CoordinadorRegional', 'PersonalSIPINNA'],
+  'estadisticas.ver': ['Administrador', 'CoordinadorRegional', 'PersonalSIPINNA'],
   'red.editar': ['Administrador'],
-  'perfil.ver': ['Administrador', 'PersonalSIPINNA'],
+  'perfil.ver': ['Administrador', 'CoordinadorRegional', 'PersonalSIPINNA'],
+  'expediente.editar': ['Administrador', 'CoordinadorRegional', 'PersonalSIPINNA'],
+  'alertas.ver': ['Administrador', 'CoordinadorRegional', 'PersonalSIPINNA'],
+  'alertas.gestionar': ['Administrador', 'CoordinadorRegional', 'PersonalSIPINNA'],
+  'personal.administrar': ['Administrador'],
+  'configuracion.editar': ['Administrador'],
+  'accesos.ver': ['Administrador'],
 };
 
 /** Descripción en español de cada permiso, para mostrarla en la web del personal. */
@@ -50,6 +69,12 @@ export const DESCRIPCION_PERMISO: Readonly<Record<Permiso, string>> = {
   'estadisticas.ver': 'Ver el panel de estadísticas (solo datos agregados)',
   'red.editar': 'Editar los contactos del directorio de la red de municipios',
   'perfil.ver': 'Ver su propio perfil y permisos',
+  'expediente.editar': 'Editar el expediente (responsable, dependencia, verificación, seguimiento, duplicados y acciones)',
+  'alertas.ver': 'Ver las alertas de punto recurrente de sus municipios',
+  'alertas.gestionar': 'Marcar alertas de punto recurrente como atendidas',
+  'personal.administrar': 'Asignar municipios a cada persona del personal',
+  'configuracion.editar': 'Editar los parámetros de duplicados, alertas y conservación',
+  'accesos.ver': 'Consultar la bitácora de accesos a expedientes',
 };
 
 /** Permisos que otorgan los grupos indicados. */

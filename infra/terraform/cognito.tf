@@ -32,7 +32,11 @@ resource "aws_cognito_user_pool" "personal" {
 }
 
 resource "aws_cognito_user_group" "grupos" {
-  for_each     = { Administrador = "Administración de RIETI", PersonalSIPINNA = "Personal operativo SIPINNA" }
+  for_each = {
+    Administrador       = "Administración de RIETI"
+    CoordinadorRegional = "Coordinación regional: ve todos los municipios participantes"
+    PersonalSIPINNA     = "Personal operativo SIPINNA" # enlace municipal: solo sus municipios asignados
+  }
   user_pool_id = aws_cognito_user_pool.personal.id
   name         = each.key
   description  = each.value

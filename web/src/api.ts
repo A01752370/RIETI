@@ -47,6 +47,8 @@ export function errorDesdeRespuesta(estatus: number, cuerpo: unknown): ErrorApi 
 export interface Sesion {
   token: string;
   correo: string;
+  /** Solo para mostrar u ocultar la administración; el servidor vuelve a validar cada permiso (Fase 7). */
+  esAdministrador?: boolean;
 }
 
 let sesion: Sesion | null = null;
@@ -138,6 +140,8 @@ export interface ReporteResumen {
   id: number; folio: string; estatus: string; ubicacion: string; municipio: string | null; actividad: string;
   /** Fase 6: prioridad calculada por el servidor y peligro inmediato (servidores anteriores no los envían). */
   prioridad?: 'Alta' | 'Media' | 'Normal'; peligroInmediato?: string | null;
+  /** Fase 7 (servidores anteriores no los envían). */
+  verificacion?: string; esDuplicado?: boolean; seguimientoVencido?: boolean;
   edadAproximada: string; cantidadNinos: number; situacionRiesgo: string; fechaCreacion: string; fechaActualizacion: string;
 }
 /** Página de la bandeja. */
@@ -153,12 +157,59 @@ export interface ReporteDetalle extends ReporteResumen {
   grupos?: GrupoMenores[];
   actividadOtro?: string | null;
   direccion?: DireccionRespuesta | null;
+  /** Expediente interno y duplicados (Fase 7; servidores anteriores no lo envían). */
+  expediente?: Expediente;
+  duplicadoDe?: ReporteRelacionado | null;
+  duplicados?: ReporteRelacionado[];
 }
-/** Evento de la bitácora (solo personal). `tipo` llega desde la Fase 5. */
+/** Tipo de evento de la bitácora. */
+export type TipoEvento = 'registro' | 'cambio' | 'nota' | 'accion' | 'expediente';
+/** Evento de la bitácora (solo personal). `tipo` llega desde la Fase 5; `accion` y `expediente` desde la Fase 7. */
 export interface EventoBitacora {
   estatus: string; comentario: string | null; autor: string | null; fecha: string;
-  tipo?: 'registro' | 'cambio' | 'nota';
+  tipo?: TipoEvento;
 }
+/** Id y nombre de un catálogo. */
+export interface IdNombre { id: number; nombre: string }
+/** Expediente interno del caso (Fase 7). */
+export interface Expediente {
+  responsable: { id: number; correo: string } | null;
+  dependencia: IdNombre | null;
+  fechaSeguimiento: string | null;
+  seguimientoVencido: boolean;
+  resultado: string | null;
+  fechaCierre: string | null;
+  modalidad: IdNombre | null;
+  verificacion: string;
+  nnaIdentificados: number | null; nnaCanalizados: number | null; nnaNinas: number | null; nnaNinos: number | null;
+}
+/** Cambios al expediente: `null` borra el valor. */
+export type CambiosExpediente = Partial<{
+  idResponsable: number | null; idDependencia: number | null; fechaSeguimiento: string | null; idModalidad: number | null;
+  verificacion: string; nnaIdentificados: number | null; nnaCanalizados: number | null; nnaNinas: number | null; nnaNinos: number | null;
+}>;
+/** Reporte relacionado (duplicado o cercano). */
+export interface ReporteRelacionado { id: number; folio: string; estatus: string; estatusEtiqueta: string; fechaCreacion: string; distanciaMetros?: number }
+/** Catálogos del expediente. */
+export interface CatalogosExpediente { dependencias: IdNombre[]; modalidades: IdNombre[]; verificaciones: string[]; tiposAccion: string[] }
+/** Embudo de atención (Fase 7). */
+export interface Embudo {
+  recibidos: number; verificados: number; casosIdentificados: number; nnaIdentificados: number; nnaCanalizados: number;
+  duplicadosDescontados: number; prioridadAltaPendientes: number; seguimientosVencidos: number; alertasAbiertas: number;
+}
+/** Alerta de punto recurrente (Fase 7). */
+export interface Alerta {
+  id: number; municipio: string | null; latitud: number; longitud: number; reportes: number; estatus: 'abierta' | 'atendida';
+  fechaCreacion: string; fechaActualizacion: string; comentario: string | null; relacionados: { id: number; folio: string }[];
+}
+/** Persona del personal con sus municipios (administración). */
+export interface PersonaPersonal { id: number; correo: string; perfil: string; activo: boolean; regional: boolean; municipios: IdNombre[] }
+/** Parámetro editable por el Administrador. */
+export interface Parametro { clave: string; valor: number; descripcion: string; minimo: number; maximo: number; fechaActualizacion: string }
+/** Dependencia del catálogo. */
+export interface Dependencia { id: number; nombre: string; activo: boolean }
+/** Entrada de la bitácora de accesos. */
+export interface Acceso { id: number; usuario: string; accion: string; folio: string | null; detalle: string | null; fecha: string }
 /** Menores observados en un rango de edad. */
 export interface GrupoMenores { rango: string; cantidad: number }
 /** Dirección estructurada del lugar de los hechos. */
@@ -168,7 +219,11 @@ export interface DireccionRespuesta {
   calle: string | null; numeroExterior: string | null; colonia: string | null; codigoPostal: string | null; referencias: string | null;
 }
 /** Perfil y permisos del personal (D-18). */
-export interface Perfil { correo: string; perfil: string; grupos: string[]; permisos: { permiso: string; descripcion: string }[] }
+export interface Perfil {
+  correo: string; perfil: string; grupos: string[]; permisos: { permiso: string; descripcion: string }[];
+  /** Municipios que puede ver; null = todos (Fase 7; servidores anteriores no lo envían). */
+  municipios?: IdNombre[] | null;
+}
 /** Resumen del panel (solo agregados). */
 export interface ResumenEstadisticas {
   total: number; nuevosUltimos7Dias: number; sinMunicipio: number; pendientes: number;
@@ -207,6 +262,9 @@ export interface FiltrosBandeja extends FiltrosPanel {
   riesgo?: string;
   /** Solo casos pendientes, Recibido o En revisión (Fase 5). */
   pendientes?: boolean;
+  /** Solo casos abiertos con seguimiento vencido y por verificación (Fase 7). */
+  vencidos?: boolean;
+  verificacion?: string;
 }
 
 /** Datos del formulario de reporte (formato de la Fase 2: grupos de edad y dirección). */
@@ -234,17 +292,42 @@ export const api = {
   consultar: (folio: string, clave: string) => llamar<ConsultaPublica>('/reportes/consulta', { metodo: 'POST', cuerpo: { folio, clave } }),
   red: () => llamar<RedMunicipios>('/red-municipios'),
   login: (correo: string, password: string) =>
-    llamar<{ accessToken: string; correo: string }>('/auth/login', { metodo: 'POST', cuerpo: { correo, password } }),
+    llamar<{ accessToken: string; correo: string; esAdministrador?: boolean }>('/auth/login', { metodo: 'POST', cuerpo: { correo, password } }),
   perfil: () => llamar<Perfil>('/auth/perfil'),
   reportes: (f: FiltrosBandeja & { pagina?: number }) =>
     llamar<Pagina<ReporteResumen>>(`/reportes${consulta({ ...f, tamano: 50 })}`),
   detalle: (id: number) => llamar<ReporteDetalle>(`/reportes/${id}`),
-  cambiarEstatus: (id: number, estatus: string, comentario?: string, motivo?: string) =>
+  cambiarEstatus: (id: number, estatus: string, comentario?: string, motivo?: string, resultado?: string) =>
     llamar<ReporteDetalle>(`/reportes/${id}/estatus`, {
-      metodo: 'PATCH', cuerpo: { estatus, comentario: comentario || undefined, motivo: motivo || undefined },
+      metodo: 'PATCH', cuerpo: { estatus, comentario: comentario || undefined, motivo: motivo || undefined, resultado: resultado || undefined },
     }),
-  agregarNota: (id: number, comentario: string) =>
-    llamar<ReporteDetalle>(`/reportes/${id}/seguimientos`, { metodo: 'POST', cuerpo: { comentario } }),
+  agregarNota: (id: number, comentario: string, tipo: 'nota' | 'accion' = 'nota') =>
+    llamar<ReporteDetalle>(`/reportes/${id}/seguimientos`, { metodo: 'POST', cuerpo: tipo === 'accion' ? { comentario, tipo } : { comentario } }),
+  // Fase 7: expediente, duplicados, alertas y administración.
+  catalogosExpediente: () => llamar<CatalogosExpediente>('/catalogos/expediente'),
+  actualizarExpediente: (id: number, cambios: CambiosExpediente) =>
+    llamar<ReporteDetalle>(`/reportes/${id}/expediente`, { metodo: 'PATCH', cuerpo: cambios }),
+  responsables: (id: number) => llamar<{ id: number; correo: string; perfil: string }[]>(`/reportes/${id}/responsables`),
+  cercanos: (id: number) => llamar<ReporteRelacionado[]>(`/reportes/${id}/cercanos`),
+  vincularDuplicado: (id: number, idPrincipal: number) =>
+    llamar<ReporteDetalle>(`/reportes/${id}/duplicado`, { metodo: 'POST', cuerpo: { idPrincipal } }),
+  desvincularDuplicado: (id: number) => llamar<ReporteDetalle>(`/reportes/${id}/duplicado`, { metodo: 'DELETE' }),
+  embudo: (f: FiltrosPanel) => llamar<Embudo>(`/estadisticas/embudo${consulta({ ...f })}`),
+  alertas: (estatus: 'abierta' | 'atendida' | 'todas' = 'abierta') => llamar<Alerta[]>(`/alertas${consulta({ estatus })}`),
+  atenderAlerta: (id: number, estatus: 'atendida' | 'abierta', comentario?: string) =>
+    llamar<{ id: number; estatus: string }>(`/alertas/${id}`, { metodo: 'PATCH', cuerpo: { estatus, comentario: comentario || undefined } }),
+  personal: () => llamar<PersonaPersonal[]>('/admin/personal'),
+  asignarMunicipios: (id: number, municipios: number[]) =>
+    llamar<PersonaPersonal>(`/admin/personal/${id}/municipios`, { metodo: 'PUT', cuerpo: { municipios } }),
+  configuracion: () => llamar<Parametro[]>('/admin/configuracion'),
+  guardarConfiguracion: (valores: Record<string, number>) =>
+    llamar<Parametro[]>('/admin/configuracion', { metodo: 'PUT', cuerpo: { valores } }),
+  dependencias: () => llamar<Dependencia[]>('/admin/dependencias'),
+  crearDependencia: (nombre: string) => llamar<Dependencia>('/admin/dependencias', { metodo: 'POST', cuerpo: { nombre } }),
+  editarDependencia: (id: number, cambios: { nombre?: string; activo?: boolean }) =>
+    llamar<Dependencia>(`/admin/dependencias/${id}`, { metodo: 'PATCH', cuerpo: cambios }),
+  accesos: (f: { folio?: string; desde?: string; hasta?: string; pagina?: number }) =>
+    llamar<Pagina<Acceso>>(`/admin/accesos${consulta({ ...f, tamano: 50 })}`),
   estadisticas: (f: FiltrosPanel) => llamar<ResumenEstadisticas>(`/estadisticas/resumen${consulta({ ...f })}`),
   distribuciones: (f: FiltrosPanel) => llamar<Distribuciones>(`/estadisticas/distribuciones${consulta({ ...f })}`),
   tiempos: (f: FiltrosPanel) => llamar<Tiempos>(`/estadisticas/tiempos${consulta({ ...f })}`),

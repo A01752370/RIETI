@@ -61,7 +61,22 @@ GRANT UPDATE (cuenta_ciudadano_id) ON reporte TO rieti_app;
 -- Consecutivo de folios.
 GRANT SELECT, INSERT, UPDATE ON folio_contador TO rieti_app;
 
+-- Fase 7: expediente y control territorial. El Administrador da de alta y renombra
+-- dependencias (nunca se borran: se desactivan para no romper expedientes).
+GRANT SELECT ON modalidad TO rieti_app;
+GRANT SELECT, INSERT ON dependencia TO rieti_app;
+GRANT UPDATE (nombre, activo) ON dependencia TO rieti_app;
+GRANT SELECT, INSERT, DELETE ON asignacion_municipio TO rieti_app;
+GRANT UPDATE (id_responsable, id_dependencia, fecha_seguimiento, resultado, fecha_cierre, id_modalidad, verificacion,
+  nna_identificados, nna_canalizados, nna_ninas, nna_ninos) ON caso TO rieti_app;
+GRANT UPDATE (duplicado_de) ON reporte TO rieti_app;
+GRANT SELECT, UPDATE ON configuracion TO rieti_app;
+GRANT SELECT, INSERT, UPDATE ON alerta_territorial TO rieti_app;
+-- Bitácora de accesos: solo lectura e inserción (además, un trigger rechaza UPDATE/DELETE).
+GRANT SELECT, INSERT ON acceso_expediente TO rieti_app;
+
 -- Secuencias de las llaves serial.
+
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO rieti_app;
 
 -- La tabla de control de migraciones solo la toca el usuario maestro.

@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -57,6 +58,7 @@ import mx.sipinna.rieti.viewmodel.UiState
  * @param alAbrirBandeja abre la bandeja con filtro de estatus o de "sin atender" (ambos opcionales)
  * @param alAbrirPrioridadAlta abre la bandeja con los pendientes de prioridad Alta (peligro inmediato)
  * @param alAbrirPendientes abre la bandeja con los pendientes (Recibido y En revisión)
+ * @param alAbrirVencidos abre la bandeja con los casos de seguimiento vencido (Fase 7)
  * @param alCerrarSesion descarta el token y vuelve al inicio
  * @param alSesionExpirada el servidor respondió 401: hay que volver a iniciar sesión
  */
@@ -66,6 +68,7 @@ fun InicioPersonalScreen(
     alAbrirBandeja: (estatus: String?, sinAtender: Int?) -> Unit,
     alAbrirPrioridadAlta: () -> Unit,
     alAbrirPendientes: () -> Unit,
+    alAbrirVencidos: () -> Unit,
     alCerrarSesion: () -> Unit,
     alSesionExpirada: () -> Unit,
     viewModel: InicioPersonalViewModel = viewModel()
@@ -96,7 +99,7 @@ fun InicioPersonalScreen(
                         MensajeError(e.mensaje)
                         OutlinedButton(onClick = viewModel::cargar, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Reintentar") }
                     }
-                    is UiState.Exito -> Tablero(e.datos, alAbrirBandeja, alAbrirPrioridadAlta, alAbrirPendientes)
+                    is UiState.Exito -> Tablero(e.datos, alAbrirBandeja, alAbrirPrioridadAlta, alAbrirPendientes, alAbrirVencidos)
                 }
             }
             // Solo durante el gesto o la recarga (en reposo el indicador asomaría arriba).
@@ -109,7 +112,13 @@ fun InicioPersonalScreen(
 
 /** Contenido del inicio con datos. */
 @Composable
-private fun Tablero(d: InicioPersonal, alAbrirBandeja: (String?, Int?) -> Unit, alAbrirPrioridadAlta: () -> Unit, alAbrirPendientes: () -> Unit) {
+private fun Tablero(
+    d: InicioPersonal,
+    alAbrirBandeja: (String?, Int?) -> Unit,
+    alAbrirPrioridadAlta: () -> Unit,
+    alAbrirPendientes: () -> Unit,
+    alAbrirVencidos: () -> Unit
+) {
     Text("Desliza hacia abajo para actualizar.", style = MaterialTheme.typography.bodySmall)
 
     // Fase 5: lo más urgente arriba.
@@ -121,11 +130,35 @@ private fun Tablero(d: InicioPersonal, alAbrirBandeja: (String?, Int?) -> Unit, 
         fondo = if (d.resumen.prioridadAltaPendientes > 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant,
         alTocar = alAbrirPrioridadAlta
     )
+    // Fase 7: seguimientos vencidos y alertas de punto recurrente (si el servidor ya los calcula).
+    d.embudo?.let { e ->
+        TarjetaAccion(
+            icono = Icons.Filled.DateRange,
+            cifra = e.seguimientosVencidos,
+            titulo = "Seguimientos vencidos",
+            detalle = if (e.seguimientosVencidos == 0) "Ninguno por ahora" else "La fecha de seguimiento ya pasó",
+            fondo = if (e.seguimientosVencidos > 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant,
+            alTocar = alAbrirVencidos
+        )
+        if (e.alertasAbiertas > 0) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer), modifier = Modifier.fillMaxWidth()
+                .semantics(mergeDescendants = true) { contentDescription = "Alertas de punto recurrente: ${e.alertasAbiertas}. Revísalas en la web del personal." }) {
+                Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Icon(Icons.Filled.LocationOn, contentDescription = null, modifier = Modifier.size(32.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Alertas de punto recurrente", style = MaterialTheme.typography.titleMedium)
+                        Text("Varios reportes cerca en poco tiempo. El detalle está en la web del personal.", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Text("${e.alertasAbiertas}", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
     TarjetaAccion(
         icono = Icons.Filled.Notifications,
         cifra = d.resumen.pendientes,
         titulo = "Pendientes de atender",
-        detalle = "Recibidos y en revisión",
+        detalle = "Registrados, en revisión o reincidentes",
         fondo = MaterialTheme.colorScheme.primaryContainer,
         alTocar = alAbrirPendientes
     )

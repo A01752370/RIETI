@@ -393,6 +393,21 @@ fun IndicadorPrioridad(prioridad: String?) {
     }
 }
 
+/** Insignia de texto (p. ej. "Seguimiento vencido" o "Posible duplicado"; Fase 7). */
+@Composable
+fun IndicadorTexto(texto: String, destacado: Boolean = false) {
+    Surface(
+        color = if (destacado) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
+        Text(
+            texto, style = MaterialTheme.typography.labelLarge,
+            color = if (destacado) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
+    }
+}
+
 /** Indicador visible de riesgo percibido por quien reportó ("Sí"): icono + texto, nunca solo color. */
 @Composable
 fun IndicadorRiesgo() {

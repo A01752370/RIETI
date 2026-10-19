@@ -49,6 +49,9 @@ export function etiquetaEstatus(nombre: string): string {
   return esEstatus(nombre) ? ETIQUETAS[nombre] : nombre;
 }
 
+/** Estatus de un caso cerrado (no cuentan para seguimientos vencidos; Fase 7). */
+export const ESTATUS_CERRADOS: readonly Estatus[] = [ESTATUS.CONCLUIDO, ESTATUS.DESCARTADO, ESTATUS.ARCHIVADO];
+
 /** Estatus que cuentan como "pendientes de atender" (también un caso que volvió a requerir atención). */
 export const ESTATUS_PENDIENTES: readonly Estatus[] = [ESTATUS.RECIBIDO, ESTATUS.EN_REVISION, ESTATUS.REINCIDENTE];
 

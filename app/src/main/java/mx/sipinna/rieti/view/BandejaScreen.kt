@@ -51,7 +51,8 @@ fun BandejaScreen(
     val sinAtender by viewModel.sinAtenderDias.collectAsState()
     val prioridadAlta by viewModel.prioridadAlta.collectAsState()
     val pendientes by viewModel.pendientes.collectAsState()
-    val filtroInicio = sinAtender != null || prioridadAlta || pendientes
+    val vencidos by viewModel.vencidos.collectAsState()
+    val filtroInicio = sinAtender != null || prioridadAlta || pendientes || vencidos
 
     // Se recarga cada vez que se vuelve a la bandeja (p. ej. tras cambiar un estatus).
     LaunchedEffect(Unit) { viewModel.cargar() }
@@ -75,6 +76,9 @@ fun BandejaScreen(
                 item {
                     FilterChip(selected = true, onClick = { viewModel.filtrar(null) }, label = { Text("Sin cambios en más de $dias días ✕") })
                 }
+            }
+            if (vencidos) {
+                item { FilterChip(selected = true, onClick = { viewModel.filtrar(null) }, label = { Text("Seguimiento vencido ✕") }) }
             }
             if (prioridadAlta) {
                 item { FilterChip(selected = true, onClick = { viewModel.filtrar(null) }, label = { Text("Prioridad alta pendientes ✕") }) }
@@ -104,6 +108,7 @@ fun BandejaScreen(
                 if (e.datos.elementos.isEmpty()) {
                     EstadoVacio(
                         when {
+                            vencidos -> "No hay casos con la fecha de seguimiento vencida."
                             sinAtender != null -> "No hay casos pendientes sin cambios en más de $sinAtender días."
                             prioridadAlta -> "No hay casos pendientes con prioridad alta."
                             pendientes -> "No hay casos pendientes de atender."
@@ -139,6 +144,8 @@ private fun FilaReporte(r: ReporteResumen, alTocar: () -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 IndicadorPrioridad(r.prioridad)
                 if (r.situacionRiesgo == "Sí") IndicadorRiesgo()
+                if (r.seguimientoVencido) IndicadorTexto("Seguimiento vencido", destacado = true)
+                if (r.esDuplicado) IndicadorTexto("Posible duplicado")
             }
             Text(formatearFecha(r.fechaCreacion), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
