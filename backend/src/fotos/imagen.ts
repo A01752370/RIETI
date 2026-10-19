@@ -46,7 +46,7 @@ export interface ImagenRecodificada {
  */
 export async function recodificar(entrada: Buffer): Promise<ImagenRecodificada> {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const sharp = require('sharp') as typeof import('sharp');
+  const sharp = require('sharp') as typeof import('sharp').default;
   const { data, info } = await sharp(entrada, { limitInputPixels: MAX_PIXELES_ENTRADA, failOn: 'error', pages: 1 })
     .rotate()
     .resize({ width: LADO_MAXIMO, height: LADO_MAXIMO, fit: 'inside', withoutEnlargement: true })
